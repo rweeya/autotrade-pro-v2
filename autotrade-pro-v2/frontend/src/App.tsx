@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import TradingChart from './components/TradingChart'
 import SignalHistory from './components/SignalHistory'
+import News from './components/News'
+import TopMovers from './components/TopMovers'
+import Watchlist from './components/Watchlist'
 import { binanceWS } from './services/websocket'
 
 interface Signal {
@@ -25,12 +28,10 @@ const DEMO_PRICES: Record<string, number> = {
 // Реальные цены (обновляются из WebSocket)
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 
-// Генерация сигнала на основе RSI и MACD (эмуляция)
+// Генерация сигнала на основе RSI и MACD
 function generateSignal(symbol: string): Signal | null {
-  // Для крипты используем реальную цену, для остальных - демо
   let price = realPrices[symbol] || DEMO_PRICES[symbol]
   
-  // Эмуляция RSI и MACD на основе времени (чтобы были разные сигналы)
   const timestamp = Date.now()
   let hash = 0
   for (let i = 0; i < symbol.length; i++) {
@@ -73,21 +74,19 @@ function openBybit(symbol: string) {
   let bybitSymbol = symbol
   if (symbol.includes('/USDT')) {
     bybitSymbol = symbol.replace('/USDT', '')
+    window.open(`https://www.bybit.com/trade/spot/${bybitSymbol}/USDT`, '_blank')
   } else if (symbol.includes('/')) {
     window.open(`https://www.tradingview.com/chart/?symbol=FX:${symbol.replace('/', '')}`, '_blank')
-    return
   } else {
     window.open(`https://www.tradingview.com/chart/?symbol=NASDAQ:${symbol}`, '_blank')
-    return
   }
-  window.open(`https://www.bybit.com/trade/spot/${bybitSymbol}/USDT`, '_blank')
 }
 
 function App() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history'>('signals')
+  const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist'>('signals')
   const [isRealTime, setIsRealTime] = useState(false)
 
   useEffect(() => {
@@ -97,7 +96,6 @@ function App() {
 
   // Подключение к WebSocket и обновление сигналов
   useEffect(() => {
-    // Обновление цен из WebSocket
     const updatePrice = (symbol: string, price: number) => {
       const formattedSymbol = symbol === 'BTCUSDT' ? 'BTC/USDT' :
                               symbol === 'ETHUSDT' ? 'ETH/USDT' :
@@ -111,7 +109,6 @@ function App() {
       setIsRealTime(true)
     }
     
-    // Подписываемся на обновления
     binanceWS.connect()
     
     const symbolsToSubscribe = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT']
@@ -119,7 +116,6 @@ function App() {
       binanceWS.subscribe(sym, updatePrice)
     })
     
-    // Генерация сигналов с обновленными ценами
     const updateSignals = () => {
       const newSignals = SYMBOLS.map(s => generateSignal(s)).filter(s => s !== null) as Signal[]
       setSignals(newSignals)
@@ -182,19 +178,28 @@ function App() {
         </div>
 
         {/* Вкладки */}
-        <div className="flex gap-4 mb-6 border-b border-purple-500/30">
-          <button onClick={() => setActiveTab('signals')} className={`pb-2 px-4 font-bold transition-all ${activeTab === 'signals' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500'}`}>
+        <div className="flex gap-2 mb-6 border-b border-purple-500/30 overflow-x-auto pb-1">
+          <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'signals' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
             🎯 СИГНАЛЫ
           </button>
-          <button onClick={() => setActiveTab('trading')} className={`pb-2 px-4 font-bold transition-all ${activeTab === 'trading' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500'}`}>
-            📈 ТОРГОВЛЯ
+          <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'trading' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+            📈 ГРАФИК
           </button>
-          <button onClick={() => setActiveTab('history')} className={`pb-2 px-4 font-bold transition-all ${activeTab === 'history' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500'}`}>
+          <button onClick={() => setActiveTab('history')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'history' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
             📜 ИСТОРИЯ
+          </button>
+          <button onClick={() => setActiveTab('news')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'news' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+            📰 НОВОСТИ
+          </button>
+          <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'topmovers' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+            📊 ТОП МОНЕТ
+          </button>
+          <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'watchlist' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+            ⭐ ИЗБРАННОЕ
           </button>
         </div>
 
-        {/* ТОРГОВЛЯ (график) */}
+        {/* Контент по вкладкам */}
         {activeTab === 'trading' && (
           <>
             <div className="mb-4">
@@ -206,20 +211,17 @@ function App() {
           </>
         )}
 
-        {/* ИСТОРИЯ */}
         {activeTab === 'history' && <SignalHistory />}
+        
+        {activeTab === 'news' && <News />}
+        
+        {activeTab === 'topmovers' && <TopMovers />}
+        
+        {activeTab === 'watchlist' && <Watchlist />}
 
-        {/* СИГНАЛЫ */}
         {activeTab === 'signals' && (
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-purple-400">🎯 АКТУАЛЬНЫЕ СИГНАЛЫ</h2>
-              {isRealTime && (
-                <div className="text-xs text-green-400 bg-green-500/20 px-3 py-1 rounded-full">
-                  🔴 Реальные цены Binance
-                </div>
-              )}
-            </div>
+            <h2 className="text-xl font-bold text-purple-400 mb-4">🎯 АКТУАЛЬНЫЕ СИГНАЛЫ</h2>
             {signals.map((signal, idx) => {
               const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
               return (
