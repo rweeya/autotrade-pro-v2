@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import TradingChart from './components/TradingChart'
 import SignalHistory from './components/SignalHistory'
+import { binanceWS } from './services/websocket'
 
 interface Signal {
   symbol: string
@@ -11,19 +12,37 @@ interface Signal {
   timestamp: Date
 }
 
-// Расширенный список символов
+// Символы для отслеживания
 const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT', 'EUR/USD', 'GBP/USD', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
 
-const PRICES: Record<string, number> = {
+// Демо цены (запасной вариант)
+const DEMO_PRICES: Record<string, number> = {
   'BTC/USDT': 65234, 'ETH/USDT': 3456, 'SOL/USDT': 178, 'BNB/USDT': 587, 'XRP/USDT': 0.62,
   'DOGE/USDT': 0.15, 'ADA/USDT': 0.48, 'EUR/USD': 1.089, 'GBP/USD': 1.267, 'AAPL': 175.5,
   'MSFT': 420.7, 'TSLA': 175.8, 'NVDA': 905
 }
 
-// Генерация сигнала
+// Реальные цены (обновляются из WebSocket)
+let realPrices: Record<string, number> = { ...DEMO_PRICES }
+
+// Генерация сигнала на основе RSI и MACD (эмуляция)
 function generateSignal(symbol: string): Signal | null {
-  const rsi = 30 + Math.random() * 60
-  const macd = (Math.random() - 0.5) * 2
+  // Для крипты используем реальную цену, для остальных - демо
+  let price = realPrices[symbol] || DEMO_PRICES[symbol]
+  
+  // Эмуляция RSI и MACD на основе времени (чтобы были разные сигналы)
+  const timestamp = Date.now()
+  let hash = 0
+  for (let i = 0; i < symbol.length; i++) {
+    hash = ((hash << 5) - hash) + symbol.charCodeAt(i)
+    hash = hash & hash
+  }
+  const seed = Math.abs(hash % 100)
+  const cycle = (timestamp / 60000) % 120
+  
+  const rsi = 30 + (Math.sin(cycle * 0.1) * 30 + (seed % 40)) % 70
+  const macd = Math.sin(cycle * 0.15) * 2
+  
   let score = 0
   let reasons = []
   
@@ -40,7 +59,7 @@ function generateSignal(symbol: string): Signal | null {
     return {
       symbol,
       action,
-      price: PRICES[symbol],
+      price,
       strength: Math.min(Math.abs(Math.floor(score)), 5),
       reasons,
       timestamp: new Date()
@@ -55,38 +74,13 @@ function openBybit(symbol: string) {
   if (symbol.includes('/USDT')) {
     bybitSymbol = symbol.replace('/USDT', '')
   } else if (symbol.includes('/')) {
-    // Для форекс открываем TradingView
     window.open(`https://www.tradingview.com/chart/?symbol=FX:${symbol.replace('/', '')}`, '_blank')
     return
   } else {
-    // Для акций открываем TradingView
     window.open(`https://www.tradingview.com/chart/?symbol=NASDAQ:${symbol}`, '_blank')
     return
   }
-  
-  // Открываем Bybit
   window.open(`https://www.bybit.com/trade/spot/${bybitSymbol}/USDT`, '_blank')
-}
-
-// Сохранение сигнала в историю
-function saveToHistory(signal: Signal) {
-  const historySignal = {
-    id: Date.now(),
-    symbol: signal.symbol,
-    action: signal.action,
-    price: signal.price,
-    strength: signal.strength,
-    reasons: signal.reasons.join(', '),
-    timestamp: signal.timestamp.toISOString()
-  }
-  
-  const saved = localStorage.getItem('signal_history')
-  let history = saved ? JSON.parse(saved) : []
-  history = [historySignal, ...history].slice(0, 100)
-  localStorage.setItem('signal_history', JSON.stringify(history))
-  
-  // Обновляем событие для SignalHistory компонента
-  window.dispatchEvent(new Event('storage'))
 }
 
 function App() {
@@ -94,20 +88,52 @@ function App() {
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
   const [currentTime, setCurrentTime] = useState(new Date())
   const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history'>('signals')
+  const [isRealTime, setIsRealTime] = useState(false)
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
+  // Подключение к WebSocket и обновление сигналов
   useEffect(() => {
+    // Обновление цен из WebSocket
+    const updatePrice = (symbol: string, price: number) => {
+      const formattedSymbol = symbol === 'BTCUSDT' ? 'BTC/USDT' :
+                              symbol === 'ETHUSDT' ? 'ETH/USDT' :
+                              symbol === 'SOLUSDT' ? 'SOL/USDT' :
+                              symbol === 'BNBUSDT' ? 'BNB/USDT' :
+                              symbol === 'XRPUSDT' ? 'XRP/USDT' :
+                              symbol === 'DOGEUSDT' ? 'DOGE/USDT' :
+                              symbol === 'ADAUSDT' ? 'ADA/USDT' : symbol
+      
+      realPrices[formattedSymbol] = price
+      setIsRealTime(true)
+    }
+    
+    // Подписываемся на обновления
+    binanceWS.connect()
+    
+    const symbolsToSubscribe = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT']
+    symbolsToSubscribe.forEach(sym => {
+      binanceWS.subscribe(sym, updatePrice)
+    })
+    
+    // Генерация сигналов с обновленными ценами
     const updateSignals = () => {
       const newSignals = SYMBOLS.map(s => generateSignal(s)).filter(s => s !== null) as Signal[]
       setSignals(newSignals)
     }
+    
     updateSignals()
-    const interval = setInterval(updateSignals, 30000)
-    return () => clearInterval(interval)
+    const interval = setInterval(updateSignals, 15000)
+    
+    return () => {
+      symbolsToSubscribe.forEach(sym => {
+        binanceWS.unsubscribe(sym, updatePrice)
+      })
+      clearInterval(interval)
+    }
   }, [])
 
   const buys = signals.filter(s => s.action === 'buy').length
@@ -121,6 +147,12 @@ function App() {
             ⚡ AUTO TRADE PRO V2
           </h1>
           <div className="flex gap-4 items-center">
+            {isRealTime && (
+              <div className="flex items-center gap-1 text-xs text-green-400">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                REAL-TIME
+              </div>
+            )}
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-green-400">LIVE</span>
             <div className="text-sm text-gray-400 font-mono">{currentTime.toLocaleTimeString('ru-RU')}</div>
@@ -177,10 +209,17 @@ function App() {
         {/* ИСТОРИЯ */}
         {activeTab === 'history' && <SignalHistory />}
 
-        {/* СИГНАЛЫ (с кликабельностью) */}
+        {/* СИГНАЛЫ */}
         {activeTab === 'signals' && (
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
-            <h2 className="text-xl font-bold text-purple-400 mb-4">🎯 АКТУАЛЬНЫЕ СИГНАЛЫ</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-purple-400">🎯 АКТУАЛЬНЫЕ СИГНАЛЫ</h2>
+              {isRealTime && (
+                <div className="text-xs text-green-400 bg-green-500/20 px-3 py-1 rounded-full">
+                  🔴 Реальные цены Binance
+                </div>
+              )}
+            </div>
             {signals.map((signal, idx) => {
               const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
               return (
