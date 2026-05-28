@@ -11,12 +11,16 @@ interface Signal {
   timestamp: Date
 }
 
-const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'EUR/USD', 'GBP/USD', 'AAPL', 'MSFT', 'TSLA']
+// Расширенный список символов
+const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT', 'EUR/USD', 'GBP/USD', 'AAPL', 'MSFT', 'TSLA', 'NVDA']
+
 const PRICES: Record<string, number> = {
   'BTC/USDT': 65234, 'ETH/USDT': 3456, 'SOL/USDT': 178, 'BNB/USDT': 587, 'XRP/USDT': 0.62,
-  'EUR/USD': 1.089, 'GBP/USD': 1.267, 'AAPL': 175.5, 'MSFT': 420.7, 'TSLA': 175.8
+  'DOGE/USDT': 0.15, 'ADA/USDT': 0.48, 'EUR/USD': 1.089, 'GBP/USD': 1.267, 'AAPL': 175.5,
+  'MSFT': 420.7, 'TSLA': 175.8, 'NVDA': 905
 }
 
+// Генерация сигнала
 function generateSignal(symbol: string): Signal | null {
   const rsi = 30 + Math.random() * 60
   const macd = (Math.random() - 0.5) * 2
@@ -43,6 +47,46 @@ function generateSignal(symbol: string): Signal | null {
     }
   }
   return null
+}
+
+// Функция для открытия Bybit
+function openBybit(symbol: string) {
+  let bybitSymbol = symbol
+  if (symbol.includes('/USDT')) {
+    bybitSymbol = symbol.replace('/USDT', '')
+  } else if (symbol.includes('/')) {
+    // Для форекс открываем TradingView
+    window.open(`https://www.tradingview.com/chart/?symbol=FX:${symbol.replace('/', '')}`, '_blank')
+    return
+  } else {
+    // Для акций открываем TradingView
+    window.open(`https://www.tradingview.com/chart/?symbol=NASDAQ:${symbol}`, '_blank')
+    return
+  }
+  
+  // Открываем Bybit
+  window.open(`https://www.bybit.com/trade/spot/${bybitSymbol}/USDT`, '_blank')
+}
+
+// Сохранение сигнала в историю
+function saveToHistory(signal: Signal) {
+  const historySignal = {
+    id: Date.now(),
+    symbol: signal.symbol,
+    action: signal.action,
+    price: signal.price,
+    strength: signal.strength,
+    reasons: signal.reasons.join(', '),
+    timestamp: signal.timestamp.toISOString()
+  }
+  
+  const saved = localStorage.getItem('signal_history')
+  let history = saved ? JSON.parse(saved) : []
+  history = [historySignal, ...history].slice(0, 100)
+  localStorage.setItem('signal_history', JSON.stringify(history))
+  
+  // Обновляем событие для SignalHistory компонента
+  window.dispatchEvent(new Event('storage'))
 }
 
 function App() {
@@ -85,6 +129,7 @@ function App() {
       </header>
 
       <div className="container mx-auto px-6 py-8">
+        {/* Статистика */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-black/50 backdrop-blur-lg rounded-xl p-4 border border-purple-500/30">
             <div className="text-3xl font-bold text-purple-400">{signals.length}</div>
@@ -104,6 +149,7 @@ function App() {
           </div>
         </div>
 
+        {/* Вкладки */}
         <div className="flex gap-4 mb-6 border-b border-purple-500/30">
           <button onClick={() => setActiveTab('signals')} className={`pb-2 px-4 font-bold transition-all ${activeTab === 'signals' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500'}`}>
             🎯 СИГНАЛЫ
@@ -116,6 +162,7 @@ function App() {
           </button>
         </div>
 
+        {/* ТОРГОВЛЯ (график) */}
         {activeTab === 'trading' && (
           <>
             <div className="mb-4">
@@ -127,25 +174,32 @@ function App() {
           </>
         )}
 
+        {/* ИСТОРИЯ */}
         {activeTab === 'history' && <SignalHistory />}
 
+        {/* СИГНАЛЫ (с кликабельностью) */}
         {activeTab === 'signals' && (
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
             <h2 className="text-xl font-bold text-purple-400 mb-4">🎯 АКТУАЛЬНЫЕ СИГНАЛЫ</h2>
             {signals.map((signal, idx) => {
               const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
               return (
-                <div key={idx} className="bg-gradient-to-r from-purple-900/20 to-cyan-900/20 rounded-xl p-4 border-l-4 border-purple-500">
+                <div 
+                  key={idx} 
+                  onClick={() => openBybit(signal.symbol)}
+                  className="bg-gradient-to-r from-purple-900/20 to-cyan-900/20 rounded-xl p-4 border-l-4 border-purple-500 hover:translate-x-1 hover:bg-purple-900/40 transition-all cursor-pointer"
+                >
                   <div className="flex justify-between items-center flex-wrap gap-2">
-                    <span className="font-bold">💰 {signal.symbol}</span>
+                    <span className="font-bold text-lg">💰 {signal.symbol}</span>
                     <span className={`px-3 py-1 rounded-full text-sm font-bold ${signal.action === 'buy' ? 'bg-green-500 text-black' : 'bg-red-500 text-white'}`}>
                       {signal.action === 'buy' ? '🟢 BUY' : '🔴 SELL'}
                     </span>
-                    <span className="text-yellow-400">⚡ {stars}</span>
+                    <span className="text-yellow-400 text-sm">⚡ {stars}</span>
                   </div>
-                  <div className="flex gap-4 mt-2 text-gray-400 text-sm">
+                  <div className="flex gap-4 mt-2 text-gray-400 text-sm flex-wrap">
                     <span>💵 ${signal.price.toLocaleString()}</span>
                     <span>📊 {signal.reasons.join(', ')}</span>
+                    <span className="text-purple-400 text-xs">🖱️ Клик → Bybit</span>
                   </div>
                 </div>
               )
