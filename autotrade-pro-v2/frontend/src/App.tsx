@@ -4,7 +4,9 @@ import SignalHistory from './components/SignalHistory'
 import News from './components/News'
 import TopMovers from './components/TopMovers'
 import Watchlist from './components/Watchlist'
+import VirtualWallet from './components/VirtualWallet'
 import { binanceWS } from './services/websocket'
+import { soundService } from './services/sound'
 
 interface Signal {
   symbol: string
@@ -86,15 +88,16 @@ function App() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist'>('signals')
+  const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist' | 'wallet'>('signals')
   const [isRealTime, setIsRealTime] = useState(false)
 
+  // Время
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
-  // Подключение к WebSocket и обновление сигналов
+  // WebSocket и сигналы
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       const formattedSymbol = symbol === 'BTCUSDT' ? 'BTC/USDT' :
@@ -131,6 +134,29 @@ function App() {
       clearInterval(interval)
     }
   }, [])
+
+  // Отслеживание новых сигналов и звук
+  const previousSignalsRef = React.useRef<string>('')
+
+  useEffect(() => {
+    const currentSignalsStr = signals.map(s => `${s.symbol}_${s.action}`).join(',')
+    
+    if (previousSignalsRef.current && previousSignalsRef.current !== currentSignalsStr) {
+      const oldSet = new Set(previousSignalsRef.current.split(','))
+      const newSignals = signals.filter(s => !oldSet.has(`${s.symbol}_${s.action}`))
+      
+      if (newSignals.length > 0) {
+        const latestSignal = newSignals[0]
+        soundService.notifyNewSignal({
+          action: latestSignal.action,
+          symbol: latestSignal.symbol,
+          strength: latestSignal.strength
+        })
+      }
+    }
+    
+    previousSignalsRef.current = currentSignalsStr
+  }, [signals])
 
   const buys = signals.filter(s => s.action === 'buy').length
   const sells = signals.filter(s => s.action === 'sell').length
@@ -197,6 +223,9 @@ function App() {
           <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'watchlist' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
             ⭐ ИЗБРАННОЕ
           </button>
+          <button onClick={() => setActiveTab('wallet')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'wallet' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
+            💼 КОШЕЛЕК
+          </button>
         </div>
 
         {/* Контент по вкладкам */}
@@ -212,12 +241,10 @@ function App() {
         )}
 
         {activeTab === 'history' && <SignalHistory />}
-        
         {activeTab === 'news' && <News />}
-        
         {activeTab === 'topmovers' && <TopMovers />}
-        
         {activeTab === 'watchlist' && <Watchlist />}
+        {activeTab === 'wallet' && <VirtualWallet />}
 
         {activeTab === 'signals' && (
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
