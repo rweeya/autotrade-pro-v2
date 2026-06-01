@@ -38,6 +38,19 @@ let realPrices: Record<string, number> = { ...DEMO_PRICES }
 // Хранилище исторических цен для индикаторов
 let priceHistory: Record<string, number[]> = {}
 
+// Функция для форматирования времени (UTC+4 = +1 час от МСК)
+const formatTime = (date: Date): string => {
+  const utc4Date = new Date(date.getTime() + (4 * 60 * 60 * 1000))
+  return utc4Date.toLocaleString('ru-RU', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
+}
+
 // Функция расчета RSI
 function calculateRSI(prices: number[], period: number = 14): number {
   if (prices.length < period + 1) return 50
@@ -91,10 +104,10 @@ function calculateStochastic(prices: number[], high: number, low: number, period
   return ((currentPrice - lowest) / (highest - lowest)) * 100
 }
 
-// Генерация исторических цен (эмуляция для индикаторов)
+// Генерация исторических цен
 function generatePriceHistory(symbol: string, currentPrice: number): number[] {
   const history: number[] = []
-  let price = currentPrice * 0.8 // начинаем с более низкой цены
+  let price = currentPrice * 0.8
   
   for (let i = 0; i < 100; i++) {
     const change = (Math.random() - 0.5) * 0.02
@@ -104,14 +117,12 @@ function generatePriceHistory(symbol: string, currentPrice: number): number[] {
   return history
 }
 
-// Анализ индикаторов и генерация сигнала
+// Анализ индикаторов
 function analyzeIndicators(symbol: string, currentPrice: number): Signal | null {
-  // Получаем или создаем историю цен
   if (!priceHistory[symbol]) {
     priceHistory[symbol] = generatePriceHistory(symbol, currentPrice)
   }
   
-  // Добавляем новую цену
   priceHistory[symbol].push(currentPrice)
   if (priceHistory[symbol].length > 100) {
     priceHistory[symbol].shift()
@@ -119,19 +130,17 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
   
   const prices = priceHistory[symbol]
   
-  // Рассчитываем все индикаторы
   const rsi = calculateRSI(prices)
   const macd = calculateMACD(prices)
   const ema20 = calculateEMA(prices, 20)
   const ema50 = calculateEMA(prices, 50)
   const stoch = calculateStochastic(prices, currentPrice * 1.02, currentPrice * 0.98)
-  const adx = 25 + Math.random() * 30 // Упрощенно для демо
+  const adx = 25 + Math.random() * 30
   
   let bullishScore = 0
   let bearishScore = 0
   let reasons: string[] = []
   
-  // Индикатор 1: RSI
   if (rsi < 35) {
     bullishScore++
     reasons.push(`RSI oversold (${Math.round(rsi)})`)
@@ -140,7 +149,6 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
     reasons.push(`RSI overbought (${Math.round(rsi)})`)
   }
   
-  // Индикатор 2: EMA (тренд)
   if (currentPrice > ema20 && ema20 > ema50) {
     bullishScore++
     reasons.push('Bullish EMA (20>50)')
@@ -149,7 +157,6 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
     reasons.push('Bearish EMA (20<50)')
   }
   
-  // Индикатор 3: MACD
   if (macd > 0.5) {
     bullishScore++
     reasons.push(`MACD bullish (${macd.toFixed(2)})`)
@@ -158,7 +165,6 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
     reasons.push(`MACD bearish (${macd.toFixed(2)})`)
   }
   
-  // Индикатор 4: Stochastic
   if (stoch < 30) {
     bullishScore++
     reasons.push(`Stoch oversold (${Math.round(stoch)})`)
@@ -167,7 +173,6 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
     reasons.push(`Stoch overbought (${Math.round(stoch)})`)
   }
   
-  // Индикатор 5: ADX (сила тренда)
   if (adx > 30) {
     if (currentPrice > ema20) {
       bullishScore++
@@ -178,7 +183,6 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
     }
   }
   
-  // Сигнал только если 3+ индикатора совпадают
   let action: 'buy' | 'sell' | null = null
   let strength = 0
   
@@ -212,7 +216,6 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
   return null
 }
 
-// Функция для открытия Bybit
 function openBybit(symbol: string) {
   let bybitSymbol = symbol.replace('/USDT', '')
   window.open(`https://www.bybit.com/trade/spot/${bybitSymbol}/USDT`, '_blank')
@@ -230,7 +233,6 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // Подключение к WebSocket и обновление сигналов
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       const formattedSymbol = symbol === 'BTCUSDT' ? 'BTC/USDT' :
@@ -252,7 +254,6 @@ function App() {
       binanceWS.subscribe(sym, updatePrice)
     })
     
-    // Обновление сигналов на основе индикаторов
     const updateSignals = () => {
       const newSignals: Signal[] = []
       for (const symbol of SYMBOLS) {
@@ -269,7 +270,7 @@ function App() {
     }
     
     updateSignals()
-    const interval = setInterval(updateSignals, 30000) // Каждые 30 секунд
+    const interval = setInterval(updateSignals, 30000)
     
     return () => {
       symbolsToSubscribe.forEach(sym => {
@@ -281,6 +282,9 @@ function App() {
 
   const buys = signals.filter(s => s.action === 'buy').length
   const sells = signals.filter(s => s.action === 'sell').length
+
+  // Форматированное текущее время UTC+4
+  const formattedCurrentTime = formatTime(currentTime)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900/20 to-black">
@@ -298,13 +302,12 @@ function App() {
             )}
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-green-400">LIVE</span>
-            <div className="text-sm text-gray-400 font-mono">{currentTime.toLocaleTimeString('ru-RU')}</div>
+            <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
         </div>
       </header>
 
       <div className="container mx-auto px-6 py-8">
-        {/* Статистика */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-black/50 backdrop-blur-lg rounded-xl p-4 border border-purple-500/30">
             <div className="text-3xl font-bold text-purple-400">{signals.length}</div>
@@ -324,7 +327,6 @@ function App() {
           </div>
         </div>
 
-        {/* Вкладки */}
         <div className="flex gap-2 mb-6 border-b border-purple-500/30 overflow-x-auto pb-1">
           <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'signals' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
             🎯 СИГНАЛЫ
@@ -346,7 +348,6 @@ function App() {
           </button>
         </div>
 
-        {/* Контент по вкладкам */}
         {activeTab === 'trading' && (
           <>
             <div className="mb-4">
@@ -392,6 +393,7 @@ function App() {
                     <div className="flex gap-4 mt-2 text-gray-400 text-sm flex-wrap">
                       <span>💵 ${signal.price.toLocaleString()}</span>
                       <span>📊 RSI:{signal.indicators.rsi} | MACD:{signal.indicators.macd} | Stoch:{signal.indicators.stoch}</span>
+                      <span>🕐 {formatTime(signal.timestamp)}</span>
                     </div>
                     <div className="mt-2 text-xs text-orange-400">
                       🎯 {signal.reasons.join(' • ')}
