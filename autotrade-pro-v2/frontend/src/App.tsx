@@ -33,10 +33,9 @@ const DEMO_PRICES: Record<string, number> = {
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
 
-// Форматирование времени: МСК + 1 час (UTC+4)
+// Форматирование времени (МСК / UTC+3)
 const formatTime = (date: Date): string => {
-  const mskPlus1 = new Date(date.getTime() + (1 * 60 * 60 * 1000))
-  return mskPlus1.toLocaleString('ru-RU', {
+  return date.toLocaleString('ru-RU', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
