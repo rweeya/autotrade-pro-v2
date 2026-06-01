@@ -23,25 +23,20 @@ interface Signal {
   }
 }
 
-// Символы для отслеживания
 const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT']
 
-// Демо цены
 const DEMO_PRICES: Record<string, number> = {
   'BTC/USDT': 65234, 'ETH/USDT': 3456, 'SOL/USDT': 178, 'BNB/USDT': 587, 
   'XRP/USDT': 0.62, 'DOGE/USDT': 0.15, 'ADA/USDT': 0.48
 }
 
-// Реальные цены
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
-
-// Хранилище исторических цен для индикаторов
 let priceHistory: Record<string, number[]> = {}
 
-// Функция для форматирования времени (UTC+4 = +1 час от МСК)
+// Форматирование времени: МСК + 1 час (UTC+4)
 const formatTime = (date: Date): string => {
-  const utc4Date = new Date(date.getTime() + (4 * 60 * 60 * 1000))
-  return utc4Date.toLocaleString('ru-RU', {
+  const mskPlus1 = new Date(date.getTime() + (1 * 60 * 60 * 1000))
+  return mskPlus1.toLocaleString('ru-RU', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -51,41 +46,31 @@ const formatTime = (date: Date): string => {
   })
 }
 
-// Функция расчета RSI
 function calculateRSI(prices: number[], period: number = 14): number {
   if (prices.length < period + 1) return 50
-  
-  let gains = 0
-  let losses = 0
-  
+  let gains = 0, losses = 0
   for (let i = prices.length - period; i < prices.length; i++) {
     const diff = prices[i] - prices[i - 1]
     if (diff >= 0) gains += diff
     else losses -= diff
   }
-  
   const avgGain = gains / period
   const avgLoss = losses / period
-  
   if (avgLoss === 0) return 100
   const rs = avgGain / avgLoss
   return 100 - (100 / (1 + rs))
 }
 
-// Функция расчета EMA
 function calculateEMA(prices: number[], period: number): number {
   if (prices.length < period) return prices[prices.length - 1]
-  
   const multiplier = 2 / (period + 1)
   let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period
-  
   for (let i = period; i < prices.length; i++) {
     ema = (prices[i] - ema) * multiplier + ema
   }
   return ema
 }
 
-// Функция расчета MACD
 function calculateMACD(prices: number[]): number {
   if (prices.length < 26) return 0
   const ema12 = calculateEMA(prices, 12)
@@ -93,22 +78,18 @@ function calculateMACD(prices: number[]): number {
   return ema12 - ema26
 }
 
-// Функция расчета Stochastic
 function calculateStochastic(prices: number[], high: number, low: number, period: number = 14): number {
   if (prices.length < period) return 50
-  const recentPrices = prices.slice(-period)
-  const lowest = Math.min(...recentPrices.map(() => low))
-  const highest = Math.max(...recentPrices.map(() => high))
+  const lowest = Math.min(...prices.slice(-period).map(() => low))
+  const highest = Math.max(...prices.slice(-period).map(() => high))
   const currentPrice = prices[prices.length - 1]
   if (highest === lowest) return 50
   return ((currentPrice - lowest) / (highest - lowest)) * 100
 }
 
-// Генерация исторических цен
 function generatePriceHistory(symbol: string, currentPrice: number): number[] {
   const history: number[] = []
   let price = currentPrice * 0.8
-  
   for (let i = 0; i < 100; i++) {
     const change = (Math.random() - 0.5) * 0.02
     price = price * (1 + change)
@@ -117,19 +98,14 @@ function generatePriceHistory(symbol: string, currentPrice: number): number[] {
   return history
 }
 
-// Анализ индикаторов
 function analyzeIndicators(symbol: string, currentPrice: number): Signal | null {
   if (!priceHistory[symbol]) {
     priceHistory[symbol] = generatePriceHistory(symbol, currentPrice)
   }
-  
   priceHistory[symbol].push(currentPrice)
-  if (priceHistory[symbol].length > 100) {
-    priceHistory[symbol].shift()
-  }
+  if (priceHistory[symbol].length > 100) priceHistory[symbol].shift()
   
   const prices = priceHistory[symbol]
-  
   const rsi = calculateRSI(prices)
   const macd = calculateMACD(prices)
   const ema20 = calculateEMA(prices, 20)
@@ -137,88 +113,45 @@ function analyzeIndicators(symbol: string, currentPrice: number): Signal | null 
   const stoch = calculateStochastic(prices, currentPrice * 1.02, currentPrice * 0.98)
   const adx = 25 + Math.random() * 30
   
-  let bullishScore = 0
-  let bearishScore = 0
-  let reasons: string[] = []
+  let bullishScore = 0, bearishScore = 0, reasons: string[] = []
   
-  if (rsi < 35) {
-    bullishScore++
-    reasons.push(`RSI oversold (${Math.round(rsi)})`)
-  } else if (rsi > 65) {
-    bearishScore++
-    reasons.push(`RSI overbought (${Math.round(rsi)})`)
-  }
+  if (rsi < 35) { bullishScore++; reasons.push(`RSI oversold (${Math.round(rsi)})`) }
+  else if (rsi > 65) { bearishScore++; reasons.push(`RSI overbought (${Math.round(rsi)})`) }
   
-  if (currentPrice > ema20 && ema20 > ema50) {
-    bullishScore++
-    reasons.push('Bullish EMA (20>50)')
-  } else if (currentPrice < ema20 && ema20 < ema50) {
-    bearishScore++
-    reasons.push('Bearish EMA (20<50)')
-  }
+  if (currentPrice > ema20 && ema20 > ema50) { bullishScore++; reasons.push('Bullish EMA (20>50)') }
+  else if (currentPrice < ema20 && ema20 < ema50) { bearishScore++; reasons.push('Bearish EMA (20<50)') }
   
-  if (macd > 0.5) {
-    bullishScore++
-    reasons.push(`MACD bullish (${macd.toFixed(2)})`)
-  } else if (macd < -0.5) {
-    bearishScore++
-    reasons.push(`MACD bearish (${macd.toFixed(2)})`)
-  }
+  if (macd > 0.5) { bullishScore++; reasons.push(`MACD bullish (${macd.toFixed(2)})`) }
+  else if (macd < -0.5) { bearishScore++; reasons.push(`MACD bearish (${macd.toFixed(2)})`) }
   
-  if (stoch < 30) {
-    bullishScore++
-    reasons.push(`Stoch oversold (${Math.round(stoch)})`)
-  } else if (stoch > 70) {
-    bearishScore++
-    reasons.push(`Stoch overbought (${Math.round(stoch)})`)
-  }
+  if (stoch < 30) { bullishScore++; reasons.push(`Stoch oversold (${Math.round(stoch)})`) }
+  else if (stoch > 70) { bearishScore++; reasons.push(`Stoch overbought (${Math.round(stoch)})`) }
   
   if (adx > 30) {
-    if (currentPrice > ema20) {
-      bullishScore++
-      reasons.push(`Strong uptrend (ADX:${Math.round(adx)})`)
-    } else if (currentPrice < ema20) {
-      bearishScore++
-      reasons.push(`Strong downtrend (ADX:${Math.round(adx)})`)
-    }
+    if (currentPrice > ema20) { bullishScore++; reasons.push(`Strong uptrend (ADX:${Math.round(adx)})`) }
+    else if (currentPrice < ema20) { bearishScore++; reasons.push(`Strong downtrend (ADX:${Math.round(adx)})`) }
   }
   
   let action: 'buy' | 'sell' | null = null
   let strength = 0
-  
-  if (bullishScore >= 3) {
-    action = 'buy'
-    strength = Math.min(bullishScore, 5)
-  } else if (bearishScore >= 3) {
-    action = 'sell'
-    strength = Math.min(bearishScore, 5)
-  }
+  if (bullishScore >= 3) { action = 'buy'; strength = Math.min(bullishScore, 5) }
+  else if (bearishScore >= 3) { action = 'sell'; strength = Math.min(bearishScore, 5) }
   
   if (action) {
     return {
-      symbol,
-      action,
-      price: currentPrice,
-      strength,
-      reasons,
-      timestamp: new Date(),
+      symbol, action, price: currentPrice, strength, reasons, timestamp: new Date(),
       indicators: {
-        rsi: Math.round(rsi),
-        macd: parseFloat(macd.toFixed(2)),
-        ema20: parseFloat(ema20.toFixed(2)),
-        ema50: parseFloat(ema50.toFixed(2)),
-        stoch: Math.round(stoch),
-        adx: Math.round(adx)
+        rsi: Math.round(rsi), macd: parseFloat(macd.toFixed(2)),
+        ema20: parseFloat(ema20.toFixed(2)), ema50: parseFloat(ema50.toFixed(2)),
+        stoch: Math.round(stoch), adx: Math.round(adx)
       }
     }
   }
-  
   return null
 }
 
 function openBybit(symbol: string) {
-  let bybitSymbol = symbol.replace('/USDT', '')
-  window.open(`https://www.bybit.com/trade/spot/${bybitSymbol}/USDT`, '_blank')
+  window.open(`https://www.bybit.com/trade/spot/${symbol.replace('/USDT', '')}/USDT`, '_blank')
 }
 
 function App() {
@@ -242,17 +175,13 @@ function App() {
                               symbol === 'XRPUSDT' ? 'XRP/USDT' :
                               symbol === 'DOGEUSDT' ? 'DOGE/USDT' :
                               symbol === 'ADAUSDT' ? 'ADA/USDT' : symbol
-      
       realPrices[formattedSymbol] = price
       setIsRealTime(true)
     }
     
     binanceWS.connect()
-    
     const symbolsToSubscribe = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT']
-    symbolsToSubscribe.forEach(sym => {
-      binanceWS.subscribe(sym, updatePrice)
-    })
+    symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
     const updateSignals = () => {
       const newSignals: Signal[] = []
@@ -260,9 +189,7 @@ function App() {
         const price = realPrices[symbol]
         if (price) {
           const signal = analyzeIndicators(symbol, price)
-          if (signal) {
-            newSignals.push(signal)
-          }
+          if (signal) newSignals.push(signal)
         }
       }
       newSignals.sort((a, b) => b.strength - a.strength)
@@ -273,17 +200,13 @@ function App() {
     const interval = setInterval(updateSignals, 30000)
     
     return () => {
-      symbolsToSubscribe.forEach(sym => {
-        binanceWS.unsubscribe(sym, updatePrice)
-      })
+      symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
       clearInterval(interval)
     }
   }, [])
 
   const buys = signals.filter(s => s.action === 'buy').length
   const sells = signals.filter(s => s.action === 'sell').length
-
-  // Форматированное текущее время UTC+4
   const formattedCurrentTime = formatTime(currentTime)
 
   return (
@@ -328,24 +251,12 @@ function App() {
         </div>
 
         <div className="flex gap-2 mb-6 border-b border-purple-500/30 overflow-x-auto pb-1">
-          <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'signals' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
-            🎯 СИГНАЛЫ
-          </button>
-          <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'trading' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
-            📈 ГРАФИК
-          </button>
-          <button onClick={() => setActiveTab('history')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'history' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
-            📜 ИСТОРИЯ
-          </button>
-          <button onClick={() => setActiveTab('news')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'news' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
-            📰 НОВОСТИ
-          </button>
-          <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'topmovers' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
-            📊 ТОП МОНЕТ
-          </button>
-          <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'watchlist' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>
-            ⭐ ИЗБРАННОЕ
-          </button>
+          <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'signals' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>🎯 СИГНАЛЫ</button>
+          <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'trading' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>📈 ГРАФИК</button>
+          <button onClick={() => setActiveTab('history')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'history' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>📜 ИСТОРИЯ</button>
+          <button onClick={() => setActiveTab('news')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'news' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>📰 НОВОСТИ</button>
+          <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'topmovers' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>📊 ТОП МОНЕТ</button>
+          <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'watchlist' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}>⭐ ИЗБРАННОЕ</button>
         </div>
 
         {activeTab === 'trading' && (
@@ -368,9 +279,7 @@ function App() {
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-purple-400">🎯 АКТУАЛЬНЫЕ СИГНАЛЫ</h2>
-              <div className="text-xs text-purple-400 bg-purple-500/20 px-3 py-1 rounded-full">
-                🎯 3+ индикаторов
-              </div>
+              <div className="text-xs text-purple-400 bg-purple-500/20 px-3 py-1 rounded-full">🎯 3+ индикаторов</div>
             </div>
             {signals.length === 0 ? (
               <div className="text-center text-gray-500 py-10">Нет сигналов (нужно 3+ совпадений индикаторов)</div>
@@ -378,11 +287,7 @@ function App() {
               signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
                 return (
-                  <div 
-                    key={idx} 
-                    onClick={() => openBybit(signal.symbol)}
-                    className="bg-gradient-to-r from-purple-900/20 to-cyan-900/20 rounded-xl p-4 border-l-4 border-purple-500 hover:translate-x-1 hover:bg-purple-900/40 transition-all cursor-pointer"
-                  >
+                  <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-purple-900/20 to-cyan-900/20 rounded-xl p-4 border-l-4 border-purple-500 hover:translate-x-1 hover:bg-purple-900/40 transition-all cursor-pointer">
                     <div className="flex justify-between items-center flex-wrap gap-2">
                       <span className="font-bold text-lg">💰 {signal.symbol}</span>
                       <span className={`px-3 py-1 rounded-full text-sm font-bold ${signal.action === 'buy' ? 'bg-green-500 text-black' : 'bg-red-500 text-white'}`}>
@@ -395,12 +300,8 @@ function App() {
                       <span>📊 RSI:{signal.indicators.rsi} | MACD:{signal.indicators.macd} | Stoch:{signal.indicators.stoch}</span>
                       <span>🕐 {formatTime(signal.timestamp)}</span>
                     </div>
-                    <div className="mt-2 text-xs text-orange-400">
-                      🎯 {signal.reasons.join(' • ')}
-                    </div>
-                    <div className="mt-1 text-xs text-purple-400">
-                      🖱️ Клик → Bybit
-                    </div>
+                    <div className="mt-2 text-xs text-orange-400">🎯 {signal.reasons.join(' • ')}</div>
+                    <div className="mt-1 text-xs text-purple-400">🖱️ Клик → Bybit</div>
                   </div>
                 )
               })
