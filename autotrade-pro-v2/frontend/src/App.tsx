@@ -5,6 +5,7 @@ import News from './components/News'
 import TopMovers from './components/TopMovers'
 import Watchlist from './components/Watchlist'
 import { binanceWS } from './services/websocket'
+import { bybitTestnet } from './services/bybitTestnet'
 
 interface Signal {
   symbol: string
@@ -27,16 +28,12 @@ interface Signal {
 
 // ========== 30+ АКТИВОВ ==========
 const SYMBOLS = [
-  // Топ-10
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
-  // Топ-20
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
-  // Топ-30
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
-  // Мемы
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT'
 ]
 
@@ -231,8 +228,17 @@ function App() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT')
   const [currentTime, setCurrentTime] = useState(new Date())
-  const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist'>('signals')
+  const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist' | 'autotrade'>('signals')
   const [isRealTime, setIsRealTime] = useState(false)
+  
+  // Автоторговля
+  const [autoTradeEnabled, setAutoTradeEnabled] = useState(false)
+  const [apiConfigured, setApiConfigured] = useState(false)
+  const [balance, setBalance] = useState(10000)
+  const [positions, setPositions] = useState<any[]>([])
+  const [tradeHistory, setTradeHistory] = useState<any[]>([])
+  const [apiKey, setApiKey] = useState('')
+  const [apiSecret, setApiSecret] = useState('')
 
   useEffect(() => {
     const createBloodDrop = () => {
@@ -254,6 +260,15 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
+  // Загрузка данных автоторговли
+  useEffect(() => {
+    setApiConfigured(bybitTestnet.isConfigured())
+    setBalance(bybitTestnet.getBalance())
+    setPositions(bybitTestnet.getPositions())
+    setTradeHistory(bybitTestnet.getHistory())
+  }, [])
+
+  // WebSocket и сигналы
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
@@ -312,6 +327,46 @@ function App() {
       clearInterval(interval)
     }
   }, [])
+
+  // Автоторговля при новых сигналах
+  useEffect(() => {
+    if (autoTradeEnabled && apiConfigured && signals.length > 0) {
+      signals.forEach(async (signal) => {
+        const qty = (balance * 0.02) / signal.price
+        const side = signal.action === 'buy' ? 'Buy' : 'Sell'
+        try {
+          const order = await bybitTestnet.placeOrder({
+            symbol: signal.symbol.replace('/USDT', ''),
+            side,
+            qty: parseFloat(qty.toFixed(4)),
+            price: signal.price
+          })
+          console.log('✅ Ордер открыт:', order)
+          setBalance(bybitTestnet.getBalance())
+          setPositions(bybitTestnet.getPositions())
+          setTradeHistory(bybitTestnet.getHistory())
+        } catch (error) {
+          console.error('❌ Ошибка открытия ордера:', error)
+        }
+      })
+    }
+  }, [signals, autoTradeEnabled, apiConfigured])
+
+  const saveApiKeys = () => {
+    if (apiKey && apiSecret) {
+      bybitTestnet.setConfig(apiKey, apiSecret)
+      setApiConfigured(true)
+      alert('API ключи сохранены!')
+    }
+  }
+
+  const resetAccount = () => {
+    bybitTestnet.resetAccount()
+    setBalance(10000)
+    setPositions([])
+    setTradeHistory([])
+    alert('Счёт сброшен')
+  }
 
   const buys = signals.filter(s => s.action === 'buy').length
   const sells = signals.filter(s => s.action === 'sell').length
@@ -374,6 +429,7 @@ function App() {
           <button onClick={() => setActiveTab('news')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📰 Новости</button>
           <button onClick={() => setActiveTab('topmovers')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📊 Топ монет</button>
           <button onClick={() => setActiveTab('watchlist')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>⭐ Избранное</button>
+          <button onClick={() => setActiveTab('autotrade')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'autotrade' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🤖 Автоторговля</button>
         </div>
 
         {activeTab === 'trading' && (
@@ -393,80 +449,82 @@ function App() {
         {activeTab === 'topmovers' && <TopMovers />}
         {activeTab === 'watchlist' && <Watchlist />}
 
-        {activeTab === 'signals' && (
-          <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
-            <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">
-                🎯 Сигналы высокой точности — требуются все 5 индикаторов | Мониторинг {SYMBOLS.length} активов
-              </div>
-            </div>
-            
-            <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (
-                <div className="text-center text-gray-500 py-16">
-                  ⏳ Нет сигналов<br/>
-                  <span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения всех 5 индикаторов</span>
+        {activeTab === 'autotrade' && (
+          <div className="space-y-6">
+            <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
+              <h3 className="text-xl font-bold text-red-400 mb-4">🤖 НАСТРОЙКА АВТОТОРГОВЛИ</h3>
+              
+              {!apiConfigured ? (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-gray-400 text-sm mb-1">API Key</label>
+                    <input 
+                      type="text" 
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Введите API Key от Bybit Testnet"
+                      className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-sm mb-1">API Secret</label>
+                    <input 
+                      type="password" 
+                      value={apiSecret}
+                      onChange={(e) => setApiSecret(e.target.value)}
+                      placeholder="Введите API Secret"
+                      className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white"
+                    />
+                  </div>
+                  <button onClick={saveApiKeys} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold transition">Сохранить ключи</button>
+                  <div className="text-xs text-gray-500 mt-2">Ключи можно получить в Bybit Testnet: API Management → Create New Key</div>
                 </div>
               ) : (
-                signals.map((signal, idx) => {
-                  const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
-                  return (
-                    <div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
-                      <div className="flex justify-between items-start flex-wrap gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="font-bold text-xl text-white">💰 {signal.symbol}</span>
-                          <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-                            {signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}
-                          </span>
-                          <span className="text-yellow-400 text-sm">⚡ {stars} (5/5)</span>
-                        </div>
-                        <div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mt-4 text-xs">
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">RSI</div>
-                          <div className={`font-bold ${signal.indicators.rsi < 35 ? 'text-green-400' : signal.indicators.rsi > 65 ? 'text-red-400' : 'text-white'}`}>
-                            {signal.indicators.rsi}
-                          </div>
-                        </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">MACD</div>
-                          <div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div>
-                        </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">Stoch</div>
-                          <div className={`font-bold ${signal.indicators.stoch < 30 ? 'text-green-400' : signal.indicators.stoch > 70 ? 'text-red-400' : 'text-white'}`}>
-                            {signal.indicators.stoch}
-                          </div>
-                        </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">ADX</div>
-                          <div className="font-bold text-white">{signal.indicators.adx}</div>
-                        </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">EMA20/50</div>
-                          <div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div>
-                        </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">Цена</div>
-                          <div className="text-white text-xs">${signal.price.toLocaleString()}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-3 text-xs text-red-300">
-                        🎯 {signal.reasons.join(' • ')}
-                      </div>
-                    </div>
-                  )
-                })
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="text-green-400 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>✅ API ключи настроены</div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={autoTradeEnabled} onChange={(e) => setAutoTradeEnabled(e.target.checked)} className="w-5 h-5" />
+                      <span className="text-white font-bold">🔓 Включить автоторговлю</span>
+                    </label>
+                    <button onClick={resetAccount} className="bg-yellow-600/50 hover:bg-yellow-600 px-4 py-1 rounded-lg text-sm transition">Сбросить счёт</button>
+                  </div>
+                  {autoTradeEnabled && (<div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">При появлении сигналов (5/5 индикаторов) сделки будут открываться автоматически</p></div>)}
+                </div>
               )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
+                <h3 className="text-lg font-bold text-red-400 mb-3">💰 БАЛАНС</h3>
+                <div className="text-3xl font-bold text-white">${balance.toLocaleString()}</div>
+                <div className="text-xs text-gray-500 mt-1">Демо-счёт Bybit Testnet</div>
+              </div>
+              <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
+                <h3 className="text-lg font-bold text-red-400 mb-3">📊 ОТКРЫТЫЕ ПОЗИЦИИ</h3>
+                {positions.length === 0 ? <div className="text-gray-500 text-sm">Нет открытых позиций</div> : positions.map((pos, idx) => (<div key={idx} className="border-b border-red-500/20 py-2 flex justify-between"><span>{pos.side} {pos.symbol}</span><span>${pos.price}</span><span className="text-xs">{pos.qty}</span></div>))}
+              </div>
+            </div>
+
+            <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
+              <h3 className="text-lg font-bold text-red-400 mb-3">📜 ИСТОРИЯ СДЕЛОК</h3>
+              <div className="max-h-[200px] overflow-y-auto">
+                {tradeHistory.length === 0 ? <div className="text-gray-500 text-sm text-center py-4">Нет сделок</div> : tradeHistory.map((trade, idx) => (<div key={idx} className="border-b border-red-500/20 py-2 flex justify-between text-sm"><span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>{trade.side}</span><span>{trade.symbol}</span><span>${trade.price}</span><span className="text-gray-500 text-xs">{new Date(trade.timestamp).toLocaleTimeString()}</span></div>))}
+              </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
-  )
-}
 
-export default App
+        {activeTab === 'signals' && (
+          <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
+            <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
+              <div className="text-sm font-semibold text-red-300">🎯 Сигналы высокой точности — требуются все 5 индикаторов | Мониторинг {SYMBOLS.length} активов</div>
+            </div>
+            <div className="divide-y divide-red-900/20">
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения всех 5 индикаторов</span></div>) : (signals.map((signal, idx) => {
+                const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
+                return (<div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
+                  <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} (5/5)</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mt-4 text-xs">
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < 35 ? 'text-green-400' : signal.indicators.rsi > 65 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(
