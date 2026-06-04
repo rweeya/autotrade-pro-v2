@@ -177,7 +177,6 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   let reasons: string[] = []
   
-  // НОВАЯ ЛОГИКА: 4 индикатора (RSI, MACD, ADX, EMA)
   const allBuyConditions = rsi < 35 && macdCross === 'bullish' && adx > 30 && currentPrice > ema20 && emaCross === 'golden'
   const allSellConditions = rsi > 65 && macdCross === 'bearish' && adx > 30 && currentPrice < ema20 && emaCross === 'death'
   
@@ -221,7 +220,6 @@ function App() {
   const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist' | 'autotrade'>('signals')
   const [isRealTime, setIsRealTime] = useState(false)
   
-  // Автоторговля
   const [autoTradeEnabled, setAutoTradeEnabled] = useState(false)
   const [apiConfigured, setApiConfigured] = useState(false)
   const [balance, setBalance] = useState(10000)
@@ -250,7 +248,6 @@ function App() {
     return () => clearInterval(timer)
   }, [])
 
-  // Загрузка данных автоторговли
   useEffect(() => {
     setApiConfigured(bybitTestnet.isConfigured())
     setBalance(bybitTestnet.getBalance())
@@ -258,7 +255,18 @@ function App() {
     setTradeHistory(bybitTestnet.getHistory())
   }, [])
 
-  // WebSocket и сигналы
+  // Закрытие сделок по обратному сигналу
+  useEffect(() => {
+    if (!apiConfigured) return
+    for (const signal of signals) {
+      const cleanSymbol = signal.symbol.replace('/USDT', '')
+      bybitTestnet.closeByReverseSignal(cleanSymbol, signal.action === 'buy' ? 'Buy' : 'Sell')
+      setBalance(bybitTestnet.getBalance())
+      setPositions(bybitTestnet.getPositions())
+      setTradeHistory(bybitTestnet.getHistory())
+    }
+  }, [signals, apiConfigured])
+
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
@@ -281,6 +289,7 @@ function App() {
       
       realPrices[formattedSymbol] = price
       setIsRealTime(true)
+      bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
     }
     
     binanceWS.connect()
@@ -318,7 +327,6 @@ function App() {
     }
   }, [])
 
-  // Автоторговля при новых сигналах
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
