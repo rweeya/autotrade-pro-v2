@@ -16,6 +16,78 @@ body {
   color: #ffffff;
 }
 
+/* ===== КРОВАВЫЙ ФОН ===== */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(139, 0, 0, 0.08) 0px,
+    rgba(139, 0, 0, 0.08) 2px,
+    transparent 2px,
+    transparent 10px
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Анимированные капли */
+.blood-drop {
+  position: fixed;
+  top: -20px;
+  background: rgba(180, 0, 0, 0.7);
+  width: 3px;
+  height: 12px;
+  border-radius: 0 0 3px 3px;
+  animation: fall linear infinite;
+  z-index: 2;
+  pointer-events: none;
+}
+
+@keyframes fall {
+  0% {
+    top: -20px;
+    opacity: 0.8;
+  }
+  100% {
+    top: 100vh;
+    opacity: 0;
+  }
+}
+
+/* Красные акценты вместо фиолетовых */
+.border-purple-500 {
+  border-color: #b91c1c !important;
+}
+
+.border-purple-500\/30 {
+  border-color: rgba(185, 28, 28, 0.3) !important;
+}
+
+.bg-purple-600 {
+  background-color: #b91c1c !important;
+}
+
+.text-purple-400 {
+  color: #ef4444 !important;
+}
+
+.from-purple-500 {
+  --tw-gradient-from: #b91c1c !important;
+}
+
+.to-cyan-500 {
+  --tw-gradient-to: #ef4444 !important;
+}
+
+.bg-purple-500\/20 {
+  background-color: rgba(185, 28, 28, 0.2) !important;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -26,10 +98,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ff00ff;
+  background: #b91c1c;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00ffff;
+  background: #ef4444;
 }
