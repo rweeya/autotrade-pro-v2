@@ -24,7 +24,7 @@ interface Signal {
   }
 }
 
-// ========== 60+ АКТИВОВ ==========
+// ========== 35 АКТИВОВ ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -273,7 +273,6 @@ function App() {
     }
   }, [signals, apiConfigured])
 
-  // Функция для закрытия всех позиций
   const closeAllPositions = async () => {
     if (positions.length === 0) {
       alert('Нет открытых позиций')
@@ -460,7 +459,7 @@ function App() {
           <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📜 История</button>
           <button onClick={() => setActiveTab('news')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📰 Новости</button>
           <button onClick={() => setActiveTab('topmovers')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📊 Топ монет</button>
-          <button onClick={() | setActiveTab('watchlist')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>⭐ Избранное</button>
+          <button onClick={() => setActiveTab('watchlist')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>⭐ Избранное</button>
           <button onClick={() => setActiveTab('autotrade')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'autotrade' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🤖 Автоторговля</button>
         </div>
 
@@ -504,7 +503,6 @@ function App() {
                   <div className="flex items-center gap-4 flex-wrap">
                     <div className="text-green-400 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>✅ API ключи настроены</div>
                     
-                    {/* Улучшенная кнопка автоторговли */}
                     <button
                       onClick={() => setAutoTradeEnabled(!autoTradeEnabled)}
                       className={`px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 ${autoTradeEnabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}
@@ -514,7 +512,6 @@ function App() {
                     
                     <button onClick={resetAccount} className="bg-yellow-600/50 hover:bg-yellow-600 px-4 py-2 rounded-lg text-sm transition">🔄 Сбросить счёт</button>
                     
-                    {/* Новая кнопка закрытия всех позиций */}
                     {positions.length > 0 && (
                       <button onClick={closeAllPositions} className="bg-red-700/80 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
                         🔒 ЗАКРЫТЬ ВСЕ ({positions.length})
