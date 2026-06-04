@@ -527,4 +527,21 @@ function App() {
                   <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} (5/5)</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
                   <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mt-4 text-xs">
                     <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < 35 ? 'text-green-400' : signal.indicators.rsi > 65 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
-                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div></div>
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Stoch</div><div className={`font-bold ${signal.indicators.stoch < 30 ? 'text-green-400' : signal.indicators.stoch > 70 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.stoch}</div></div>
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">ADX</div><div className="font-bold text-white">{signal.indicators.adx}</div></div>
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div></div>
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="text-white text-xs">${signal.price.toLocaleString()}</div></div>
+                  </div>
+                  <div className="mt-3 text-xs text-red-300">🎯 {signal.reasons.join(' • ')}</div>
+                </div>)
+              }))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default App
