@@ -25,10 +25,31 @@ interface Signal {
   }
 }
 
-const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT']
+// ========== 30+ АКТИВОВ ==========
+const SYMBOLS = [
+  // Топ-10
+  'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
+  'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
+  // Топ-20
+  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
+  'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
+  // Топ-30
+  'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
+  'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
+  // Мемы
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT'
+]
+
 const DEMO_PRICES: Record<string, number> = {
   'BTC/USDT': 65234, 'ETH/USDT': 3456, 'SOL/USDT': 178, 'BNB/USDT': 587,
-  'XRP/USDT': 0.62, 'DOGE/USDT': 0.15, 'ADA/USDT': 0.48
+  'XRP/USDT': 0.62, 'DOGE/USDT': 0.15, 'ADA/USDT': 0.48, 'AVAX/USDT': 42.5,
+  'DOT/USDT': 8.75, 'MATIC/USDT': 0.95, 'LINK/USDT': 18.5, 'UNI/USDT': 12.3,
+  'ATOM/USDT': 11.2, 'LTC/USDT': 98.5, 'NEAR/USDT': 7.8, 'FIL/USDT': 6.2,
+  'APT/USDT': 11.5, 'ARB/USDT': 1.8, 'OP/USDT': 3.2, 'INJ/USDT': 32.5,
+  'SUI/USDT': 1.4, 'IMX/USDT': 2.8, 'HBAR/USDT': 0.12, 'VET/USDT': 0.035,
+  'GRT/USDT': 0.32, 'RNDR/USDT': 10.5, 'MKR/USDT': 2800, 'AAVE/USDT': 120,
+  'SNX/USDT': 3.8, 'CRV/USDT': 0.65, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
+  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -75,7 +96,6 @@ function calculateMACD(prices: number[], fast = 12, slow = 26, signal = 9): { ma
   const emaSlow = calculateEMA(prices, slow)
   const macdLine = emaFast - emaSlow
   
-  // Для сигнальной линии нужно больше данных, упрощённо используем EMA от MACD
   const macdValues = prices.map((_, i) => {
     if (i < slow) return 0
     const f = calculateEMA(prices.slice(0, i + 1), fast)
@@ -130,17 +150,13 @@ function generatePriceHistory(currentPrice: number): number[] {
 }
 
 function checkEmaCross(prevEma20: number, prevEma50: number, currEma20: number, currEma50: number): 'golden' | 'death' | null {
-  // Golden cross: 20 пересекает 50 снизу вверх
   if (prevEma20 <= prevEma50 && currEma20 > currEma50) return 'golden'
-  // Death cross: 20 пересекает 50 сверху вниз
   if (prevEma20 >= prevEma50 && currEma20 < currEma50) return 'death'
   return null
 }
 
 function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, currSignal: number): 'bullish' | 'bearish' | null {
-  // Bullish: MACD пересекает сигнальную снизу вверх
   if (prevMacd <= prevSignal && currMacd > currSignal) return 'bullish'
-  // Bearish: MACD пересекает сигнальную сверху вниз
   if (prevMacd >= prevSignal && currMacd < currSignal) return 'bearish'
   return null
 }
@@ -159,10 +175,8 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   const stoch = calculateStochastic(prices, currentHigh, currentLow)
   const adx = calculateADX(prices.map(() => currentHigh), prices.map(() => currentLow), prices, 14)
   
-  // MACD с историей
   const macdData = calculateMACD(prices)
   
-  // Сохраняем историю MACD для определения пересечения
   if (!macdHistory[symbol]) macdHistory[symbol] = []
   macdHistory[symbol].push(macdData)
   if (macdHistory[symbol].length > 5) macdHistory[symbol].shift()
@@ -170,40 +184,21 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2] : macdData
   const currMacd = macdData
   
-  // EMA пересечение
   const prevEma20 = prices.length >= 21 ? calculateEMA(prices.slice(0, -1), 20) : ema20
   const prevEma50 = prices.length >= 51 ? calculateEMA(prices.slice(0, -1), 50) : ema50
   const emaCross = checkEmaCross(prevEma20, prevEma50, ema20, ema50)
-  
-  // MACD пересечение
   const macdCross = checkMacdCross(prevMacd.macd, prevMacd.signal, currMacd.macd, currMacd.signal)
   
-  let isBuySignal = false
-  let isSellSignal = false
   let reasons: string[] = []
   
-  // УСЛОВИЯ ДЛЯ BUY
-  if (rsi < 35) { isBuySignal = true; reasons.push(`RSI oversold (${Math.round(rsi)})`) }
-  if (macdCross === 'bullish') { isBuySignal = true; reasons.push(`MACD bullish cross (${currMacd.macd.toFixed(2)} > ${currMacd.signal.toFixed(2)})`) }
-  if (stoch < 30) { isBuySignal = true; reasons.push(`Stoch oversold (${Math.round(stoch)})`) }
-  if (adx > 30 && currentPrice > ema20) { isBuySignal = true; reasons.push(`Strong uptrend (ADX:${Math.round(adx)})`) }
-  if (emaCross === 'golden') { isBuySignal = true; reasons.push(`Golden cross (EMA20 > EMA50)`) }
-  
-  // УСЛОВИЯ ДЛЯ SELL
-  if (rsi > 65) { isSellSignal = true; reasons.push(`RSI overbought (${Math.round(rsi)})`) }
-  if (macdCross === 'bearish') { isSellSignal = true; reasons.push(`MACD bearish cross (${currMacd.macd.toFixed(2)} < ${currMacd.signal.toFixed(2)})`) }
-  if (stoch > 70) { isSellSignal = true; reasons.push(`Stoch overbought (${Math.round(stoch)})`) }
-  if (adx > 30 && currentPrice < ema20) { isSellSignal = true; reasons.push(`Strong downtrend (ADX:${Math.round(adx)})`) }
-  if (emaCross === 'death') { isSellSignal = true; reasons.push(`Death cross (EMA20 < EMA50)`) }
-  
-  // Сигнал только если ВСЕ 5 индикаторов совпадают
   const allBuyConditions = rsi < 35 && macdCross === 'bullish' && stoch < 30 && adx > 30 && currentPrice > ema20 && emaCross === 'golden'
   const allSellConditions = rsi > 65 && macdCross === 'bearish' && stoch > 70 && adx > 30 && currentPrice < ema20 && emaCross === 'death'
   
   if (allBuyConditions) {
+    reasons.push(`RSI:${Math.round(rsi)}`, `MACD bullish`, `Stoch:${Math.round(stoch)}`, `ADX:${Math.round(adx)}`, `EMA cross↑`)
     return {
       symbol, action: 'buy', price: currentPrice, strength: 5,
-      reasons: [...reasons, '✅ ВСЕ 5 ИНДИКАТОРОВ'],
+      reasons,
       timestamp: new Date(),
       indicators: {
         rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
@@ -213,9 +208,10 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   }
   
   if (allSellConditions) {
+    reasons.push(`RSI:${Math.round(rsi)}`, `MACD bearish`, `Stoch:${Math.round(stoch)}`, `ADX:${Math.round(adx)}`, `EMA cross↓`)
     return {
       symbol, action: 'sell', price: currentPrice, strength: 5,
-      reasons: [...reasons, '✅ ВСЕ 5 ИНДИКАТОРОВ'],
+      reasons,
       timestamp: new Date(),
       indicators: {
         rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
@@ -260,19 +256,36 @@ function App() {
 
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
-      const formattedSymbol = symbol === 'BTCUSDT' ? 'BTC/USDT' :
-                              symbol === 'ETHUSDT' ? 'ETH/USDT' :
-                              symbol === 'SOLUSDT' ? 'SOL/USDT' :
-                              symbol === 'BNBUSDT' ? 'BNB/USDT' :
-                              symbol === 'XRPUSDT' ? 'XRP/USDT' :
-                              symbol === 'DOGEUSDT' ? 'DOGE/USDT' :
-                              symbol === 'ADAUSDT' ? 'ADA/USDT' : symbol
+      let formattedSymbol = symbol
+      if (symbol === 'BTCUSDT') formattedSymbol = 'BTC/USDT'
+      else if (symbol === 'ETHUSDT') formattedSymbol = 'ETH/USDT'
+      else if (symbol === 'SOLUSDT') formattedSymbol = 'SOL/USDT'
+      else if (symbol === 'BNBUSDT') formattedSymbol = 'BNB/USDT'
+      else if (symbol === 'XRPUSDT') formattedSymbol = 'XRP/USDT'
+      else if (symbol === 'DOGEUSDT') formattedSymbol = 'DOGE/USDT'
+      else if (symbol === 'ADAUSDT') formattedSymbol = 'ADA/USDT'
+      else if (symbol === 'AVAXUSDT') formattedSymbol = 'AVAX/USDT'
+      else if (symbol === 'DOTUSDT') formattedSymbol = 'DOT/USDT'
+      else if (symbol === 'MATICUSDT') formattedSymbol = 'MATIC/USDT'
+      else if (symbol === 'LINKUSDT') formattedSymbol = 'LINK/USDT'
+      else if (symbol === 'UNIUSDT') formattedSymbol = 'UNI/USDT'
+      else if (symbol === 'ATOMUSDT') formattedSymbol = 'ATOM/USDT'
+      else if (symbol === 'LTCUSDT') formattedSymbol = 'LTC/USDT'
+      else if (symbol === 'NEARUSDT') formattedSymbol = 'NEAR/USDT'
+      else formattedSymbol = symbol
+      
       realPrices[formattedSymbol] = price
       setIsRealTime(true)
     }
     
     binanceWS.connect()
-    const symbolsToSubscribe = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT']
+    const symbolsToSubscribe = [
+      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT',
+      'AVAXUSDT', 'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT',
+      'FILUSDT', 'APTUSDT', 'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT', 'IMXUSDT', 'HBARUSDT',
+      'VETUSDT', 'GRTUSDT', 'RNDRUSDT', 'MKRUSDT', 'AAVEUSDT', 'SNXUSDT', 'CRVUSDT',
+      'PEPEUSDT', 'WIFUSDT', 'BONKUSDT', 'FLOKIUSDT'
+    ]
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
     const updateSignals = () => {
@@ -288,6 +301,7 @@ function App() {
       }
       newSignals.sort((a, b) => b.strength - a.strength)
       setSignals(newSignals)
+      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов`)
     }
     
     updateSignals()
@@ -309,7 +323,7 @@ function App() {
         <div className="container mx-auto px-6 py-3 flex justify-between items-center flex-wrap gap-4">
           <div className="flex items-center gap-6">
             <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">
-              💀 AUTO TRADE PRO
+              💀 AUTO TRADE PRO | {SYMBOLS.length} активов
             </h1>
             <div className="hidden md:flex gap-1">
               {SYMBOLS.slice(0, 6).map(s => (
@@ -317,6 +331,7 @@ function App() {
                   {s}
                 </button>
               ))}
+              <span className="text-gray-600 text-sm px-2">+{SYMBOLS.length - 6}</span>
             </div>
           </div>
           <div className="flex gap-4 items-center">
@@ -333,22 +348,22 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-400">{signals.length}</div>
             <div className="text-gray-400 text-sm mt-1">Активных сигналов</div>
-            <div className="text-xs text-green-400 mt-2">Только 5/5 индикаторов</div>
+            <div className="text-xs text-green-400 mt-2">Из {SYMBOLS.length} активов</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">Все условия выполнены</div>
+            <div className="text-xs text-green-400 mt-2">5/5 индикаторов</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">Все условия выполнены</div>
+            <div className="text-xs text-red-400 mt-2">5/5 индикаторов</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
             <div className="text-3xl font-bold text-yellow-500">5/5</div>
             <div className="text-gray-400 text-sm mt-1">Индикаторов</div>
-            <div className="text-xs text-green-400 mt-2">Максимальная точность</div>
+            <div className="text-xs text-green-400 mt-2">Макс. точность</div>
           </div>
         </div>
 
@@ -382,7 +397,7 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 Сигналы высокой точности — требуются все 5 индикаторов
+                🎯 Сигналы высокой точности — требуются все 5 индикаторов | Мониторинг {SYMBOLS.length} активов
               </div>
             </div>
             
@@ -390,7 +405,7 @@ function App() {
               {signals.length === 0 ? (
                 <div className="text-center text-gray-500 py-16">
                   ⏳ Нет сигналов<br/>
-                  <span className="text-xs text-gray-600">Ожидаем совпадения всех 5 индикаторов</span>
+                  <span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения всех 5 индикаторов</span>
                 </div>
               ) : (
                 signals.map((signal, idx) => {
