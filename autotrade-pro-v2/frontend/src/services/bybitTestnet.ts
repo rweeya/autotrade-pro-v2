@@ -27,6 +27,10 @@ class BybitTestnetTrading {
     if (savedPositions) {
       this.positions = JSON.parse(savedPositions)
     }
+    const savedBalance = localStorage.getItem('bybit_testnet_balance')
+    if (savedBalance) {
+      this.balance = parseFloat(savedBalance)
+    }
   }
 
   setConfig(apiKey: string, apiSecret: string) {
@@ -38,7 +42,7 @@ class BybitTestnetTrading {
     return this.config !== null
   }
 
-  async getBalance(): Promise<number> {
+  getBalance(): number {
     return this.balance
   }
 
@@ -62,7 +66,7 @@ class BybitTestnetTrading {
 
     if (params.side === 'Buy') {
       if (this.balance >= cost) {
-        this.balance -= cost
+        this.balance = this.balance - cost
         this.positions.push({ ...order, entryPrice: params.price })
       } else {
         throw new Error('Недостаточно средств')
@@ -71,7 +75,7 @@ class BybitTestnetTrading {
       const position = this.positions.find(p => p.symbol === params.symbol)
       if (position) {
         const profit = (params.price! - position.entryPrice) * params.qty
-        this.balance += position.cost + profit
+        this.balance = this.balance + position.cost + profit
         this.positions = this.positions.filter(p => p.symbol !== params.symbol)
         order.profit = profit
       }
@@ -105,7 +109,11 @@ class BybitTestnetTrading {
 
   getTotalProfit(): number {
     const history = this.getHistory()
-    return history.reduce((sum, t) => sum + (t.profit || 0), 0)
+    let total = 0
+    for (const t of history) {
+      total = total + (t.profit || 0)
+    }
+    return total
   }
 
   resetAccount() {
