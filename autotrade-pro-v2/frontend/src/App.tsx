@@ -331,31 +331,37 @@ function App() {
   // Автоторговля при новых сигналах
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
-      signals.forEach(async (signal) => {
-        const qty = (balance * 0.02) / signal.price
-        const side = signal.action === 'buy' ? 'Buy' : 'Sell'
-        try {
-          const order = await bybitTestnet.placeOrder({
-            symbol: signal.symbol.replace('/USDT', ''),
-            side,
-            qty: parseFloat(qty.toFixed(4)),
-            price: signal.price
-          })
-          console.log('✅ Ордер открыт:', order)
-          setBalance(bybitTestnet.getBalance())
-          setPositions(bybitTestnet.getPositions())
-          setTradeHistory(bybitTestnet.getHistory())
-        } catch (error) {
-          console.error('❌ Ошибка открытия ордера:', error)
+      const executeTrades = async () => {
+        for (const signal of signals) {
+          const qty = (balance * 0.02) / signal.price
+          const side = signal.action === 'buy' ? 'Buy' : 'Sell'
+          try {
+            const order = await bybitTestnet.placeOrder({
+              symbol: signal.symbol.replace('/USDT', ''),
+              side,
+              qty: parseFloat(qty.toFixed(4)),
+              price: signal.price
+            })
+            console.log('✅ Ордер открыт:', order)
+            setBalance(bybitTestnet.getBalance())
+            setPositions(bybitTestnet.getPositions())
+            setTradeHistory(bybitTestnet.getHistory())
+          } catch (error) {
+            console.error('❌ Ошибка открытия ордера:', error)
+          }
         }
-      })
+      }
+      executeTrades()
     }
-  }, [signals, autoTradeEnabled, apiConfigured])
+  }, [signals, autoTradeEnabled, apiConfigured, balance])
 
   const saveApiKeys = () => {
     if (apiKey && apiSecret) {
       bybitTestnet.setConfig(apiKey, apiSecret)
       setApiConfigured(true)
+      setBalance(bybitTestnet.getBalance())
+      setPositions(bybitTestnet.getPositions())
+      setTradeHistory(bybitTestnet.getHistory())
       alert('API ключи сохранены!')
     }
   }
@@ -458,30 +464,18 @@ function App() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-gray-400 text-sm mb-1">API Key</label>
-                    <input 
-                      type="text" 
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="Введите API Key от Bybit Testnet"
-                      className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white"
-                    />
+                    <input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Введите API Key от Bybit Testnet" className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white" />
                   </div>
                   <div>
                     <label className="block text-gray-400 text-sm mb-1">API Secret</label>
-                    <input 
-                      type="password" 
-                      value={apiSecret}
-                      onChange={(e) => setApiSecret(e.target.value)}
-                      placeholder="Введите API Secret"
-                      className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white"
-                    />
+                    <input type="password" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} placeholder="Введите API Secret" className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white" />
                   </div>
                   <button onClick={saveApiKeys} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold transition">Сохранить ключи</button>
                   <div className="text-xs text-gray-500 mt-2">Ключи можно получить в Bybit Testnet: API Management → Create New Key</div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-wrap">
                     <div className="text-green-400 flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>✅ API ключи настроены</div>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input type="checkbox" checked={autoTradeEnabled} onChange={(e) => setAutoTradeEnabled(e.target.checked)} className="w-5 h-5" />
