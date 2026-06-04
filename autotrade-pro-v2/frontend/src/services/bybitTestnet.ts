@@ -1,4 +1,4 @@
-// Bybit Testnet API для автоторговли
+// Bybit Testnet API для автоторговли с автоматическим закрытием
 
 interface OrderParams {
   symbol: string
@@ -17,12 +17,29 @@ interface Order {
   status: string
   timestamp: string
   profit?: number
+  closedAt?: string
 }
+
+interface Position {
+  symbol: string
+  side: string
+  price: number
+  qty: number
+  cost: number
+  entryPrice: number
+  openTime: number
+}
+
+// НАСТРОЙКИ ЗАКРЫТИЯ СДЕЛОК (меняй здесь)
+const TAKE_PROFIT_PERCENT = 3      // Закрыть при +3% прибыли
+const STOP_LOSS_PERCENT = 2        // Закрыть при -2% убытка
+const MAX_HOLD_TIME_MINUTES = 60   // Закрыть через 60 минут
 
 class BybitTestnetTrading {
   private config: { apiKey: string; apiSecret: string; testnet: boolean } | null = null
   private balance: number = 10000
-  private positions: any[] = []
+  private positions: Position[] = []
+  private checkInterval: NodeJS.Timeout | null = null
 
   constructor() {
     const saved = localStorage.getItem('bybit_testnet_config')
@@ -37,6 +54,67 @@ class BybitTestnetTrading {
     if (savedBalance) {
       this.balance = parseFloat(savedBalance)
     }
+    
+    // Запускаем проверку позиций каждые 30 секунд
+    this.startPositionCheck()
+  }
+
+  private startPositionCheck() {
+    if (this.checkInterval) clearInterval(this.checkInterval)
+    this.checkInterval = setInterval(() => this.checkPositions(), 30000)
+  }
+
+  // Проверка всех позиций на закрытие по TP/SL/времени
+  private async checkPositions() {
+    if (this.positions.length === 0) return
+
+    const currentPrices = await this.getCurrentPrices()
+    
+    for (const position of this.positions) {
+      const currentPrice = currentPrices[position.symbol]
+      if (!currentPrice) continue
+
+      const profitPercent = position.side === 'Buy' 
+        ? ((currentPrice - position.entryPrice) / position.entryPrice) * 100
+        : ((position.entryPrice - currentPrice) / position.entryPrice) * 100
+
+      const holdTimeMinutes = (Date.now() - position.openTime) / 1000 / 60
+
+      // Проверка на закрытие
+      let shouldClose = false
+      let closeReason = ''
+
+      if (profitPercent >= TAKE_PROFIT_PERCENT) {
+        shouldClose = true
+        closeReason = `Тейк-профит (${profitPercent.toFixed(1)}%)`
+      } else if (profitPercent <= -STOP_LOSS_PERCENT) {
+        shouldClose = true
+        closeReason = `Стоп-лосс (${profitPercent.toFixed(1)}%)`
+      } else if (holdTimeMinutes >= MAX_HOLD_TIME_MINUTES) {
+        shouldClose = true
+        closeReason = `Истекло время (${Math.floor(holdTimeMinutes)} мин)`
+      }
+
+      if (shouldClose) {
+        await this.closePosition(position.symbol, currentPrice, closeReason)
+      }
+    }
+  }
+
+  // Получение текущих цен (из localStorage или API)
+  private async getCurrentPrices(): Promise<Record<string, number>> {
+    // Здесь можно подключить реальные цены из Binance WebSocket
+    // Пока используем сохранённые цены
+    const prices: Record<string, number> = {}
+    for (const pos of this.positions) {
+      const savedPrice = localStorage.getItem(`price_${pos.symbol}`)
+      if (savedPrice) {
+        prices[pos.symbol] = parseFloat(savedPrice)
+      } else {
+        prices[pos.symbol] = pos.entryPrice * (1 + (Math.random() - 0.5) * 0.02)
+      }
+    }
+    return prices
   }
 
   setConfig(apiKey: string, apiSecret: string) {
@@ -50,6 +128,26 @@ class BybitTestnetTrading {
 
   getBalance(): number {
     return this.balance
+  }
+
+  // Обновление цены для проверки (вызывается из App.tsx)
+  updatePrice(symbol: string, price: number) {
+    localStorage.setItem(`price_${symbol}`, price.toString())
+  }
+
+  // Закрытие позиции по обратному сигналу
+  async closeByReverseSignal(symbol: string, signalSide: string): Promise<boolean> {
+    const position = this.positions.find(p => p.symbol === symbol)
+    if (!position) return false
+
+    // Проверяем, противоположный ли сигнал
+    if ((position.side === 'Buy' && signalSide === 'Sell') ||
+        (position.side === 'Sell' && signalSide === 'Buy')) {
+      const currentPrice = parseFloat(localStorage.getItem(`price_${symbol}`) || position.entryPrice.toString())
+      await this.closePosition(symbol, currentPrice, 'Обратный сигнал')
+      return true
+    }
+    return false
   }
 
   async placeOrder(params: OrderParams): Promise<Order> {
@@ -79,12 +177,14 @@ class BybitTestnetTrading {
           price: params.price || 0,
           qty: params.qty,
           cost: cost,
-          entryPrice: params.price || 0
+          entryPrice: params.price || 0,
+          openTime: Date.now()
         })
       } else {
         throw new Error('Недостаточно средств')
       }
     } else {
+      // Закрытие позиции (Sell)
       const positionIndex = this.positions.findIndex(p => p.symbol === params.symbol)
       if (positionIndex !== -1) {
         const position = this.positions[positionIndex]
@@ -107,15 +207,24 @@ class BybitTestnetTrading {
     return order
   }
 
-  async closePosition(symbol: string, price: number): Promise<Order> {
+  async closePosition(symbol: string, price: number, reason: string): Promise<Order> {
     const position = this.positions.find(p => p.symbol === symbol)
     if (!position) {
       throw new Error('Позиция не найдена')
     }
-    return this.placeOrder({ symbol, side: 'Sell', qty: position.qty, price })
+    
+    console.log(`🔒 Закрытие ${symbol}: ${reason}`)
+    const order = await this.placeOrder({ 
+      symbol, 
+      side: 'Sell', 
+      qty: position.qty, 
+      price 
+    })
+    order.closedAt = new Date().toISOString()
+    return order
   }
 
-  getPositions(): any[] {
+  getPositions(): Position[] {
     return this.positions
   }
 
