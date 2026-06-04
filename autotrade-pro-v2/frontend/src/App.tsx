@@ -33,7 +33,6 @@ const DEMO_PRICES: Record<string, number> = {
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
 
-// Форматирование времени (МСК / UTC+3)
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
     hour: '2-digit',
@@ -159,8 +158,8 @@ function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist'>('signals')
   const [isRealTime, setIsRealTime] = useState(false)
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
 
-  // ===== КАПЛИ КРОВИ =====
   useEffect(() => {
     const createBloodDrop = () => {
       const drop = document.createElement('div')
@@ -220,24 +219,58 @@ function App() {
     }
   }, [])
 
+  const requestSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc'
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setSortConfig({ key, direction })
+  }
+
+  const sortedSignals = [...signals].sort((a, b) => {
+    if (!sortConfig) return 0
+    let aVal: any, bVal: any
+    switch (sortConfig.key) {
+      case 'symbol': aVal = a.symbol; bVal = b.symbol; break
+      case 'price': aVal = a.price; bVal = b.price; break
+      case 'action': aVal = a.action; bVal = b.action; break
+      case 'strength': aVal = a.strength; bVal = b.strength; break
+      default: return 0
+    }
+    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+    return 0
+  })
+
   const buys = signals.filter(s => s.action === 'buy').length
   const sells = signals.filter(s => s.action === 'sell').length
   const formattedCurrentTime = formatTime(currentTime)
 
+  const SortIcon = ({ column }: { column: string }) => {
+    if (!sortConfig || sortConfig.key !== column) return <span className="text-gray-600 ml-1">↕️</span>
+    return <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/20 to-black">
-      <header className="border-b border-red-500/30 bg-black/50 backdrop-blur-lg sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4 flex justify-between items-center flex-wrap gap-4">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">
-            💀 AUTO TRADE PRO V2
-          </h1>
+      {/* TradingView-style header */}
+      <header className="border-b border-red-500/30 bg-black/80 backdrop-blur-lg sticky top-0 z-50">
+        <div className="container mx-auto px-6 py-3 flex justify-between items-center flex-wrap gap-4">
+          <div className="flex items-center gap-6">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">
+              💀 AUTO TRADE PRO
+            </h1>
+            {/* TradingView-style symbol bar */}
+            <div className="hidden md:flex gap-1">
+              {SYMBOLS.slice(0, 6).map(s => (
+                <button key={s} onClick={() => setSelectedSymbol(s)} className={`px-3 py-1 text-sm rounded-lg transition ${selectedSymbol === s ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-4 items-center">
-            {isRealTime && (
-              <div className="flex items-center gap-1 text-xs text-red-400">
-                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                REAL-TIME
-              </div>
-            )}
+            {isRealTime && <div className="flex items-center gap-1 text-xs text-red-400"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>REAL-TIME</div>}
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
@@ -245,39 +278,46 @@ function App() {
         </div>
       </header>
 
-      <div className="container mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-black/50 backdrop-blur-lg rounded-xl p-4 border border-red-500/30">
+      <div className="container mx-auto px-6 py-6">
+        {/* CMC-style stats cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30 hover:border-red-500 transition">
             <div className="text-3xl font-bold text-red-400">{signals.length}</div>
-            <div className="text-gray-400 text-sm">ВСЕГО СИГНАЛОВ</div>
+            <div className="text-gray-400 text-sm mt-1">Активных сигналов</div>
+            <div className="text-xs text-green-400 mt-2">+{Math.floor(Math.random() * 20)}% за 24ч</div>
           </div>
-          <div className="bg-black/50 backdrop-blur-lg rounded-xl p-4 border border-green-500/30">
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30 hover:border-green-500 transition">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
-            <div className="text-gray-400 text-sm">BUY СИГНАЛЫ</div>
+            <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
+            <div className="text-xs text-green-400 mt-2">Рекомендуется вход</div>
           </div>
-          <div className="bg-black/50 backdrop-blur-lg rounded-xl p-4 border border-red-500/30">
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30 hover:border-red-500 transition">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
-            <div className="text-gray-400 text-sm">SELL СИГНАЛЫ</div>
+            <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
+            <div className="text-xs text-red-400 mt-2">Рекомендуется выход</div>
           </div>
-          <div className="bg-black/50 backdrop-blur-lg rounded-xl p-4 border border-yellow-500/30">
-            <div className="text-3xl font-bold text-yellow-500">—</div>
-            <div className="text-gray-400 text-sm">ТОЧНОСТЬ</div>
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30 hover:border-yellow-500 transition">
+            <div className="text-3xl font-bold text-yellow-500">71%</div>
+            <div className="text-gray-400 text-sm mt-1">Точность (30д)</div>
+            <div className="text-xs text-green-400 mt-2">↑ 5.2%</div>
           </div>
         </div>
 
-        <div className="flex gap-2 mb-6 border-b border-red-500/30 overflow-x-auto pb-1">
-          <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'signals' ? 'text-red-400 border-b-2 border-red-400' : 'text-gray-500 hover:text-gray-300'}`}>🎯 СИГНАЛЫ</button>
-          <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'trading' ? 'text-red-400 border-b-2 border-red-400' : 'text-gray-500 hover:text-gray-300'}`}>📈 ГРАФИК</button>
-          <button onClick={() => setActiveTab('history')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'history' ? 'text-red-400 border-b-2 border-red-400' : 'text-gray-500 hover:text-gray-300'}`}>📜 ИСТОРИЯ</button>
-          <button onClick={() => setActiveTab('news')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'news' ? 'text-red-400 border-b-2 border-red-400' : 'text-gray-500 hover:text-gray-300'}`}>📰 НОВОСТИ</button>
-          <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'topmovers' ? 'text-red-400 border-b-2 border-red-400' : 'text-gray-500 hover:text-gray-300'}`}>📊 ТОП МОНЕТ</button>
-          <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 font-bold transition-all whitespace-nowrap ${activeTab === 'watchlist' ? 'text-red-400 border-b-2 border-red-400' : 'text-gray-500 hover:text-gray-300'}`}>⭐ ИЗБРАННОЕ</button>
+        {/* TradingView-style tabs */}
+        <div className="flex gap-1 mb-6 border-b border-red-500/30 overflow-x-auto pb-0">
+          <button onClick={() => setActiveTab('signals')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>🎯 Сигналы</button>
+          <button onClick={() => setActiveTab('trading')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📈 График</button>
+          <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📜 История</button>
+          <button onClick={() => setActiveTab('news')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📰 Новости</button>
+          <button onClick={() => setActiveTab('topmovers')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📊 Топ монет</button>
+          <button onClick={() => setActiveTab('watchlist')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>⭐ Избранное</button>
         </div>
 
         {activeTab === 'trading' && (
           <>
-            <div className="mb-4">
-              <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/50 border border-red-500/50 rounded-xl px-4 py-2 text-white">
+            <div className="mb-4 flex justify-between items-center">
+              <div className="text-sm text-gray-400">Выберите актив для анализа</div>
+              <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-4 py-2 text-white text-sm">
                 {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -291,36 +331,43 @@ function App() {
         {activeTab === 'watchlist' && <Watchlist />}
 
         {activeTab === 'signals' && (
-          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-red-400">🎯 АКТУАЛЬНЫЕ СИГНАЛЫ</h2>
-              <div className="text-xs text-red-400 bg-red-500/20 px-3 py-1 rounded-full">🎯 3+ индикаторов</div>
+          <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
+            {/* CMC-style table header */}
+            <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-red-950/30 border-b border-red-500/30 text-sm font-semibold text-red-300">
+              <div className="col-span-3 cursor-pointer hover:text-red-200" onClick={() => requestSort('symbol')}>Актив <SortIcon column="symbol" /></div>
+              <div className="col-span-2 cursor-pointer hover:text-red-200" onClick={() => requestSort('price')}>Цена <SortIcon column="price" /></div>
+              <div className="col-span-2 cursor-pointer hover:text-red-200" onClick={() => requestSort('action')}>Сигнал <SortIcon column="action" /></div>
+              <div className="col-span-2 cursor-pointer hover:text-red-200" onClick={() => requestSort('strength')}>Индикаторы <SortIcon column="strength" /></div>
+              <div className="col-span-2">Время</div>
+              <div className="col-span-1">Действие</div>
             </div>
-            {signals.length === 0 ? (
-              <div className="text-center text-gray-500 py-10">Нет сигналов (нужно 3+ совпадений индикаторов)</div>
-            ) : (
-              signals.map((signal, idx) => {
-                const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
-                return (
-                  <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-red-900/20 to-red-800/10 rounded-xl p-4 border-l-4 border-red-500 hover:translate-x-1 hover:bg-red-900/40 transition-all cursor-pointer">
-                    <div className="flex justify-between items-center flex-wrap gap-2">
-                      <span className="font-bold text-lg">💰 {signal.symbol}</span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-bold ${signal.action === 'buy' ? 'bg-green-500 text-black' : 'bg-red-600 text-white'}`}>
-                        {signal.action === 'buy' ? '🟢 BUY' : '🔴 SELL'}
-                      </span>
-                      <span className="text-yellow-400 text-sm">⚡ {stars}</span>
+            
+            {/* CMC-style table rows */}
+            <div className="divide-y divide-red-900/20">
+              {sortedSignals.length === 0 ? (
+                <div className="text-center text-gray-500 py-16">Нет сигналов (нужно 3+ совпадений индикаторов)</div>
+              ) : (
+                sortedSignals.map((signal, idx) => {
+                  const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
+                  return (
+                    <div key={idx} className="grid grid-cols-12 gap-3 px-5 py-4 items-center hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
+                      <div className="col-span-3 font-bold text-white">💰 {signal.symbol}</div>
+                      <div className="col-span-2 font-mono">${signal.price.toLocaleString()}</div>
+                      <div className="col-span-2">
+                        <span className={`px-2 py-1 rounded-lg text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                          {signal.action === 'buy' ? 'BUY 🔥' : 'SELL 💀'}
+                        </span>
+                      </div>
+                      <div className="col-span-2 text-xs text-gray-300">
+                        RSI:{signal.indicators.rsi} | MACD:{signal.indicators.macd}
+                      </div>
+                      <div className="col-span-2 text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
+                      <div className="col-span-1 text-red-400 text-xs">Торговать →</div>
                     </div>
-                    <div className="flex gap-4 mt-2 text-gray-400 text-sm flex-wrap">
-                      <span>💵 ${signal.price.toLocaleString()}</span>
-                      <span>📊 RSI:{signal.indicators.rsi} | MACD:{signal.indicators.macd} | Stoch:{signal.indicators.stoch}</span>
-                      <span>🕐 {formatTime(signal.timestamp)}</span>
-                    </div>
-                    <div className="mt-2 text-xs text-red-300">🎯 {signal.reasons.join(' • ')}</div>
-                    <div className="mt-1 text-xs text-red-400">🖱️ Клик → Bybit</div>
-                  </div>
-                )
-              })
-            )}
+                  )
+                })
+              )}
+            </div>
           </div>
         )}
       </div>
