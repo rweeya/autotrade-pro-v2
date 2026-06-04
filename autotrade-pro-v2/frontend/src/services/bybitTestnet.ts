@@ -7,16 +7,31 @@ interface OrderParams {
   price?: number
 }
 
-interface BybitConfig {
-  apiKey: string
-  apiSecret: string
-  testnet: boolean
+interface Order {
+  id: string
+  symbol: string
+  side: string
+  price: number
+  qty: number
+  cost: number
+  status: string
+  timestamp: string
+  profit?: number
+}
+
+interface Position {
+  symbol: string
+  side: string
+  price: number
+  qty: number
+  cost: number
+  entryPrice: number
 }
 
 class BybitTestnetTrading {
-  private config: BybitConfig | null = null
+  private config: { apiKey: string; apiSecret: string; testnet: boolean } | null = null
   private balance: number = 10000
-  private positions: any[] = []
+  private positions: Position[] = []
 
   constructor() {
     const saved = localStorage.getItem('bybit_testnet_config')
@@ -46,14 +61,14 @@ class BybitTestnetTrading {
     return this.balance
   }
 
-  async placeOrder(params: OrderParams): Promise<any> {
+  async placeOrder(params: OrderParams): Promise<Order> {
     if (!this.config) {
       throw new Error('API ключи не настроены')
     }
 
     const cost = params.qty * (params.price || 0)
     
-    const order = {
+    const order: Order = {
       id: Date.now().toString(),
       symbol: params.symbol,
       side: params.side,
@@ -67,31 +82,41 @@ class BybitTestnetTrading {
     if (params.side === 'Buy') {
       if (this.balance >= cost) {
         this.balance = this.balance - cost
-        this.positions.push({ ...order, entryPrice: params.price })
+        this.positions.push({
+          symbol: params.symbol,
+          side: params.side,
+          price: params.price || 0,
+          qty: params.qty,
+          cost: cost,
+          entryPrice: params.price || 0
+        })
       } else {
         throw new Error('Недостаточно средств')
       }
     } else {
-      const position = this.positions.find(p => p.symbol === params.symbol)
-      if (position) {
+      const positionIndex = this.positions.findIndex(p => p.symbol === params.symbol)
+      if (positionIndex !== -1) {
+        const position = this.positions[positionIndex]
         const profit = (params.price! - position.entryPrice) * params.qty
         this.balance = this.balance + position.cost + profit
-        this.positions = this.positions.filter(p => p.symbol !== params.symbol)
+        this.positions.splice(positionIndex, 1)
         order.profit = profit
+      } else {
+        throw new Error('Позиция не найдена')
       }
     }
 
     localStorage.setItem('bybit_testnet_balance', JSON.stringify(this.balance))
     localStorage.setItem('bybit_testnet_positions', JSON.stringify(this.positions))
     
-    const history = JSON.parse(localStorage.getItem('bybit_testnet_history') || '[]')
+    const history: Order[] = JSON.parse(localStorage.getItem('bybit_testnet_history') || '[]')
     history.unshift(order)
     localStorage.setItem('bybit_testnet_history', JSON.stringify(history.slice(0, 100)))
     
     return order
   }
 
-  async closePosition(symbol: string, price: number): Promise<any> {
+  async closePosition(symbol: string, price: number): Promise<Order> {
     const position = this.positions.find(p => p.symbol === symbol)
     if (!position) {
       throw new Error('Позиция не найдена')
@@ -99,11 +124,11 @@ class BybitTestnetTrading {
     return this.placeOrder({ symbol, side: 'Sell', qty: position.qty, price })
   }
 
-  getPositions(): any[] {
+  getPositions(): Position[] {
     return this.positions
   }
 
-  getHistory(): any[] {
+  getHistory(): Order[] {
     return JSON.parse(localStorage.getItem('bybit_testnet_history') || '[]')
   }
 
@@ -111,7 +136,9 @@ class BybitTestnetTrading {
     const history = this.getHistory()
     let total = 0
     for (const t of history) {
-      total = total + (t.profit || 0)
+      if (t.profit) {
+        total = total + t.profit
+      }
     }
     return total
   }
