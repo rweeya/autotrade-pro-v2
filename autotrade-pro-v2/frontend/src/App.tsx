@@ -16,6 +16,8 @@ interface Signal {
   indicators: {
     rsi: number
     macd: number
+    macdSignal: number
+    macdHistogram: number
     ema20: number
     ema50: number
     stoch: number
@@ -24,23 +26,19 @@ interface Signal {
 }
 
 const SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT']
-
 const DEMO_PRICES: Record<string, number> = {
-  'BTC/USDT': 65234, 'ETH/USDT': 3456, 'SOL/USDT': 178, 'BNB/USDT': 587, 
+  'BTC/USDT': 65234, 'ETH/USDT': 3456, 'SOL/USDT': 178, 'BNB/USDT': 587,
   'XRP/USDT': 0.62, 'DOGE/USDT': 0.15, 'ADA/USDT': 0.48
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
+let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric'
   })
 }
 
@@ -69,11 +67,26 @@ function calculateEMA(prices: number[], period: number): number {
   return ema
 }
 
-function calculateMACD(prices: number[]): number {
-  if (prices.length < 26) return 0
-  const ema12 = calculateEMA(prices, 12)
-  const ema26 = calculateEMA(prices, 26)
-  return ema12 - ema26
+function calculateMACD(prices: number[], fast = 12, slow = 26, signal = 9): { macd: number; signal: number; histogram: number } {
+  if (prices.length < slow + signal) {
+    return { macd: 0, signal: 0, histogram: 0 }
+  }
+  const emaFast = calculateEMA(prices, fast)
+  const emaSlow = calculateEMA(prices, slow)
+  const macdLine = emaFast - emaSlow
+  
+  // Для сигнальной линии нужно больше данных, упрощённо используем EMA от MACD
+  const macdValues = prices.map((_, i) => {
+    if (i < slow) return 0
+    const f = calculateEMA(prices.slice(0, i + 1), fast)
+    const s = calculateEMA(prices.slice(0, i + 1), slow)
+    return f - s
+  }).filter(v => v !== 0)
+  
+  const signalLine = macdValues.length >= signal ? calculateEMA(macdValues.slice(-signal), signal) : 0
+  const histogram = macdLine - signalLine
+  
+  return { macd: macdLine, signal: signalLine, histogram }
 }
 
 function calculateStochastic(prices: number[], high: number, low: number, period: number = 14): number {
@@ -85,7 +98,27 @@ function calculateStochastic(prices: number[], high: number, low: number, period
   return ((currentPrice - lowest) / (highest - lowest)) * 100
 }
 
-function generatePriceHistory(symbol: string, currentPrice: number): number[] {
+function calculateADX(highs: number[], lows: number[], closes: number[], period: number = 14): number {
+  if (closes.length < period + 1) return 25
+  let plusDM = 0, minusDM = 0, tr = 0
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const highLow = highs[i] - lows[i]
+    const highClose = Math.abs(highs[i] - closes[i - 1])
+    const lowClose = Math.abs(lows[i] - closes[i - 1])
+    tr += Math.max(highLow, highClose, lowClose)
+    const upMove = highs[i] - highs[i - 1]
+    const downMove = lows[i - 1] - lows[i]
+    if (upMove > downMove && upMove > 0) plusDM += upMove
+    if (downMove > upMove && downMove > 0) minusDM += downMove
+  }
+  const atr = tr / period
+  const plusDI = (plusDM / period) / atr * 100
+  const minusDI = (minusDM / period) / atr * 100
+  const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100
+  return isNaN(dx) ? 25 : dx
+}
+
+function generatePriceHistory(currentPrice: number): number[] {
   const history: number[] = []
   let price = currentPrice * 0.8
   for (let i = 0; i < 100; i++) {
@@ -96,55 +129,101 @@ function generatePriceHistory(symbol: string, currentPrice: number): number[] {
   return history
 }
 
-function analyzeIndicators(symbol: string, currentPrice: number): Signal | null {
+function checkEmaCross(prevEma20: number, prevEma50: number, currEma20: number, currEma50: number): 'golden' | 'death' | null {
+  // Golden cross: 20 пересекает 50 снизу вверх
+  if (prevEma20 <= prevEma50 && currEma20 > currEma50) return 'golden'
+  // Death cross: 20 пересекает 50 сверху вниз
+  if (prevEma20 >= prevEma50 && currEma20 < currEma50) return 'death'
+  return null
+}
+
+function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, currSignal: number): 'bullish' | 'bearish' | null {
+  // Bullish: MACD пересекает сигнальную снизу вверх
+  if (prevMacd <= prevSignal && currMacd > currSignal) return 'bullish'
+  // Bearish: MACD пересекает сигнальную сверху вниз
+  if (prevMacd >= prevSignal && currMacd < currSignal) return 'bearish'
+  return null
+}
+
+function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number): Signal | null {
   if (!priceHistory[symbol]) {
-    priceHistory[symbol] = generatePriceHistory(symbol, currentPrice)
+    priceHistory[symbol] = generatePriceHistory(currentPrice)
   }
   priceHistory[symbol].push(currentPrice)
   if (priceHistory[symbol].length > 100) priceHistory[symbol].shift()
   
   const prices = priceHistory[symbol]
   const rsi = calculateRSI(prices)
-  const macd = calculateMACD(prices)
   const ema20 = calculateEMA(prices, 20)
   const ema50 = calculateEMA(prices, 50)
-  const stoch = calculateStochastic(prices, currentPrice * 1.02, currentPrice * 0.98)
-  const adx = 25 + Math.random() * 30
+  const stoch = calculateStochastic(prices, currentHigh, currentLow)
+  const adx = calculateADX(prices.map(() => currentHigh), prices.map(() => currentLow), prices, 14)
   
-  let bullishScore = 0, bearishScore = 0, reasons: string[] = []
+  // MACD с историей
+  const macdData = calculateMACD(prices)
   
-  if (rsi < 35) { bullishScore++; reasons.push(`RSI oversold (${Math.round(rsi)})`) }
-  else if (rsi > 65) { bearishScore++; reasons.push(`RSI overbought (${Math.round(rsi)})`) }
+  // Сохраняем историю MACD для определения пересечения
+  if (!macdHistory[symbol]) macdHistory[symbol] = []
+  macdHistory[symbol].push(macdData)
+  if (macdHistory[symbol].length > 5) macdHistory[symbol].shift()
   
-  if (currentPrice > ema20 && ema20 > ema50) { bullishScore++; reasons.push('Bullish EMA (20>50)') }
-  else if (currentPrice < ema20 && ema20 < ema50) { bearishScore++; reasons.push('Bearish EMA (20<50)') }
+  const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2] : macdData
+  const currMacd = macdData
   
-  if (macd > 0.5) { bullishScore++; reasons.push(`MACD bullish (${macd.toFixed(2)})`) }
-  else if (macd < -0.5) { bearishScore++; reasons.push(`MACD bearish (${macd.toFixed(2)})`) }
+  // EMA пересечение
+  const prevEma20 = prices.length >= 21 ? calculateEMA(prices.slice(0, -1), 20) : ema20
+  const prevEma50 = prices.length >= 51 ? calculateEMA(prices.slice(0, -1), 50) : ema50
+  const emaCross = checkEmaCross(prevEma20, prevEma50, ema20, ema50)
   
-  if (stoch < 30) { bullishScore++; reasons.push(`Stoch oversold (${Math.round(stoch)})`) }
-  else if (stoch > 70) { bearishScore++; reasons.push(`Stoch overbought (${Math.round(stoch)})`) }
+  // MACD пересечение
+  const macdCross = checkMacdCross(prevMacd.macd, prevMacd.signal, currMacd.macd, currMacd.signal)
   
-  if (adx > 30) {
-    if (currentPrice > ema20) { bullishScore++; reasons.push(`Strong uptrend (ADX:${Math.round(adx)})`) }
-    else if (currentPrice < ema20) { bearishScore++; reasons.push(`Strong downtrend (ADX:${Math.round(adx)})`) }
-  }
+  let isBuySignal = false
+  let isSellSignal = false
+  let reasons: string[] = []
   
-  let action: 'buy' | 'sell' | null = null
-  let strength = 0
-  if (bullishScore >= 3) { action = 'buy'; strength = Math.min(bullishScore, 5) }
-  else if (bearishScore >= 3) { action = 'sell'; strength = Math.min(bearishScore, 5) }
+  // УСЛОВИЯ ДЛЯ BUY
+  if (rsi < 35) { isBuySignal = true; reasons.push(`RSI oversold (${Math.round(rsi)})`) }
+  if (macdCross === 'bullish') { isBuySignal = true; reasons.push(`MACD bullish cross (${currMacd.macd.toFixed(2)} > ${currMacd.signal.toFixed(2)})`) }
+  if (stoch < 30) { isBuySignal = true; reasons.push(`Stoch oversold (${Math.round(stoch)})`) }
+  if (adx > 30 && currentPrice > ema20) { isBuySignal = true; reasons.push(`Strong uptrend (ADX:${Math.round(adx)})`) }
+  if (emaCross === 'golden') { isBuySignal = true; reasons.push(`Golden cross (EMA20 > EMA50)`) }
   
-  if (action) {
+  // УСЛОВИЯ ДЛЯ SELL
+  if (rsi > 65) { isSellSignal = true; reasons.push(`RSI overbought (${Math.round(rsi)})`) }
+  if (macdCross === 'bearish') { isSellSignal = true; reasons.push(`MACD bearish cross (${currMacd.macd.toFixed(2)} < ${currMacd.signal.toFixed(2)})`) }
+  if (stoch > 70) { isSellSignal = true; reasons.push(`Stoch overbought (${Math.round(stoch)})`) }
+  if (adx > 30 && currentPrice < ema20) { isSellSignal = true; reasons.push(`Strong downtrend (ADX:${Math.round(adx)})`) }
+  if (emaCross === 'death') { isSellSignal = true; reasons.push(`Death cross (EMA20 < EMA50)`) }
+  
+  // Сигнал только если ВСЕ 5 индикаторов совпадают
+  const allBuyConditions = rsi < 35 && macdCross === 'bullish' && stoch < 30 && adx > 30 && currentPrice > ema20 && emaCross === 'golden'
+  const allSellConditions = rsi > 65 && macdCross === 'bearish' && stoch > 70 && adx > 30 && currentPrice < ema20 && emaCross === 'death'
+  
+  if (allBuyConditions) {
     return {
-      symbol, action, price: currentPrice, strength, reasons, timestamp: new Date(),
+      symbol, action: 'buy', price: currentPrice, strength: 5,
+      reasons: [...reasons, '✅ ВСЕ 5 ИНДИКАТОРОВ'],
+      timestamp: new Date(),
       indicators: {
-        rsi: Math.round(rsi), macd: parseFloat(macd.toFixed(2)),
-        ema20: parseFloat(ema20.toFixed(2)), ema50: parseFloat(ema50.toFixed(2)),
-        stoch: Math.round(stoch), adx: Math.round(adx)
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50, stoch: Math.round(stoch), adx: Math.round(adx)
       }
     }
   }
+  
+  if (allSellConditions) {
+    return {
+      symbol, action: 'sell', price: currentPrice, strength: 5,
+      reasons: [...reasons, '✅ ВСЕ 5 ИНДИКАТОРОВ'],
+      timestamp: new Date(),
+      indicators: {
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50, stoch: Math.round(stoch), adx: Math.round(adx)
+      }
+    }
+  }
+  
   return null
 }
 
@@ -158,7 +237,6 @@ function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist'>('signals')
   const [isRealTime, setIsRealTime] = useState(false)
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null)
 
   useEffect(() => {
     const createBloodDrop = () => {
@@ -202,7 +280,9 @@ function App() {
       for (const symbol of SYMBOLS) {
         const price = realPrices[symbol]
         if (price) {
-          const signal = analyzeIndicators(symbol, price)
+          const high = price * 1.02
+          const low = price * 0.98
+          const signal = analyzeIndicators(symbol, price, high, low)
           if (signal) newSignals.push(signal)
         }
       }
@@ -219,48 +299,18 @@ function App() {
     }
   }, [])
 
-  const requestSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc'
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc'
-    }
-    setSortConfig({ key, direction })
-  }
-
-  const sortedSignals = [...signals].sort((a, b) => {
-    if (!sortConfig) return 0
-    let aVal: any, bVal: any
-    switch (sortConfig.key) {
-      case 'symbol': aVal = a.symbol; bVal = b.symbol; break
-      case 'price': aVal = a.price; bVal = b.price; break
-      case 'action': aVal = a.action; bVal = b.action; break
-      case 'strength': aVal = a.strength; bVal = b.strength; break
-      default: return 0
-    }
-    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
-    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
-    return 0
-  })
-
   const buys = signals.filter(s => s.action === 'buy').length
   const sells = signals.filter(s => s.action === 'sell').length
   const formattedCurrentTime = formatTime(currentTime)
 
-  const SortIcon = ({ column }: { column: string }) => {
-    if (!sortConfig || sortConfig.key !== column) return <span className="text-gray-600 ml-1">↕️</span>
-    return <span className="ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/20 to-black">
-      {/* TradingView-style header */}
       <header className="border-b border-red-500/30 bg-black/80 backdrop-blur-lg sticky top-0 z-50">
         <div className="container mx-auto px-6 py-3 flex justify-between items-center flex-wrap gap-4">
           <div className="flex items-center gap-6">
             <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">
               💀 AUTO TRADE PRO
             </h1>
-            {/* TradingView-style symbol bar */}
             <div className="hidden md:flex gap-1">
               {SYMBOLS.slice(0, 6).map(s => (
                 <button key={s} onClick={() => setSelectedSymbol(s)} className={`px-3 py-1 text-sm rounded-lg transition ${selectedSymbol === s ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>
@@ -279,38 +329,36 @@ function App() {
       </header>
 
       <div className="container mx-auto px-6 py-6">
-        {/* CMC-style stats cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30 hover:border-red-500 transition">
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-400">{signals.length}</div>
             <div className="text-gray-400 text-sm mt-1">Активных сигналов</div>
-            <div className="text-xs text-green-400 mt-2">+{Math.floor(Math.random() * 20)}% за 24ч</div>
+            <div className="text-xs text-green-400 mt-2">Только 5/5 индикаторов</div>
           </div>
-          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30 hover:border-green-500 transition">
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">Рекомендуется вход</div>
+            <div className="text-xs text-green-400 mt-2">Все условия выполнены</div>
           </div>
-          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30 hover:border-red-500 transition">
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">Рекомендуется выход</div>
+            <div className="text-xs text-red-400 mt-2">Все условия выполнены</div>
           </div>
-          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30 hover:border-yellow-500 transition">
-            <div className="text-3xl font-bold text-yellow-500">71%</div>
-            <div className="text-gray-400 text-sm mt-1">Точность (30д)</div>
-            <div className="text-xs text-green-400 mt-2">↑ 5.2%</div>
+          <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
+            <div className="text-3xl font-bold text-yellow-500">5/5</div>
+            <div className="text-gray-400 text-sm mt-1">Индикаторов</div>
+            <div className="text-xs text-green-400 mt-2">Максимальная точность</div>
           </div>
         </div>
 
-        {/* TradingView-style tabs */}
         <div className="flex gap-1 mb-6 border-b border-red-500/30 overflow-x-auto pb-0">
-          <button onClick={() => setActiveTab('signals')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>🎯 Сигналы</button>
-          <button onClick={() => setActiveTab('trading')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📈 График</button>
-          <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📜 История</button>
-          <button onClick={() => setActiveTab('news')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📰 Новости</button>
-          <button onClick={() => setActiveTab('topmovers')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>📊 Топ монет</button>
-          <button onClick={() => setActiveTab('watchlist')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white hover:bg-red-900/30'}`}>⭐ Избранное</button>
+          <button onClick={() => setActiveTab('signals')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🎯 Сигналы</button>
+          <button onClick={() => setActiveTab('trading')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📈 График</button>
+          <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📜 История</button>
+          <button onClick={() => setActiveTab('news')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📰 Новости</button>
+          <button onClick={() => setActiveTab('topmovers')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📊 Топ монет</button>
+          <button onClick={() => setActiveTab('watchlist')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>⭐ Избранное</button>
         </div>
 
         {activeTab === 'trading' && (
@@ -332,37 +380,68 @@ function App() {
 
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
-            {/* CMC-style table header */}
-            <div className="grid grid-cols-12 gap-3 px-5 py-3 bg-red-950/30 border-b border-red-500/30 text-sm font-semibold text-red-300">
-              <div className="col-span-3 cursor-pointer hover:text-red-200" onClick={() => requestSort('symbol')}>Актив <SortIcon column="symbol" /></div>
-              <div className="col-span-2 cursor-pointer hover:text-red-200" onClick={() => requestSort('price')}>Цена <SortIcon column="price" /></div>
-              <div className="col-span-2 cursor-pointer hover:text-red-200" onClick={() => requestSort('action')}>Сигнал <SortIcon column="action" /></div>
-              <div className="col-span-2 cursor-pointer hover:text-red-200" onClick={() => requestSort('strength')}>Индикаторы <SortIcon column="strength" /></div>
-              <div className="col-span-2">Время</div>
-              <div className="col-span-1">Действие</div>
+            <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
+              <div className="text-sm font-semibold text-red-300">
+                🎯 Сигналы высокой точности — требуются все 5 индикаторов
+              </div>
             </div>
             
-            {/* CMC-style table rows */}
             <div className="divide-y divide-red-900/20">
-              {sortedSignals.length === 0 ? (
-                <div className="text-center text-gray-500 py-16">Нет сигналов (нужно 3+ совпадений индикаторов)</div>
+              {signals.length === 0 ? (
+                <div className="text-center text-gray-500 py-16">
+                  ⏳ Нет сигналов<br/>
+                  <span className="text-xs text-gray-600">Ожидаем совпадения всех 5 индикаторов</span>
+                </div>
               ) : (
-                sortedSignals.map((signal, idx) => {
+                signals.map((signal, idx) => {
                   const stars = '★'.repeat(signal.strength) + '☆'.repeat(5 - signal.strength)
                   return (
-                    <div key={idx} className="grid grid-cols-12 gap-3 px-5 py-4 items-center hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
-                      <div className="col-span-3 font-bold text-white">💰 {signal.symbol}</div>
-                      <div className="col-span-2 font-mono">${signal.price.toLocaleString()}</div>
-                      <div className="col-span-2">
-                        <span className={`px-2 py-1 rounded-lg text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-                          {signal.action === 'buy' ? 'BUY 🔥' : 'SELL 💀'}
-                        </span>
+                    <div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
+                      <div className="flex justify-between items-start flex-wrap gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className="font-bold text-xl text-white">💰 {signal.symbol}</span>
+                          <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                            {signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}
+                          </span>
+                          <span className="text-yellow-400 text-sm">⚡ {stars} (5/5)</span>
+                        </div>
+                        <div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
                       </div>
-                      <div className="col-span-2 text-xs text-gray-300">
-                        RSI:{signal.indicators.rsi} | MACD:{signal.indicators.macd}
+                      
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mt-4 text-xs">
+                        <div className="bg-black/40 rounded-lg p-2 text-center">
+                          <div className="text-gray-500">RSI</div>
+                          <div className={`font-bold ${signal.indicators.rsi < 35 ? 'text-green-400' : signal.indicators.rsi > 65 ? 'text-red-400' : 'text-white'}`}>
+                            {signal.indicators.rsi}
+                          </div>
+                        </div>
+                        <div className="bg-black/40 rounded-lg p-2 text-center">
+                          <div className="text-gray-500">MACD</div>
+                          <div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div>
+                        </div>
+                        <div className="bg-black/40 rounded-lg p-2 text-center">
+                          <div className="text-gray-500">Stoch</div>
+                          <div className={`font-bold ${signal.indicators.stoch < 30 ? 'text-green-400' : signal.indicators.stoch > 70 ? 'text-red-400' : 'text-white'}`}>
+                            {signal.indicators.stoch}
+                          </div>
+                        </div>
+                        <div className="bg-black/40 rounded-lg p-2 text-center">
+                          <div className="text-gray-500">ADX</div>
+                          <div className="font-bold text-white">{signal.indicators.adx}</div>
+                        </div>
+                        <div className="bg-black/40 rounded-lg p-2 text-center">
+                          <div className="text-gray-500">EMA20/50</div>
+                          <div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div>
+                        </div>
+                        <div className="bg-black/40 rounded-lg p-2 text-center">
+                          <div className="text-gray-500">Цена</div>
+                          <div className="text-white text-xs">${signal.price.toLocaleString()}</div>
+                        </div>
                       </div>
-                      <div className="col-span-2 text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
-                      <div className="col-span-1 text-red-400 text-xs">Торговать →</div>
+                      
+                      <div className="mt-3 text-xs text-red-300">
+                        🎯 {signal.reasons.join(' • ')}
+                      </div>
                     </div>
                   )
                 })
