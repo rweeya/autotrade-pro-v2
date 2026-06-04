@@ -1,4 +1,3 @@
-import { bybitTestnet } from './services/bybitTestnet'
 import React, { useState, useEffect } from 'react'
 import TradingChart from './components/TradingChart'
 import SignalHistory from './components/SignalHistory'
