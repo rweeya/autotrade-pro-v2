@@ -24,15 +24,24 @@ interface Signal {
   }
 }
 
-// ========== 34 АКТИВА ==========
+// ========== 60+ АКТИВОВ ==========
 const SYMBOLS = [
+  // Топ крипто (30)
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
-  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT'
+  // Мемы (5)
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
+  // Альткоины (15)
+  'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
+  'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
+  'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
+  // Новые (10)
+  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
+  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -44,7 +53,14 @@ const DEMO_PRICES: Record<string, number> = {
   'SUI/USDT': 1.4, 'IMX/USDT': 2.8, 'HBAR/USDT': 0.12, 'VET/USDT': 0.035,
   'GRT/USDT': 0.32, 'RNDR/USDT': 10.5, 'MKR/USDT': 2800, 'AAVE/USDT': 120,
   'SNX/USDT': 3.8, 'CRV/USDT': 0.65, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
-  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025
+  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
+  'ALGO/USDT': 0.24, 'FTM/USDT': 0.55, 'SAND/USDT': 0.45, 'MANA/USDT': 0.52,
+  'GALA/USDT': 0.032, 'AXS/USDT': 7.2, 'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11,
+  'THETA/USDT': 1.85, 'EOS/USDT': 0.85, 'XTZ/USDT': 1.05, 'KSM/USDT': 28.5,
+  'ZEC/USDT': 28.5, 'DASH/USDT': 32.5, 'COMP/USDT': 48.5, 'SEI/USDT': 0.42,
+  'TIA/USDT': 11.5, 'PYTH/USDT': 0.48, 'JUP/USDT': 0.95, 'ONDO/USDT': 1.15,
+  'STRK/USDT': 1.85, 'WLD/USDT': 5.2, 'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72,
+  'FET/USDT': 2.15
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -127,7 +143,37 @@ function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, 
   return null
 }
 
+// ДЕМО-РЕЖИМ: принудительная генерация сигналов для теста
+const DEMO_MODE = true  // Включи для теста, выключи для реальных сигналов
+
 function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number): Signal | null {
+  // ДЕМО-РЕЖИМ: генерируем тестовые сигналы
+  if (DEMO_MODE) {
+    // Генерируем сигналы для первых 10 активов для теста
+    const testSymbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT']
+    if (testSymbols.includes(symbol)) {
+      const randomAction = Math.random() > 0.5 ? 'buy' : 'sell'
+      return {
+        symbol,
+        action: randomAction,
+        price: currentPrice,
+        strength: 3,
+        reasons: ['🔴 ДЕМО-СИГНАЛ', 'RSI:42', 'MACD пересечение', 'EMA↑'],
+        timestamp: new Date(),
+        indicators: {
+          rsi: 42,
+          macd: 0.15,
+          macdSignal: 0.05,
+          macdHistogram: 0.10,
+          ema20: currentPrice * 0.98,
+          ema50: currentPrice * 0.96
+        }
+      }
+    }
+    return null
+  }
+
+  // РЕАЛЬНЫЙ АНАЛИЗ (если DEMO_MODE = false)
   if (!priceHistory[symbol]) {
     priceHistory[symbol] = generatePriceHistory(currentPrice)
   }
@@ -155,12 +201,11 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   let reasons: string[] = []
   
-  // НОВЫЕ УСЛОВИЯ: RSI < 40 для BUY, > 60 для SELL (было 35/65)
-  const allBuyConditions = rsi < 40 && macdCross === 'bullish' && emaCross === 'golden'
-  const allSellConditions = rsi > 60 && macdCross === 'bearish' && emaCross === 'death'
+  const allBuyConditions = rsi < 45 && macdCross === 'bullish' && emaCross === 'golden'
+  const allSellConditions = rsi > 55 && macdCross === 'bearish' && emaCross === 'death'
   
   if (allBuyConditions) {
-    reasons.push(`RSI:${Math.round(rsi)} (<40)`, `MACD bullish`, `EMA↑`)
+    reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD bullish`, `EMA↑`)
     return {
       symbol, action: 'buy', price: currentPrice, strength: 3,
       reasons,
@@ -173,7 +218,7 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   }
   
   if (allSellConditions) {
-    reasons.push(`RSI:${Math.round(rsi)} (>60)`, `MACD bearish`, `EMA↓`)
+    reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD bearish`, `EMA↓`)
     return {
       symbol, action: 'sell', price: currentPrice, strength: 3,
       reasons,
@@ -276,7 +321,9 @@ function App() {
       'AVAXUSDT', 'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT',
       'FILUSDT', 'APTUSDT', 'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT', 'IMXUSDT', 'HBARUSDT',
       'VETUSDT', 'GRTUSDT', 'RNDRUSDT', 'MKRUSDT', 'AAVEUSDT', 'SNXUSDT', 'CRVUSDT',
-      'PEPEUSDT', 'WIFUSDT', 'BONKUSDT', 'FLOKIUSDT'
+      'PEPEUSDT', 'WIFUSDT', 'BONKUSDT', 'FLOKIUSDT', 'SHIBUSDT',
+      'ALGOUSDT', 'FTMUSDT', 'SANDUSDT', 'MANAUSDT', 'GALAUSDT', 'AXSUSDT', 'ENJUSDT',
+      'CHZUSDT', 'THETAUSDT', 'EOSUSDT', 'XTZUSDT', 'KSMUSDT', 'ZECUSDT', 'DASHUSDT', 'COMPUSDT'
     ]
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
@@ -372,6 +419,7 @@ function App() {
             </div>
           </div>
           <div className="flex gap-4 items-center">
+            {DEMO_MODE && <div className="flex items-center gap-1 text-xs text-yellow-400"><div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>DEMO-MODE</div>}
             {isRealTime && <div className="flex items-center gap-1 text-xs text-red-400"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>REAL-TIME</div>}
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
@@ -390,17 +438,17 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">RSI&lt;40</div>
+            <div className="text-xs text-green-400 mt-2">RSI&lt;45</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">RSI&gt;60</div>
+            <div className="text-xs text-red-400 mt-2">RSI&gt;55</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
             <div className="text-3xl font-bold text-yellow-500">RSI/MACD/EMA</div>
             <div className="text-gray-400 text-sm mt-1">3 индикатора</div>
-            <div className="text-xs text-green-400 mt-2">Расширенный диапазон</div>
+            <div className="text-xs text-green-400 mt-2">{DEMO_MODE ? 'ДЕМО-РЕЖИМ' : 'Реальные сигналы'}</div>
           </div>
         </div>
 
@@ -485,31 +533,4 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'signals' && (
-          <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
-            <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 Сигналы — RSI (расширен: &lt;40 / &gt;60) + MACD + EMA | Мониторинг {SYMBOLS.length} активов</div>
-            </div>
-            <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения всех 3 индикаторов</span></div>) : (signals.map((signal, idx) => {
-                const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
-                return (<div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
-                  <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} (3/3)</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4 text-xs">
-                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < 40 ? 'text-green-400' : signal.indicators.rsi > 60 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
-                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div></div>
-                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div></div>
-                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="text-white text-xs">${signal.price.toLocaleString()}</div></div>
-                  </div>
-                  <div className="mt-3 text-xs text-red-300">🎯 {signal.reasons.join(' • ')}</div>
-                </div>)
-              }))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-export default App
+        {activeTab === 'sign
