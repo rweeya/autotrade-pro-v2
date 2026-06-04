@@ -144,7 +144,7 @@ function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, 
 }
 
 // ДЕМО-РЕЖИМ: принудительная генерация сигналов для теста
-const DEMO_MODE = true  // Включи для теста, выключи для реальных сигналов
+const DEMO_MODE = false  // Включи для теста, выключи для реальных сигналов
 
 function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number): Signal | null {
   // ДЕМО-РЕЖИМ: генерируем тестовые сигналы
