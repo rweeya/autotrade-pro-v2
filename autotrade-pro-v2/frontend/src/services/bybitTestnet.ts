@@ -30,12 +30,9 @@ interface Position {
   openTime: number
 }
 
-// НАСТРОЙКИ ЗАКРЫТИЯ СДЕЛОК
-// Для свинга: 3% / 2%
-// Для скальпинга: 1% / 0.5%
-const TAKE_PROFIT_PERCENT = 3      // Закрыть при +3% прибыли
-const STOP_LOSS_PERCENT = 2        // Закрыть при -2% убытка
-const MAX_HOLD_TIME_MINUTES = 60   // Закрыть через 60 минут
+const TAKE_PROFIT_PERCENT = 3
+const STOP_LOSS_PERCENT = 2
+const MAX_HOLD_TIME_MINUTES = 60
 
 class BybitTestnetTrading {
   private config: { apiKey: string; apiSecret: string; testnet: boolean } | null = null
@@ -122,15 +119,12 @@ class BybitTestnetTrading {
     localStorage.setItem(`price_${symbol}`, price.toString())
   }
 
-  // ИСПРАВЛЕННАЯ функция закрытия по обратному сигналу
   async closeByReverseSignal(symbol: string, signalSide: string): Promise<boolean> {
-    // Проверяем, есть ли позиция
     const positionIndex = this.positions.findIndex(p => p.symbol === symbol)
-    if (positionIndex === -1) return false  // ← если позиции нет, просто выходим
+    if (positionIndex === -1) return false
     
     const position = this.positions[positionIndex]
     
-    // Проверяем, противоположный ли сигнал
     if ((position.side === 'Buy' && signalSide === 'Sell') ||
         (position.side === 'Sell' && signalSide === 'Buy')) {
       const currentPrice = parseFloat(localStorage.getItem(`price_${symbol}`) || position.entryPrice.toString())
@@ -171,11 +165,11 @@ class BybitTestnetTrading {
           openTime: Date.now()
         })
         console.log(`🟢 Открыта позиция ${params.symbol} (${params.side}) по $${params.price}, размер: ${params.qty}`)
+        this.emitBalanceUpdate()
       } else {
         throw new Error(`Недостаточно средств. Баланс: $${this.balance}, нужно: $${cost}`)
       }
     } else {
-      // Закрытие позиции (Sell)
       const positionIndex = this.positions.findIndex(p => p.symbol === params.symbol)
       if (positionIndex !== -1) {
         const position = this.positions[positionIndex]
@@ -184,6 +178,7 @@ class BybitTestnetTrading {
         this.positions.splice(positionIndex, 1)
         order.profit = profit
         console.log(`🔴 Закрыта позиция ${params.symbol} по $${params.price}, прибыль: $${profit.toFixed(2)}`)
+        this.emitBalanceUpdate()
       } else {
         throw new Error(`Позиция ${params.symbol} не найдена`)
       }
@@ -197,6 +192,12 @@ class BybitTestnetTrading {
     localStorage.setItem('bybit_testnet_history', JSON.stringify(history.slice(0, 100)))
     
     return order
+  }
+
+  private emitBalanceUpdate() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('balance-updated'))
+    }
   }
 
   async closePosition(symbol: string, price: number, reason: string): Promise<Order> {
@@ -242,6 +243,7 @@ class BybitTestnetTrading {
     localStorage.setItem('bybit_testnet_positions', JSON.stringify(this.positions))
     localStorage.setItem('bybit_testnet_history', JSON.stringify([]))
     console.log('🔄 Счёт сброшен до $10,000')
+    this.emitBalanceUpdate()
   }
 }
 
