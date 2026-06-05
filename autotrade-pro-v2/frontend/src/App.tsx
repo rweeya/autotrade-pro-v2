@@ -89,7 +89,7 @@ let priceHistory: Record<string, number[]> = {}
 let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
 let demoSentCount = 0
 const MAX_DEMO_SIGNALS = 5
-const DEMO_MODE = true
+const DEMO_MODE = false  // ⚠️ ДЕМО-РЕЖИМ ОТКЛЮЧЁН — только реальные сигналы!
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -168,32 +168,7 @@ function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, 
 }
 
 function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number): Signal | null {
-  if (DEMO_MODE) {
-    if (demoSentCount >= MAX_DEMO_SIGNALS) return null
-    const testSymbols = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT']
-    if (testSymbols.includes(symbol)) {
-      demoSentCount++
-      const randomAction = Math.random() > 0.5 ? 'buy' : 'sell'
-      return {
-        symbol,
-        action: randomAction,
-        price: currentPrice,
-        strength: 3,
-        reasons: [`🔴 ДЕМО-СИГНАЛ #${demoSentCount}`, 'RSI:42', 'MACD пересечение', 'EMA↑'],
-        timestamp: new Date(),
-        indicators: {
-          rsi: 42,
-          macd: 0.15,
-          macdSignal: 0.05,
-          macdHistogram: 0.10,
-          ema20: currentPrice * 0.98,
-          ema50: currentPrice * 0.96
-        }
-      }
-    }
-    return null
-  }
-
+  // РЕАЛЬНЫЙ АНАЛИЗ (ДЕМО-РЕЖИМ ОТКЛЮЧЁН)
   if (!priceHistory[symbol]) {
     priceHistory[symbol] = generatePriceHistory(currentPrice)
   }
@@ -279,7 +254,6 @@ function App() {
   const [apiKey, setApiKey] = useState('')
   const [apiSecret, setApiSecret] = useState('')
   
-  // Максимальный процент баланса на сделку (1-100%)
   const [maxRiskPercent, setMaxRiskPercent] = useState(() => {
     const saved = localStorage.getItem('max_risk_percent')
     return saved ? parseFloat(saved) : 10
@@ -423,11 +397,9 @@ function App() {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
         for (const signal of signals) {
-          // Расчёт максимальной суммы сделки на основе выбранного процента
           const maxPositionAmount = balance * (maxRiskPercent / 100)
           let qty = maxPositionAmount / signal.price
           
-          // Минимальная сумма сделки 10$
           if (maxPositionAmount < 10) {
             console.log(`⚠️ Сумма сделки $${maxPositionAmount.toFixed(2)} меньше минимальной (10$), пропускаем`)
             continue
@@ -705,7 +677,7 @@ function App() {
                         <th className="text-right py-2">Прибыль</th>
                         <th className="text-right py-2">%</th>
                         <th className="text-left py-2">Причина</th>
-                       </tr>
+                      </tr>
                     </thead>
                     <tbody>
                       {tradeHistory.map((trade, idx) => (
@@ -764,7 +736,7 @@ function App() {
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (
-                <div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов</span></div>
+                <div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения 3 индикаторов</span></div>
               ) : (
                 signals.map((signal, idx) => {
                   const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
