@@ -17,7 +17,9 @@ interface Order {
   status: string
   timestamp: string
   profit?: number
+  profitPercent?: number
   closedAt?: string
+  closeReason?: string
 }
 
 interface Position {
@@ -174,10 +176,12 @@ class BybitTestnetTrading {
       if (positionIndex !== -1) {
         const position = this.positions[positionIndex]
         const profit = (params.price! - position.entryPrice) * params.qty
+        const profitPercent = (profit / position.cost) * 100
         this.balance = this.balance + position.cost + profit
         this.positions.splice(positionIndex, 1)
         order.profit = profit
-        console.log(`🔴 Закрыта позиция ${params.symbol} по $${params.price}, прибыль: $${profit.toFixed(2)}`)
+        order.profitPercent = profitPercent
+        console.log(`🔴 Закрыта позиция ${params.symbol} по $${params.price}, прибыль: $${profit.toFixed(2)} (${profitPercent.toFixed(2)}%)`)
         this.emitBalanceUpdate()
       } else {
         throw new Error(`Позиция ${params.symbol} не найдена`)
@@ -189,7 +193,7 @@ class BybitTestnetTrading {
     
     const history: Order[] = JSON.parse(localStorage.getItem('bybit_testnet_history') || '[]')
     history.unshift(order)
-    localStorage.setItem('bybit_testnet_history', JSON.stringify(history.slice(0, 100)))
+    localStorage.setItem('bybit_testnet_history', JSON.stringify(history.slice(0, 200)))
     
     return order
   }
@@ -214,6 +218,7 @@ class BybitTestnetTrading {
       price 
     })
     order.closedAt = new Date().toISOString()
+    order.closeReason = reason
     return order
   }
 
@@ -234,6 +239,14 @@ class BybitTestnetTrading {
       }
     }
     return total
+  }
+
+  getWinRate(): number {
+    const history = this.getHistory()
+    const closedTrades = history.filter(t => t.profit !== undefined)
+    if (closedTrades.length === 0) return 0
+    const wins = closedTrades.filter(t => t.profit && t.profit > 0).length
+    return (wins / closedTrades.length) * 100
   }
 
   resetAccount() {
