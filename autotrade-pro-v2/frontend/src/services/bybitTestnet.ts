@@ -141,8 +141,25 @@ class BybitTestnetTrading {
       throw new Error('API ключи не настроены')
     }
 
+    // ========== ЖЁСТКАЯ ЗАЩИТА ОТ СЛИВА БАЛАНСА ==========
+    if (this.balance < 50) {
+      throw new Error(`❌ Баланс слишком низкий ($${this.balance.toFixed(2)}). Минимальный порог $50. Сбросьте счёт.`)
+    }
+
     const cost = params.qty * (params.price || 0)
     
+    // Нельзя потратить больше 10% баланса за одну сделку
+    const maxCost = this.balance * 0.1
+    if (cost > maxCost) {
+      throw new Error(`❌ Сумма сделки $${cost.toFixed(2)} превышает 10% баланса ($${maxCost.toFixed(2)}). Уменьшите размер позиции.`)
+    }
+
+    // Нельзя открыть сделку если остаток после сделки будет меньше $10
+    if (this.balance - cost < 10) {
+      throw new Error(`❌ После сделки баланс будет $${(this.balance - cost).toFixed(2)} (минимальный порог $10)`)
+    }
+    // ========== КОНЕЦ ЗАЩИТЫ ==========
+
     const order: Order = {
       id: Date.now().toString(),
       symbol: params.symbol,
