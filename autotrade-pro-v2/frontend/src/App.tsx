@@ -24,7 +24,7 @@ interface Signal {
   }
 }
 
-// ========== 150+ АКТИВОВ ==========
+// ========== 200+ АКТИВОВ ==========
 const SYMBOLS = [
   // Топ-30
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
@@ -38,7 +38,7 @@ const SYMBOLS = [
   'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
   'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
   'ELON/USDT', 'HOGE/USDT', 'CATE/USDT', 'PEPE2/USDT', 'WOJAK/USDT',
-  // Альты (50)
+  // Альты (100)
   'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
   'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'THETA/USDT',
   'XDC/USDT', 'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT',
@@ -49,7 +49,6 @@ const SYMBOLS = [
   'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT', 'STRK/USDT', 'WLD/USDT',
   'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT', 'LDO/USDT', 'BLUR/USDT',
   'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT', 'SSV/USDT', 'RPL/USDT',
-  // Остальные (50)
   'DGB/USDT', 'DCR/USDT', 'BTG/USDT', 'NMR/USDT', 'STORJ/USDT',
   'ANKR/USDT', 'REEF/USDT', 'COTI/USDT', 'WIN/USDT', 'ALICE/USDT',
   'TLM/USDT', 'MBOX/USDT', 'DAR/USDT', 'RACA/USDT', 'HIGH/USDT',
@@ -286,6 +285,27 @@ function App() {
   const [tradeHistory, setTradeHistory] = useState<any[]>([])
   const [apiKey, setApiKey] = useState('')
   const [apiSecret, setApiSecret] = useState('')
+  
+  // Размер сделки (в долларах)
+  const [positionSizeUSD, setPositionSizeUSD] = useState(() => {
+    const saved = localStorage.getItem('position_size_usd')
+    return saved ? parseFloat(saved) : 200
+  })
+  
+  const [positionSizePercent, setPositionSizePercent] = useState(() => {
+    const saved = localStorage.getItem('position_size_percent')
+    return saved ? parseFloat(saved) : 2
+  })
+  
+  const STOP_LOSS_PERCENT = scalpingMode ? 0.5 : 2
+
+  // Сохраняем настройки размера сделки
+  const savePositionSize = (usd: number, percent: number) => {
+    setPositionSizeUSD(usd)
+    setPositionSizePercent(percent)
+    localStorage.setItem('position_size_usd', usd.toString())
+    localStorage.setItem('position_size_percent', percent.toString())
+  }
 
   useEffect(() => {
     const createBloodDrop = () => {
@@ -349,7 +369,6 @@ function App() {
     const newMode = !scalpingMode
     setScalpingMode(newMode)
     localStorage.setItem('scalping_mode', String(newMode))
-    // Перезагружаем страницу для применения новых параметров
     window.location.reload()
   }
 
@@ -411,13 +430,28 @@ function App() {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
         for (const signal of signals) {
-          const qty = (balance * 0.02) / signal.price
+          // Расчёт размера позиции
+          let qty = positionSizeUSD / signal.price
+          
+          // Ограничение по проценту от баланса (максимум 10%)
+          const maxQty = (balance * 0.1) / signal.price
+          if (qty > maxQty) {
+            qty = maxQty
+            console.log(`⚠️ Размер позиции ограничен 10% баланса ($${(balance * 0.1).toFixed(0)})`)
+          }
+          
+          // Минимальная сумма сделки (10$)
+          const minQty = 10 / signal.price
+          if (qty < minQty) {
+            qty = minQty
+          }
+          
           const side = signal.action === 'buy' ? 'Buy' : 'Sell'
           try {
             const order = await bybitTestnet.placeOrder({
               symbol: signal.symbol.replace('/USDT', ''),
               side,
-              qty: parseFloat(qty.toFixed(4)),
+              qty: parseFloat(qty.toFixed(6)),
               price: signal.price
             })
             console.log('✅ Ордер открыт:', order)
@@ -431,7 +465,7 @@ function App() {
       }
       executeTrades()
     }
-  }, [signals, autoTradeEnabled, apiConfigured, balance])
+  }, [signals, autoTradeEnabled, apiConfigured, balance, positionSizeUSD])
 
   const saveApiKeys = () => {
     if (apiKey && apiSecret) {
@@ -594,6 +628,76 @@ function App() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* НАСТРОЙКИ РАЗМЕРА СДЕЛКИ */}
+            <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
+              <h3 className="text-lg font-bold text-red-400 mb-4">💰 НАСТРОЙКИ РИСКА</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-gray-400 text-sm mb-2">
+                    📊 Процент от баланса (сейчас: {positionSizePercent}%)
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                    value={positionSizePercent}
+                    onChange={(e) => {
+                      const p = parseFloat(e.target.value)
+                      const usd = (balance * p) / 100
+                      savePositionSize(usd, p)
+                    }}
+                    className="w-full accent-red-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>1% (${(balance * 0.01).toFixed(0)})</span>
+                    <span>5% (${(balance * 0.05).toFixed(0)})</span>
+                    <span>10% (${(balance * 0.1).toFixed(0)})</span>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-gray-400 text-sm mb-2">
+                    💵 Фиксированная сумма (USD)
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={positionSizeUSD}
+                      onChange={(e) => {
+                        let usd = parseFloat(e.target.value) || 0
+                        const maxUsd = balance * 0.1
+                        if (usd > maxUsd) usd = maxUsd
+                        const percent = (usd / balance) * 100
+                        savePositionSize(usd, percent)
+                      }}
+                      min="10"
+                      max={balance * 0.1}
+                      step="10"
+                      className="flex-1 bg-black/50 border border-red-500/50 rounded-lg p-2 text-white"
+                    />
+                    <span className="text-gray-400 text-sm flex items-center">макс: ${(balance * 0.1).toFixed(0)}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-red-950/30 rounded-lg">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Баланс:</span>
+                  <span className="text-white font-bold">${balance.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-400">Размер сделки:</span>
+                  <span className="text-yellow-400 font-bold">${positionSizeUSD.toLocaleString()} ({positionSizePercent}%)</span>
+                </div>
+                <div className="flex justify-between text-sm mt-1">
+                  <span className="text-gray-400">Макс. риск за сделку:</span>
+                  <span className="text-red-400">${(positionSizeUSD * (STOP_LOSS_PERCENT / 100)).toLocaleString()}</span>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
