@@ -298,19 +298,16 @@ function App() {
     localStorage.setItem('position_size_percent', percent.toString())
   }
 
-  // Сохраняем состояние автоторговли
   useEffect(() => {
     localStorage.setItem('auto_trade_enabled', String(autoTradeEnabled))
   }, [autoTradeEnabled])
 
-  // Слушаем событие обновления баланса
   useEffect(() => {
     const handleBalanceUpdate = () => {
       setBalance(bybitTestnet.getBalance())
       setPositions(bybitTestnet.getPositions())
       setTradeHistory(bybitTestnet.getHistory())
     }
-    
     window.addEventListener('balance-updated', handleBalanceUpdate)
     return () => window.removeEventListener('balance-updated', handleBalanceUpdate)
   }, [])
@@ -712,20 +709,65 @@ function App() {
 
             <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
               <h3 className="text-lg font-bold text-red-400 mb-3">📜 ИСТОРИЯ СДЕЛОК</h3>
-              <div className="max-h-[200px] overflow-y-auto">
+              <div className="max-h-[300px] overflow-y-auto">
                 {tradeHistory.length === 0 ? (
                   <div className="text-gray-500 text-sm text-center py-4">Нет сделок</div>
                 ) : (
-                  tradeHistory.map((trade, idx) => (
-                    <div key={idx} className="border-b border-red-500/20 py-2 flex justify-between text-sm">
-                      <span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>{trade.side}</span>
-                      <span>{trade.symbol}</span>
-                      <span>${trade.price}</span>
-                      <span className="text-gray-500 text-xs">{new Date(trade.timestamp).toLocaleTimeString()}</span>
-                    </div>
-                  ))
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-black/80">
+                      <tr className="text-gray-400 border-b border-red-500/20">
+                        <th className="text-left py-2">Символ</th>
+                        <th className="text-left py-2">Тип</th>
+                        <th className="text-right py-2">Цена</th>
+                        <th className="text-right py-2">Прибыль</th>
+                        <th className="text-right py-2">%</th>
+                        <th className="text-left py-2">Причина</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tradeHistory.map((trade, idx) => (
+                        <tr key={idx} className="border-b border-red-500/20 hover:bg-red-900/10">
+                          <td className="py-2 font-mono">{trade.symbol}</td>
+                          <td className="py-2">
+                            <span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>
+                              {trade.side === 'Buy' ? '🟢 BUY' : '🔴 SELL'}
+                            </span>
+                          </td>
+                          <td className="py-2 text-right">${trade.price?.toFixed(2) || '—'}</td>
+                          <td className={`py-2 text-right font-bold ${trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                            {trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}
+                          </td>
+                          <td className={`py-2 text-right font-bold ${trade.profitPercent && trade.profitPercent > 0 ? 'text-green-400' : trade.profitPercent && trade.profitPercent < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                            {trade.profitPercent ? `${trade.profitPercent > 0 ? '+' : ''}${trade.profitPercent.toFixed(2)}%` : '—'}
+                          </td>
+                          <td className="py-2 text-gray-500 text-xs">
+                            {trade.closeReason || (trade.side === 'Sell' ? 'Закрыта' : 'Открыта')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
               </div>
+              
+              {tradeHistory.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-red-500/30 grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <div className="text-gray-500 text-xs">Всего сделок</div>
+                    <div className="text-white font-bold text-lg">{tradeHistory.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 text-xs">Профит</div>
+                    <div className={`font-bold text-lg ${bybitTestnet.getTotalProfit() >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      ${bybitTestnet.getTotalProfit().toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-gray-500 text-xs">Винрейт</div>
+                    <div className="text-yellow-400 font-bold text-lg">{bybitTestnet.getWinRate().toFixed(1)}%</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
