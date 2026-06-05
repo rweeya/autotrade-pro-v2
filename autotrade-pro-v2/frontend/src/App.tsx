@@ -26,19 +26,16 @@ interface Signal {
 
 // ========== 200+ АКТИВОВ ==========
 const SYMBOLS = [
-  // Топ-30
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
-  // Мемы (20)
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
   'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
   'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
   'ELON/USDT', 'HOGE/USDT', 'CATE/USDT', 'PEPE2/USDT', 'WOJAK/USDT',
-  // Альты (100)
   'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
   'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'THETA/USDT',
   'XDC/USDT', 'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT',
@@ -55,10 +52,7 @@ const SYMBOLS = [
   'STG/USDT', 'LQTY/USDT', 'TRU/USDT', 'BOND/USDT', 'MDX/USDT',
   'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT', 'CAKE/USDT', 'XVS/USDT',
   'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT',
-  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
-  'VRA/USDT', 'POND/USDT', 'PHA/USDT', 'GLMR/USDT', 'MOVR/USDT',
-  'ACA/USDT', 'KINT/USDT', 'EVMOS/USDT', 'CORE/USDT', 'CFX/USDT',
-  'OSMO/USDT', 'PROM/USDT', 'DATA/USDT', 'DIA/USDT', 'ALGO/USDT'
+  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -87,11 +81,7 @@ const DEMO_PRICES: Record<string, number> = {
   'FORTH/USDT': 4.2, 'BAKE/USDT': 0.32, 'BURGER/USDT': 0.42, 'CAKE/USDT': 2.15,
   'XVS/USDT': 8.5, 'ALPACA/USDT': 0.18, 'BETA/USDT': 0.065, 'LAZIO/USDT': 1.85,
   'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22,
-  'ZRX/USDT': 0.32, 'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'VRA/USDT': 0.0042,
-  'POND/USDT': 0.012, 'PHA/USDT': 0.12, 'GLMR/USDT': 0.28, 'MOVR/USDT': 8.5,
-  'ACA/USDT': 0.085, 'KINT/USDT': 0.48, 'EVMOS/USDT': 0.042, 'CORE/USDT': 0.85,
-  'CFX/USDT': 0.22, 'OSMO/USDT': 0.65, 'PROM/USDT': 6.5, 'DATA/USDT': 0.048,
-  'DIA/USDT': 0.42
+  'ZRX/USDT': 0.32, 'OMG/USDT': 0.48, 'QTUM/USDT': 3.2
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -278,7 +268,10 @@ function App() {
     return saved === 'true'
   })
   
-  const [autoTradeEnabled, setAutoTradeEnabled] = useState(false)
+  const [autoTradeEnabled, setAutoTradeEnabled] = useState(() => {
+    const saved = localStorage.getItem('auto_trade_enabled')
+    return saved === 'true'
+  })
   const [apiConfigured, setApiConfigured] = useState(false)
   const [balance, setBalance] = useState(10000)
   const [positions, setPositions] = useState<any[]>([])
@@ -286,7 +279,6 @@ function App() {
   const [apiKey, setApiKey] = useState('')
   const [apiSecret, setApiSecret] = useState('')
   
-  // Размер сделки (в долларах)
   const [positionSizeUSD, setPositionSizeUSD] = useState(() => {
     const saved = localStorage.getItem('position_size_usd')
     return saved ? parseFloat(saved) : 200
@@ -299,13 +291,29 @@ function App() {
   
   const STOP_LOSS_PERCENT = scalpingMode ? 0.5 : 2
 
-  // Сохраняем настройки размера сделки
   const savePositionSize = (usd: number, percent: number) => {
     setPositionSizeUSD(usd)
     setPositionSizePercent(percent)
     localStorage.setItem('position_size_usd', usd.toString())
     localStorage.setItem('position_size_percent', percent.toString())
   }
+
+  // Сохраняем состояние автоторговли
+  useEffect(() => {
+    localStorage.setItem('auto_trade_enabled', String(autoTradeEnabled))
+  }, [autoTradeEnabled])
+
+  // Слушаем событие обновления баланса
+  useEffect(() => {
+    const handleBalanceUpdate = () => {
+      setBalance(bybitTestnet.getBalance())
+      setPositions(bybitTestnet.getPositions())
+      setTradeHistory(bybitTestnet.getHistory())
+    }
+    
+    window.addEventListener('balance-updated', handleBalanceUpdate)
+    return () => window.removeEventListener('balance-updated', handleBalanceUpdate)
+  }, [])
 
   useEffect(() => {
     const createBloodDrop = () => {
@@ -339,9 +347,6 @@ function App() {
     for (const signal of signals) {
       const cleanSymbol = signal.symbol.replace('/USDT', '')
       bybitTestnet.closeByReverseSignal(cleanSymbol, signal.action === 'buy' ? 'Buy' : 'Sell')
-      setBalance(bybitTestnet.getBalance())
-      setPositions(bybitTestnet.getPositions())
-      setTradeHistory(bybitTestnet.getHistory())
     }
   }, [signals, apiConfigured])
 
@@ -358,10 +363,6 @@ function App() {
           console.error('Ошибка закрытия:', e)
         }
       }
-      setBalance(bybitTestnet.getBalance())
-      setPositions(bybitTestnet.getPositions())
-      setTradeHistory(bybitTestnet.getHistory())
-      alert('Все позиции закрыты')
     }
   }
 
@@ -430,21 +431,11 @@ function App() {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
         for (const signal of signals) {
-          // Расчёт размера позиции
           let qty = positionSizeUSD / signal.price
-          
-          // Ограничение по проценту от баланса (максимум 10%)
           const maxQty = (balance * 0.1) / signal.price
-          if (qty > maxQty) {
-            qty = maxQty
-            console.log(`⚠️ Размер позиции ограничен 10% баланса ($${(balance * 0.1).toFixed(0)})`)
-          }
-          
-          // Минимальная сумма сделки (10$)
+          if (qty > maxQty) qty = maxQty
           const minQty = 10 / signal.price
-          if (qty < minQty) {
-            qty = minQty
-          }
+          if (qty < minQty) qty = minQty
           
           const side = signal.action === 'buy' ? 'Buy' : 'Sell'
           try {
@@ -455,9 +446,6 @@ function App() {
               price: signal.price
             })
             console.log('✅ Ордер открыт:', order)
-            setBalance(bybitTestnet.getBalance())
-            setPositions(bybitTestnet.getPositions())
-            setTradeHistory(bybitTestnet.getHistory())
           } catch (error) {
             console.error('❌ Ошибка открытия ордера:', error)
           }
@@ -471,18 +459,12 @@ function App() {
     if (apiKey && apiSecret) {
       bybitTestnet.setConfig(apiKey, apiSecret)
       setApiConfigured(true)
-      setBalance(bybitTestnet.getBalance())
-      setPositions(bybitTestnet.getPositions())
-      setTradeHistory(bybitTestnet.getHistory())
       alert('API ключи сохранены!')
     }
   }
 
   const resetAccount = () => {
     bybitTestnet.resetAccount()
-    setBalance(10000)
-    setPositions([])
-    setTradeHistory([])
     alert('Счёт сброшен')
   }
 
@@ -630,7 +612,6 @@ function App() {
               )}
             </div>
 
-            {/* НАСТРОЙКИ РАЗМЕРА СДЕЛКИ */}
             <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
               <h3 className="text-lg font-bold text-red-400 mb-4">💰 НАСТРОЙКИ РИСКА</h3>
               
