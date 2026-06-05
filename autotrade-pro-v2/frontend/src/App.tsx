@@ -87,9 +87,6 @@ const DEMO_PRICES: Record<string, number> = {
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
 let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
-let demoSentCount = 0
-const MAX_DEMO_SIGNALS = 5
-const DEMO_MODE = false  // ⚠️ ДЕМО-РЕЖИМ ОТКЛЮЧЁН — только реальные сигналы!
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -167,8 +164,7 @@ function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, 
   return null
 }
 
-function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number): Signal | null {
-  // РЕАЛЬНЫЙ АНАЛИЗ (ДЕМО-РЕЖИМ ОТКЛЮЧЁН)
+function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number, isScalping: boolean): Signal | null {
   if (!priceHistory[symbol]) {
     priceHistory[symbol] = generatePriceHistory(currentPrice)
   }
@@ -196,13 +192,43 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   let reasons: string[] = []
   
-  const allBuyConditions = rsi < 45 && macdCross === 'bullish' && emaCross === 'golden'
-  const allSellConditions = rsi > 55 && macdCross === 'bearish' && emaCross === 'death'
+  let allBuyConditions = false
+  let allSellConditions = false
+  let strength = 0
+  
+  if (isScalping) {
+    // ========== СКАЛЬПИНГ: ТОЛЬКО RSI + MACD ==========
+    const buyScalping = rsi < 45 && macdCross === 'bullish'
+    const sellScalping = rsi > 55 && macdCross === 'bearish'
+    
+    if (buyScalping) {
+      allBuyConditions = true
+      strength = 2
+      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD bullish`)
+    } else if (sellScalping) {
+      allSellConditions = true
+      strength = 2
+      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD bearish`)
+    }
+  } else {
+    // ========== СВИНГ: RSI + MACD + EMA ==========
+    const buySwing = rsi < 45 && macdCross === 'bullish' && emaCross === 'golden'
+    const sellSwing = rsi > 55 && macdCross === 'bearish' && emaCross === 'death'
+    
+    if (buySwing) {
+      allBuyConditions = true
+      strength = 3
+      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD bullish`, `EMA↑`)
+    } else if (sellSwing) {
+      allSellConditions = true
+      strength = 3
+      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD bearish`, `EMA↓`)
+    }
+  }
   
   if (allBuyConditions) {
-    reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD bullish`, `EMA↑`)
     return {
-      symbol, action: 'buy', price: currentPrice, strength: 3,
+      symbol, action: 'buy', price: currentPrice, strength,
       reasons,
       timestamp: new Date(),
       indicators: {
@@ -213,9 +239,8 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   }
   
   if (allSellConditions) {
-    reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD bearish`, `EMA↓`)
     return {
-      symbol, action: 'sell', price: currentPrice, strength: 3,
+      symbol, action: 'sell', price: currentPrice, strength,
       reasons,
       timestamp: new Date(),
       indicators: {
@@ -375,13 +400,13 @@ function App() {
         if (price) {
           const high = price * 1.02
           const low = price * 0.98
-          const signal = analyzeIndicators(symbol, price, high, low)
+          const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
           if (signal) newSignals.push(signal)
         }
       }
       newSignals.sort((a, b) => b.strength - a.strength)
       setSignals(newSignals)
-      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов`)
+      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (${scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'})`)
     }
     
     updateSignals()
@@ -391,7 +416,7 @@ function App() {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
       clearInterval(interval)
     }
-  }, [])
+  }, [scalpingMode])
 
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
@@ -469,9 +494,8 @@ function App() {
               onClick={toggleScalpingMode}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}
             >
-              {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
+              {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора)' : '📈 СВИНГ (3 индикатора)'}
             </button>
-            {DEMO_MODE && <div className="flex items-center gap-1 text-xs text-yellow-400"><div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>DEMO-MODE</div>}
             {isRealTime && <div className="flex items-center gap-1 text-xs text-red-400"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>REAL-TIME</div>}
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
@@ -490,17 +514,17 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<25' : 'RSI<45'}</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<45' : 'RSI<45 + MACD + EMA'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>75' : 'RSI>55'}</div>
+            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>55' : 'RSI>55 + MACD + EMA'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
-            <div className="text-3xl font-bold text-yellow-500">RSI/MACD/EMA</div>
-            <div className="text-gray-400 text-sm mt-1">3 индикатора</div>
-            <div className="text-xs text-green-400 mt-2">{scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}</div>
+            <div className="text-3xl font-bold text-yellow-500">{scalpingMode ? '2/5' : '3/5'}</div>
+            <div className="text-gray-400 text-sm mt-1">Индикаторов</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? '⚡ СКАЛЬПИНГ (RSI+MACD)' : '📈 СВИНГ (RSI+MACD+EMA)'}</div>
           </div>
         </div>
 
@@ -731,12 +755,15 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                {DEMO_MODE ? '🔴 ДЕМО-РЕЖИМ: тестовые сигналы' : `🎯 ${scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} — RSI (${scalpingMode ? '25/75' : '45/55'}) + MACD + EMA`} | Мониторинг {SYMBOLS.length} активов
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора: RSI + MACD)' : '📈 СВИНГ (3 индикатора: RSI + MACD + EMA)'} | Мониторинг {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (
-                <div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения 3 индикаторов</span></div>
+                <div className="text-center text-gray-500 py-16">
+                  ⏳ Нет сигналов<br/>
+                  <span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span>
+                </div>
               ) : (
                 signals.map((signal, idx) => {
                   const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
@@ -748,14 +775,14 @@ function App() {
                           <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                             {signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}
                           </span>
-                          <span className="text-yellow-400 text-sm">⚡ {stars} (3/3)</span>
+                          <span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/{scalpingMode ? '2' : '3'})</span>
                         </div>
                         <div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4 text-xs">
                         <div className="bg-black/40 rounded-lg p-2 text-center">
                           <div className="text-gray-500">RSI</div>
-                          <div className={`font-bold ${signal.indicators.rsi < (scalpingMode ? 25 : 45) ? 'text-green-400' : signal.indicators.rsi > (scalpingMode ? 75 : 55) ? 'text-red-400' : 'text-white'}`}>
+                          <div className={`font-bold ${signal.indicators.rsi < 45 ? 'text-green-400' : signal.indicators.rsi > 55 ? 'text-red-400' : 'text-white'}`}>
                             {signal.indicators.rsi}
                           </div>
                         </div>
@@ -763,10 +790,12 @@ function App() {
                           <div className="text-gray-500">MACD</div>
                           <div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div>
                         </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">EMA20/50</div>
-                          <div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div>
-                        </div>
+                        {!scalpingMode && (
+                          <div className="bg-black/40 rounded-lg p-2 text-center">
+                            <div className="text-gray-500">EMA20/50</div>
+                            <div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div>
+                          </div>
+                        )}
                         <div className="bg-black/40 rounded-lg p-2 text-center">
                           <div className="text-gray-500">Цена</div>
                           <div className="text-white text-xs">${signal.price.toLocaleString()}</div>
