@@ -24,15 +24,42 @@ interface Signal {
   }
 }
 
-// ========== 35 АКТИВОВ ==========
+// ========== 150+ АКТИВОВ ==========
 const SYMBOLS = [
+  // Топ-30
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
-  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT'
+  // Мемы (20)
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
+  'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
+  'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
+  'ELON/USDT', 'HOGE/USDT', 'CATE/USDT', 'PEPE2/USDT', 'WOJAK/USDT',
+  // Альты (50)
+  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
+  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'THETA/USDT',
+  'XDC/USDT', 'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT',
+  'LEO/USDT', 'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT',
+  'ERG/USDT', 'RVN/USDT', 'SC/USDT', 'AR/USDT', 'HNT/USDT',
+  'LPT/USDT', 'BAL/USDT', 'YFI/USDT', 'SUSHI/USDT', '1INCH/USDT',
+  'DYDX/USDT', 'PERP/USDT', 'GMX/USDT', 'SEI/USDT', 'TIA/USDT',
+  'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT', 'STRK/USDT', 'WLD/USDT',
+  'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT', 'LDO/USDT', 'BLUR/USDT',
+  'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT', 'SSV/USDT', 'RPL/USDT',
+  // Остальные (50)
+  'DGB/USDT', 'DCR/USDT', 'BTG/USDT', 'NMR/USDT', 'STORJ/USDT',
+  'ANKR/USDT', 'REEF/USDT', 'COTI/USDT', 'WIN/USDT', 'ALICE/USDT',
+  'TLM/USDT', 'MBOX/USDT', 'DAR/USDT', 'RACA/USDT', 'HIGH/USDT',
+  'STG/USDT', 'LQTY/USDT', 'TRU/USDT', 'BOND/USDT', 'MDX/USDT',
+  'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT', 'CAKE/USDT', 'XVS/USDT',
+  'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT',
+  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
+  'VRA/USDT', 'POND/USDT', 'PHA/USDT', 'GLMR/USDT', 'MOVR/USDT',
+  'ACA/USDT', 'KINT/USDT', 'EVMOS/USDT', 'CORE/USDT', 'CFX/USDT',
+  'OSMO/USDT', 'PROM/USDT', 'DATA/USDT', 'DIA/USDT', 'ALGO/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -44,7 +71,28 @@ const DEMO_PRICES: Record<string, number> = {
   'SUI/USDT': 1.4, 'IMX/USDT': 2.8, 'HBAR/USDT': 0.12, 'VET/USDT': 0.035,
   'GRT/USDT': 0.32, 'RNDR/USDT': 10.5, 'MKR/USDT': 2800, 'AAVE/USDT': 120,
   'SNX/USDT': 3.8, 'CRV/USDT': 0.65, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
-  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025
+  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
+  'ALGO/USDT': 0.24, 'FTM/USDT': 0.55, 'SAND/USDT': 0.45, 'MANA/USDT': 0.52,
+  'GALA/USDT': 0.032, 'AXS/USDT': 7.2, 'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11,
+  'THETA/USDT': 1.85, 'EOS/USDT': 0.85, 'XTZ/USDT': 1.05, 'KSM/USDT': 28.5,
+  'ZEC/USDT': 28.5, 'DASH/USDT': 32.5, 'COMP/USDT': 48.5, 'SEI/USDT': 0.42,
+  'TIA/USDT': 11.5, 'PYTH/USDT': 0.48, 'JUP/USDT': 0.95, 'ONDO/USDT': 1.15,
+  'STRK/USDT': 1.85, 'WLD/USDT': 5.2, 'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72,
+  'FET/USDT': 2.15, 'LDO/USDT': 1.85, 'BLUR/USDT': 0.42, 'RDNT/USDT': 0.28,
+  'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2, 'SSV/USDT': 28.5, 'RPL/USDT': 28.5,
+  'DGB/USDT': 0.0085, 'DCR/USDT': 18.5, 'BTG/USDT': 28.5, 'NMR/USDT': 18.5,
+  'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028, 'COTI/USDT': 0.085,
+  'WIN/USDT': 0.00012, 'ALICE/USDT': 1.25, 'TLM/USDT': 0.018, 'MBOX/USDT': 0.28,
+  'DAR/USDT': 0.085, 'RACA/USDT': 0.00018, 'HIGH/USDT': 2.15, 'STG/USDT': 0.52,
+  'LQTY/USDT': 1.15, 'TRU/USDT': 0.12, 'BOND/USDT': 2.15, 'MDX/USDT': 0.085,
+  'FORTH/USDT': 4.2, 'BAKE/USDT': 0.32, 'BURGER/USDT': 0.42, 'CAKE/USDT': 2.15,
+  'XVS/USDT': 8.5, 'ALPACA/USDT': 0.18, 'BETA/USDT': 0.065, 'LAZIO/USDT': 1.85,
+  'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22,
+  'ZRX/USDT': 0.32, 'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'VRA/USDT': 0.0042,
+  'POND/USDT': 0.012, 'PHA/USDT': 0.12, 'GLMR/USDT': 0.28, 'MOVR/USDT': 8.5,
+  'ACA/USDT': 0.085, 'KINT/USDT': 0.48, 'EVMOS/USDT': 0.042, 'CORE/USDT': 0.85,
+  'CFX/USDT': 0.22, 'OSMO/USDT': 0.65, 'PROM/USDT': 6.5, 'DATA/USDT': 0.048,
+  'DIA/USDT': 0.42
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -226,6 +274,10 @@ function App() {
   const [currentTime, setCurrentTime] = useState(new Date())
   const [activeTab, setActiveTab] = useState<'signals' | 'trading' | 'history' | 'news' | 'topmovers' | 'watchlist' | 'autotrade'>('signals')
   const [isRealTime, setIsRealTime] = useState(false)
+  const [scalpingMode, setScalpingMode] = useState(() => {
+    const saved = localStorage.getItem('scalping_mode')
+    return saved === 'true'
+  })
   
   const [autoTradeEnabled, setAutoTradeEnabled] = useState(false)
   const [apiConfigured, setApiConfigured] = useState(false)
@@ -293,6 +345,14 @@ function App() {
     }
   }
 
+  const toggleScalpingMode = () => {
+    const newMode = !scalpingMode
+    setScalpingMode(newMode)
+    localStorage.setItem('scalping_mode', String(newMode))
+    // Перезагружаем страницу для применения новых параметров
+    window.location.reload()
+  }
+
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
@@ -319,13 +379,7 @@ function App() {
     }
     
     binanceWS.connect()
-    const symbolsToSubscribe = [
-      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT',
-      'AVAXUSDT', 'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT',
-      'FILUSDT', 'APTUSDT', 'ARBUSDT', 'OPUSDT', 'INJUSDT', 'SUIUSDT', 'IMXUSDT', 'HBARUSDT',
-      'VETUSDT', 'GRTUSDT', 'RNDRUSDT', 'MKRUSDT', 'AAVEUSDT', 'SNXUSDT', 'CRVUSDT',
-      'PEPEUSDT', 'WIFUSDT', 'BONKUSDT', 'FLOKIUSDT', 'SHIBUSDT'
-    ]
+    const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
     const updateSignals = () => {
@@ -420,6 +474,12 @@ function App() {
             </div>
           </div>
           <div className="flex gap-4 items-center">
+            <button
+              onClick={toggleScalpingMode}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}
+            >
+              {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
+            </button>
             {DEMO_MODE && <div className="flex items-center gap-1 text-xs text-yellow-400"><div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>DEMO-MODE</div>}
             {isRealTime && <div className="flex items-center gap-1 text-xs text-red-400"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>REAL-TIME</div>}
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
@@ -439,17 +499,17 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">RSI&lt;45</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<25' : 'RSI<45'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">RSI&gt;55</div>
+            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>75' : 'RSI>55'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
             <div className="text-3xl font-bold text-yellow-500">RSI/MACD/EMA</div>
             <div className="text-gray-400 text-sm mt-1">3 индикатора</div>
-            <div className="text-xs text-green-400 mt-2">{DEMO_MODE ? 'ДЕМО-РЕЖИМ' : 'Реальные сигналы'}</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}</div>
           </div>
         </div>
 
@@ -468,7 +528,7 @@ function App() {
             <div className="mb-4 flex justify-between items-center">
               <div className="text-sm text-gray-400">Выберите актив для анализа</div>
               <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-4 py-2 text-white text-sm">
-                {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
+                {SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <TradingChart symbol={selectedSymbol} />
@@ -589,7 +649,7 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                {DEMO_MODE ? '🔴 ДЕМО-РЕЖИМ: тестовые сигналы' : '🎯 Реальные сигналы — RSI (&lt;45 / &gt;55) + MACD + EMA'} | Мониторинг {SYMBOLS.length} активов
+                {DEMO_MODE ? '🔴 ДЕМО-РЕЖИМ: тестовые сигналы' : `🎯 ${scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} — RSI (${scalpingMode ? '25/75' : '45/55'}) + MACD + EMA`} | Мониторинг {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
@@ -613,7 +673,7 @@ function App() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4 text-xs">
                         <div className="bg-black/40 rounded-lg p-2 text-center">
                           <div className="text-gray-500">RSI</div>
-                          <div className={`font-bold ${signal.indicators.rsi < 45 ? 'text-green-400' : signal.indicators.rsi > 55 ? 'text-red-400' : 'text-white'}`}>
+                          <div className={`font-bold ${signal.indicators.rsi < (scalpingMode ? 25 : 45) ? 'text-green-400' : signal.indicators.rsi > (scalpingMode ? 75 : 55) ? 'text-red-400' : 'text-white'}`}>
                             {signal.indicators.rsi}
                           </div>
                         </div>
