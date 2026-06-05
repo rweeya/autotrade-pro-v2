@@ -279,23 +279,18 @@ function App() {
   const [apiKey, setApiKey] = useState('')
   const [apiSecret, setApiSecret] = useState('')
   
-  const [positionSizeUSD, setPositionSizeUSD] = useState(() => {
-    const saved = localStorage.getItem('position_size_usd')
-    return saved ? parseFloat(saved) : 200
-  })
-  
-  const [positionSizePercent, setPositionSizePercent] = useState(() => {
-    const saved = localStorage.getItem('position_size_percent')
-    return saved ? parseFloat(saved) : 2
+  // Максимальный процент баланса на сделку (1-100%)
+  const [maxRiskPercent, setMaxRiskPercent] = useState(() => {
+    const saved = localStorage.getItem('max_risk_percent')
+    return saved ? parseFloat(saved) : 10
   })
   
   const STOP_LOSS_PERCENT = scalpingMode ? 0.5 : 2
 
-  const savePositionSize = (usd: number, percent: number) => {
-    setPositionSizeUSD(usd)
-    setPositionSizePercent(percent)
-    localStorage.setItem('position_size_usd', usd.toString())
-    localStorage.setItem('position_size_percent', percent.toString())
+  const saveMaxRiskPercent = (percent: number) => {
+    const safePercent = Math.min(Math.max(percent, 1), 100)
+    setMaxRiskPercent(safePercent)
+    localStorage.setItem('max_risk_percent', safePercent.toString())
   }
 
   useEffect(() => {
@@ -428,13 +423,18 @@ function App() {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
         for (const signal of signals) {
-          let qty = positionSizeUSD / signal.price
-          const maxQty = (balance * 0.1) / signal.price
-          if (qty > maxQty) qty = maxQty
-          const minQty = 10 / signal.price
-          if (qty < minQty) qty = minQty
+          // Расчёт максимальной суммы сделки на основе выбранного процента
+          const maxPositionAmount = balance * (maxRiskPercent / 100)
+          let qty = maxPositionAmount / signal.price
+          
+          // Минимальная сумма сделки 10$
+          if (maxPositionAmount < 10) {
+            console.log(`⚠️ Сумма сделки $${maxPositionAmount.toFixed(2)} меньше минимальной (10$), пропускаем`)
+            continue
+          }
           
           const side = signal.action === 'buy' ? 'Buy' : 'Sell'
+          
           try {
             const order = await bybitTestnet.placeOrder({
               symbol: signal.symbol.replace('/USDT', ''),
@@ -442,15 +442,20 @@ function App() {
               qty: parseFloat(qty.toFixed(6)),
               price: signal.price
             })
-            console.log('✅ Ордер открыт:', order)
-          } catch (error) {
-            console.error('❌ Ошибка открытия ордера:', error)
+            console.log(`✅ Ордер открыт: ${order.side} ${order.symbol} на $${order.cost.toFixed(2)}`)
+          } catch (error: any) {
+            console.error('❌ Ошибка открытия ордера:', error.message)
+            if (error.message?.includes('Недостаточно средств') || error.message?.includes('баланс слишком низкий')) {
+              console.log('⚠️ Баланс слишком низкий, отключаем автоторговлю')
+              setAutoTradeEnabled(false)
+              break
+            }
           }
         }
       }
       executeTrades()
     }
-  }, [signals, autoTradeEnabled, apiConfigured, balance, positionSizeUSD])
+  }, [signals, autoTradeEnabled, apiConfigured, balance, maxRiskPercent])
 
   const saveApiKeys = () => {
     if (apiKey && apiSecret) {
@@ -462,12 +467,13 @@ function App() {
 
   const resetAccount = () => {
     bybitTestnet.resetAccount()
-    alert('Счёт сброшен')
+    alert('Счёт сброшен до $10,000')
   }
 
   const buys = signals.filter(s => s.action === 'buy').length
   const sells = signals.filter(s => s.action === 'sell').length
   const formattedCurrentTime = formatTime(currentTime)
+  const maxPositionAmount = balance * (maxRiskPercent / 100)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/20 to-black">
@@ -612,68 +618,45 @@ function App() {
             <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
               <h3 className="text-lg font-bold text-red-400 mb-4">💰 НАСТРОЙКИ РИСКА</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-gray-400 text-sm mb-2">
-                    📊 Процент от баланса (сейчас: {positionSizePercent}%)
+                    📊 Максимальный процент баланса на сделку: {maxRiskPercent}%
                   </label>
                   <input
                     type="range"
                     min="1"
-                    max="10"
-                    step="0.5"
-                    value={positionSizePercent}
-                    onChange={(e) => {
-                      const p = parseFloat(e.target.value)
-                      const usd = (balance * p) / 100
-                      savePositionSize(usd, p)
-                    }}
+                    max="100"
+                    step="1"
+                    value={maxRiskPercent}
+                    onChange={(e) => saveMaxRiskPercent(parseFloat(e.target.value))}
                     className="w-full accent-red-500"
                   />
                   <div className="flex justify-between text-xs text-gray-500 mt-1">
                     <span>1% (${(balance * 0.01).toFixed(0)})</span>
-                    <span>5% (${(balance * 0.05).toFixed(0)})</span>
                     <span>10% (${(balance * 0.1).toFixed(0)})</span>
+                    <span>50% (${(balance * 0.5).toFixed(0)})</span>
+                    <span>100% (${balance.toFixed(0)})</span>
                   </div>
                 </div>
                 
-                <div>
-                  <label className="block text-gray-400 text-sm mb-2">
-                    💵 Фиксированная сумма (USD)
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      value={positionSizeUSD}
-                      onChange={(e) => {
-                        let usd = parseFloat(e.target.value) || 0
-                        const maxUsd = balance * 0.1
-                        if (usd > maxUsd) usd = maxUsd
-                        const percent = (usd / balance) * 100
-                        savePositionSize(usd, percent)
-                      }}
-                      min="10"
-                      max={balance * 0.1}
-                      step="10"
-                      className="flex-1 bg-black/50 border border-red-500/50 rounded-lg p-2 text-white"
-                    />
-                    <span className="text-gray-400 text-sm flex items-center">макс: ${(balance * 0.1).toFixed(0)}</span>
+                <div className="p-3 bg-red-950/30 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Баланс:</span>
+                    <span className="text-white font-bold">${balance.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-gray-400">Макс. сумма на сделку:</span>
+                    <span className="text-yellow-400 font-bold">${maxPositionAmount.toLocaleString()} ({maxRiskPercent}%)</span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-gray-400">Макс. риск за сделку (SL):</span>
+                    <span className="text-red-400">${(maxPositionAmount * (STOP_LOSS_PERCENT / 100)).toLocaleString()}</span>
                   </div>
                 </div>
-              </div>
-              
-              <div className="mt-4 p-3 bg-red-950/30 rounded-lg">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Баланс:</span>
-                  <span className="text-white font-bold">${balance.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm mt-1">
-                  <span className="text-gray-400">Размер сделки:</span>
-                  <span className="text-yellow-400 font-bold">${positionSizeUSD.toLocaleString()} ({positionSizePercent}%)</span>
-                </div>
-                <div className="flex justify-between text-sm mt-1">
-                  <span className="text-gray-400">Макс. риск за сделку:</span>
-                  <span className="text-red-400">${(positionSizeUSD * (STOP_LOSS_PERCENT / 100)).toLocaleString()}</span>
+                
+                <div className="text-xs text-gray-500 border-t border-red-500/30 pt-3 mt-2">
+                  ⚠️ При {maxRiskPercent}% риска на сделку, после {Math.floor(100 / maxRiskPercent)} убыточных сделок подряд баланс обнулится
                 </div>
               </div>
             </div>
@@ -722,7 +705,7 @@ function App() {
                         <th className="text-right py-2">Прибыль</th>
                         <th className="text-right py-2">%</th>
                         <th className="text-left py-2">Причина</th>
-                      </tr>
+                       </tr>
                     </thead>
                     <tbody>
                       {tradeHistory.map((trade, idx) => (
