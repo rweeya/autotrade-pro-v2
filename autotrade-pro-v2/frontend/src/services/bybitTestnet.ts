@@ -148,10 +148,9 @@ class BybitTestnetTrading {
 
     const cost = params.qty * (params.price || 0)
     
-    // Нельзя потратить больше 10% баланса за одну сделку
-    const maxCost = this.balance * 0.1
-    if (cost > maxCost) {
-      throw new Error(`❌ Сумма сделки $${cost.toFixed(2)} превышает 10% баланса ($${maxCost.toFixed(2)}). Уменьшите размер позиции.`)
+    // Нельзя потратить больше 100% баланса за одну сделку (можно выбрать любой процент в интерфейсе)
+    if (cost > this.balance) {
+      throw new Error(`❌ Сумма сделки $${cost.toFixed(2)} превышает баланс ($${this.balance.toFixed(2)}). Уменьшите размер позиции.`)
     }
 
     // Нельзя открыть сделку если остаток после сделки будет меньше $10
@@ -183,7 +182,7 @@ class BybitTestnetTrading {
           entryPrice: params.price || 0,
           openTime: Date.now()
         })
-        console.log(`🟢 Открыта позиция ${params.symbol} (${params.side}) по $${params.price}, размер: ${params.qty}`)
+        console.log(`🟢 Открыта позиция ${params.symbol} (${params.side}) по $${params.price}, сумма: $${cost.toFixed(2)}`)
         this.emitBalanceUpdate()
       } else {
         throw new Error(`Недостаточно средств. Баланс: $${this.balance}, нужно: $${cost}`)
