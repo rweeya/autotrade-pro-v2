@@ -24,49 +24,21 @@ interface Signal {
   }
 }
 
-// ========== 250+ АКТИВОВ ==========
+// ========== 180+ АКТИВОВ ==========
 const SYMBOLS = [
-  // Топ-20
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
-  // Альткоины (50)
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
   'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
   'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
   'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
-  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
-  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
-  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
-  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
-  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
-  // Мемы (30)
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
-  'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
-  'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
-  'ELON/USDT', 'HOGE/USDT', 'CATE/USDT', 'PEPE2/USDT', 'WOJAK/USDT',
-  'SAMO/USDT', 'KISHU/USDT', 'CORGIAI/USDT', 'COQ/USDT', 'PONKE/USDT',
-  'KABOSU/USDT', 'VLX/USDT', 'MINI/USDT', 'KERMIT/USDT', 'POODL/USDT',
-  // Новые (50)
   'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
   'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
-  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
-  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
-  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
-  'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
-  'RACA/USDT', 'HIGH/USDT', 'STG/USDT', 'LQTY/USDT', 'TRU/USDT',
-  'BOND/USDT', 'MDX/USDT', 'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT',
-  'CAKE/USDT', 'XVS/USDT', 'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT',
-  'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT', 'CITY/USDT',
-  // Редкие (100)
-  '1INCH/USDT', 'AAVE/USDT', 'ABT/USDT', 'ACH/USDT', 'ADX/USDT',
-  'AEVO/USDT', 'AGLD/USDT', 'ALCX/USDT', 'ALPHA/USDT', 'ALPINE/USDT',
-  'AMB/USDT', 'AMP/USDT', 'ANC/USDT', 'ANT/USDT', 'APE/USDT',
-  'API3/USDT', 'ARK/USDT', 'ARPA/USDT', 'AST/USDT', 'ASTR/USDT',
-  'ATA/USDT', 'AUCTION/USDT', 'AUDIO/USDT', 'AURA/USDT', 'AXL/USDT',
-  'BADGER/USDT', 'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT'
+  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
@@ -357,6 +329,8 @@ function App() {
       
       realPrices[formattedSymbol] = price
       bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
+      
+      // ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ updateSignals
       updateSignals()
     }
     
@@ -365,6 +339,12 @@ function App() {
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
     console.log(`🌐 WebSocket подключён, подписан на ${symbolsToSubscribe.length} символов`)
+    
+    // Принудительный вызов через 2 секунды для теста
+    setTimeout(() => {
+      console.log('🔄 ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ updateSignals через 2 секунды')
+      updateSignals()
+    }, 2000)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
