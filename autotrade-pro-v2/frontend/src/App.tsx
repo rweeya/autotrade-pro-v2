@@ -24,7 +24,7 @@ interface Signal {
   }
 }
 
-// ========== 150+ АКТИВОВ ==========
+// ========== 100+ АКТИВОВ ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -35,19 +35,9 @@ const SYMBOLS = [
   'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
   'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
   'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
-  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
-  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
-  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
-  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
-  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
   'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
-  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
-  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
-  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
-  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
-  'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT',
-  'CITY/USDT', 'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT'
+  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -62,28 +52,16 @@ const DEMO_PRICES: Record<string, number> = {
   'SAND/USDT': 0.45, 'MANA/USDT': 0.52, 'GALA/USDT': 0.032, 'AXS/USDT': 7.2,
   'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11, 'THETA/USDT': 1.85, 'EOS/USDT': 0.85,
   'XTZ/USDT': 1.05, 'KSM/USDT': 28.5, 'ZEC/USDT': 28.5, 'DASH/USDT': 32.5,
-  'COMP/USDT': 48.5, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22, 'ZRX/USDT': 0.32,
-  'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'ICP/USDT': 12.5, 'STX/USDT': 1.85,
-  'KAS/USDT': 0.12, 'RUNE/USDT': 4.2, 'EGLD/USDT': 48.5, 'FLOW/USDT': 0.85,
-  'WAVES/USDT': 2.15, 'NEO/USDT': 12.5, 'IOTA/USDT': 0.25, 'XDC/USDT': 0.042,
-  'ONE/USDT': 0.018, 'HOT/USDT': 0.0025, 'CRO/USDT': 0.12, 'OKB/USDT': 48.5,
-  'LEO/USDT': 5.2, 'CELO/USDT': 0.65, 'ROSE/USDT': 0.085, 'KLAY/USDT': 0.18,
-  'CKB/USDT': 0.0085, 'ERG/USDT': 1.25, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
-  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
-  'SEI/USDT': 0.42, 'TIA/USDT': 11.5, 'PYTH/USDT': 0.48, 'JUP/USDT': 0.95,
-  'ONDO/USDT': 1.15, 'STRK/USDT': 1.85, 'WLD/USDT': 5.2, 'AGIX/USDT': 0.85,
-  'OCEAN/USDT': 0.72, 'FET/USDT': 2.15, 'LDO/USDT': 1.85, 'BLUR/USDT': 0.42,
-  'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2, 'SSV/USDT': 28.5,
-  'RPL/USDT': 28.5, 'DGB/USDT': 0.0085, 'DCR/USDT': 18.5, 'BTG/USDT': 28.5,
-  'NMR/USDT': 18.5, 'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028,
-  'COTI/USDT': 0.085, 'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85,
-  'ACM/USDT': 2.5, 'BAR/USDT': 3.0, 'CITY/USDT': 2.8, 'PSG/USDT': 4.0,
-  'JUV/USDT': 3.5, 'ATM/USDT': 2.2, 'INTER/USDT': 3.8
+  'COMP/USDT': 48.5, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2, 'BONK/USDT': 0.000028,
+  'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025, 'SEI/USDT': 0.42, 'TIA/USDT': 11.5,
+  'PYTH/USDT': 0.48, 'JUP/USDT': 0.95, 'ONDO/USDT': 1.15, 'STRK/USDT': 1.85,
+  'WLD/USDT': 5.2, 'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72, 'FET/USDT': 2.15
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
 let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
+let lastPrices: Record<string, number> = {}
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -344,7 +322,7 @@ function App() {
     window.location.reload()
   }
 
-  // WebSocket логика с обновлением КАЖДУЮ СЕКУНДУ
+  // WebSocket логика с обновлением каждую секунду
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
@@ -391,7 +369,6 @@ function App() {
     }
     
     updateSignals()
-    // ⚡ ОБНОВЛЕНИЕ КАЖДУЮ СЕКУНДУ ⚡
     const interval = setInterval(updateSignals, 1000)
     
     return () => {
@@ -453,7 +430,7 @@ function App() {
 
   const resetAccount = () => {
     bybitTestnet.resetAccount()
-    alert('Счёт сброшен до $10,000')
+    alert('Счет сброшен до $10,000')
   }
 
   const buys = signals.filter(s => s.action === 'buy').length
@@ -562,10 +539,10 @@ function App() {
                     <button onClick={() => setAutoTradeEnabled(!autoTradeEnabled)} className={`px-4 py-2 rounded-lg font-bold transition flex items-center gap-2 ${autoTradeEnabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
                       {autoTradeEnabled ? '🔴 ОСТАНОВИТЬ' : '🟢 ВКЛЮЧИТЬ'} АВТОТОРГОВЛЮ
                     </button>
-                    <button onClick={resetAccount} className="bg-yellow-600/50 hover:bg-yellow-600 px-4 py-2 rounded-lg text-sm transition">🔄 Сбросить счёт</button>
+                    <button onClick={resetAccount} className="bg-yellow-600/50 hover:bg-yellow-600 px-4 py-2 rounded-lg text-sm transition">🔄 Сбросить счет</button>
                     {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && (<div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">При появлении сигналов сделки будут открываться автоматически (обновление 1 сек)</p></div>)}
+                  {autoTradeEnabled && (<div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">При появлении сигналов сделки будут открываться автоматически</p></div>)}
                   {!autoTradeEnabled && apiConfigured && (<div className="bg-gray-500/20 border border-gray-500/50 rounded-lg p-4"><p className="text-gray-400 font-bold">⚫ АВТОТОРГОВЛЯ ОСТАНОВЛЕНА</p><p className="text-gray-400 text-sm mt-1">Нажмите "ВКЛЮЧИТЬ АВТОТОРГОВЛЮ" для активации</p></div>)}
                 </div>
               )}
@@ -593,7 +570,7 @@ function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30"><h3 className="text-lg font-bold text-red-400 mb-3">💰 БАЛАНС</h3><div className="text-3xl font-bold text-white">${balance.toLocaleString()}</div><div className="text-xs text-gray-500 mt-1">Демо-счёт Bybit Testnet</div></div>
+              <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30"><h3 className="text-lg font-bold text-red-400 mb-3">💰 БАЛАНС</h3><div className="text-3xl font-bold text-white">${balance.toLocaleString()}</div><div className="text-xs text-gray-500 mt-1">Демо-счет Bybit Testnet</div></div>
               <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
                 <h3 className="text-lg font-bold text-red-400 mb-3 flex justify-between items-center">📊 ОТКРЫТЫЕ ПОЗИЦИИ{positions.length > 0 && <button onClick={closeAllPositions} className="text-xs bg-red-700/50 hover:bg-red-700 px-2 py-1 rounded transition">Закрыть всё</button>}</h3>
                 {positions.length === 0 ? <div className="text-gray-500 text-sm">Нет открытых позиций</div> : positions.map((pos, idx) => (<div key={idx} className="border-b border-red-500/20 py-2 flex justify-between items-center"><span>{pos.side === 'Buy' ? '🟢' : '🔴'} {pos.symbol}</span><span>${pos.price}</span><span className="text-xs">{pos.qty}</span></div>))}
