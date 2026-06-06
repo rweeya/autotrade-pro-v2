@@ -121,18 +121,12 @@ class BybitTestnetTrading {
     localStorage.setItem(`price_${symbol}`, price.toString())
   }
 
-  // ИСПРАВЛЕННАЯ ФУНКЦИЯ - больше не спамит ошибками
   async closeByReverseSignal(symbol: string, signalSide: string): Promise<boolean> {
-    // Проверяем, есть ли позиция
     const positionIndex = this.positions.findIndex(p => p.symbol === symbol)
-    if (positionIndex === -1) {
-      // Нет позиции — просто выходим, без ошибки
-      return false
-    }
+    if (positionIndex === -1) return false
     
     const position = this.positions[positionIndex]
     
-    // Проверяем, противоположный ли сигнал
     if ((position.side === 'Buy' && signalSide === 'Sell') ||
         (position.side === 'Sell' && signalSide === 'Buy')) {
       const currentPrice = parseFloat(localStorage.getItem(`price_${symbol}`) || position.entryPrice.toString())
@@ -147,7 +141,6 @@ class BybitTestnetTrading {
       throw new Error('API ключи не настроены')
     }
 
-    // Защита от слива баланса
     if (this.balance < 50) {
       throw new Error(`❌ Баланс слишком низкий ($${this.balance.toFixed(2)}). Минимальный порог $50. Сбросьте счёт.`)
     }
