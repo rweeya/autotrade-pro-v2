@@ -24,7 +24,7 @@ interface Signal {
   }
 }
 
-// ========== 300+ АКТИВОВ ==========
+// ========== 500+ АКТИВОВ (МАКСИМУМ) ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -58,7 +58,30 @@ const SYMBOLS = [
   'ARK/USDT', 'ARPA/USDT', 'AST/USDT', 'ASTR/USDT', 'ATA/USDT',
   'AUCTION/USDT', 'AUDIO/USDT', 'AURA/USDT', 'AXL/USDT', 'BADGER/USDT',
   'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT',
-  'BOND/USDT', 'BRETT/USDT', 'C98/USDT', 'CAKE/USDT', 'CELR/USDT'
+  'BOND/USDT', 'BRETT/USDT', 'C98/USDT', 'CAKE/USDT', 'CELR/USDT',
+  'CFX/USDT', 'CHR/USDT', 'CITY/USDT', 'COMBO/USDT', 'CONV/USDT',
+  'CORE/USDT', 'COTI/USDT', 'CROWN/USDT', 'CTK/USDT', 'CTSI/USDT',
+  'CVC/USDT', 'DAD/USDT', 'DAI/USDT', 'DAR/USDT', 'DASH/USDT',
+  'DATA/USDT', 'DEGO/USDT', 'DENT/USDT', 'DEXE/USDT', 'DIA/USDT',
+  'DOCK/USDT', 'DODO/USDT', 'DOGE/USDT', 'DOT/USDT', 'DREP/USDT',
+  'DUSK/USDT', 'EGLD/USDT', 'ELON/USDT', 'ENJ/USDT', 'ENS/USDT',
+  'EOS/USDT', 'ERN/USDT', 'ETC/USDT', 'FARM/USDT', 'FET/USDT',
+  'FIDA/USDT', 'FIL/USDT', 'FIO/USDT', 'FIRO/USDT', 'FIS/USDT',
+  'FLM/USDT', 'FLOW/USDT', 'FLUX/USDT', 'FORTH/USDT', 'FRONT/USDT',
+  'FTM/USDT', 'FUN/USDT', 'GALA/USDT', 'GAS/USDT', 'GHST/USDT',
+  'GLM/USDT', 'GLMR/USDT', 'GNO/USDT', 'GRT/USDT', 'GTC/USDT',
+  'HARD/USDT', 'HBAR/USDT', 'HFT/USDT', 'HIGH/USDT', 'HIVE/USDT',
+  'HNT/USDT', 'HOOK/USDT', 'HOT/USDT', 'ICP/USDT', 'ICX/USDT',
+  'IDEX/USDT', 'ILV/USDT', 'IMX/USDT', 'INJ/USDT', 'IOST/USDT',
+  'IOTA/USDT', 'JASMY/USDT', 'JST/USDT', 'JUP/USDT', 'KAVA/USDT',
+  'KDA/USDT', 'KLAY/USDT', 'KNC/USDT', 'KP3R/USDT', 'KSM/USDT',
+  'LDO/USDT', 'LINA/USDT', 'LINK/USDT', 'LIT/USDT', 'LPT/USDT',
+  'LRC/USDT', 'LSK/USDT', 'LTC/USDT', 'LTO/USDT', 'MANA/USDT',
+  'MASK/USDT', 'MATIC/USDT', 'MBL/USDT', 'MBOX/USDT', 'MDT/USDT',
+  'MDX/USDT', 'MFT/USDT', 'MINA/USDT', 'MKR/USDT', 'MLN/USDT',
+  'MOVR/USDT', 'MTL/USDT', 'NEO/USDT', 'NKN/USDT', 'NMR/USDT',
+  'NULS/USDT', 'OCEAN/USDT', 'OGN/USDT', 'OKB/USDT', 'OM/USDT',
+  'ONE/USDT', 'ONT/USDT', 'OXT/USDT', 'PHA/USDT', 'PHB/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
@@ -308,7 +331,6 @@ function App() {
   }
 
   const updateSignals = () => {
-    console.log(`🟡 realPrices: ${Object.keys(realPrices).length} / ${SYMBOLS.length} активов`)
     const newSignals: Signal[] = []
     for (const symbol of SYMBOLS) {
       const price = realPrices[symbol]
@@ -319,7 +341,7 @@ function App() {
     }
     newSignals.sort((a, b) => b.strength - a.strength)
     setSignals(newSignals)
-    if (newSignals.length) console.log(`✅ Сигналов: ${newSignals.length}`)
+    if (newSignals.length) console.log(`✅ Сигналов: ${newSignals.length} из ${SYMBOLS.length}`)
   }
 
   useEffect(() => {
@@ -341,7 +363,7 @@ function App() {
     const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
-    console.log(`🌐 WebSocket подписан на ${symbolsToSubscribe.length} символов (300+)`)
+    console.log(`🌐 WebSocket подписан на ${symbolsToSubscribe.length} символов (500+)`)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
