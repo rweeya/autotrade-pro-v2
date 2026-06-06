@@ -6,6 +6,7 @@ import TopMovers from './components/TopMovers'
 import Watchlist from './components/Watchlist'
 import { binanceWS } from './services/websocket'
 import { bybitTestnet } from './services/bybitTestnet'
+import { binanceCandles } from './services/binanceCandles'
 
 interface Signal {
   symbol: string
@@ -87,6 +88,7 @@ const DEMO_PRICES: Record<string, number> = {
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
 let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
+let lastCandleTime: Record<string, number> = {}
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -164,7 +166,6 @@ function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, 
   return null
 }
 
-// РЕАЛЬНЫЕ СИГНАЛЫ (не тестовые)
 function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number, isScalping: boolean): Signal | null {
   if (!priceHistory[symbol]) {
     priceHistory[symbol] = generatePriceHistory(currentPrice)
@@ -197,10 +198,8 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   let strength = 0
   
   if (isScalping) {
-    // СКАЛЬПИНГ: RSI + MACD (2 индикатора)
     const buyScalping = rsi < 55 && macdCross === 'bullish'
     const sellScalping = rsi > 45 && macdCross === 'bearish'
-    
     if (buyScalping) {
       allBuyConditions = true
       strength = 2
@@ -211,10 +210,8 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
       reasons.push(`RSI:${Math.round(rsi)} (>45)`, `MACD bearish`)
     }
   } else {
-    // СВИНГ: RSI + MACD + EMA (3 индикатора)
     const buySwing = rsi < 45 && macdCross === 'bullish' && emaCross === 'golden'
     const sellSwing = rsi > 55 && macdCross === 'bearish' && emaCross === 'death'
-    
     if (buySwing) {
       allBuyConditions = true
       strength = 3
@@ -364,65 +361,65 @@ function App() {
     window.location.reload()
   }
 
+  // НОВАЯ ЛОГИКА: Получение 15-минутных свечей вместо LIVE
   useEffect(() => {
-    const updatePrice = (symbol: string, price: number) => {
-      let formattedSymbol = symbol
-      if (symbol === 'BTCUSDT') formattedSymbol = 'BTC/USDT'
-      else if (symbol === 'ETHUSDT') formattedSymbol = 'ETH/USDT'
-      else if (symbol === 'SOLUSDT') formattedSymbol = 'SOL/USDT'
-      else if (symbol === 'BNBUSDT') formattedSymbol = 'BNB/USDT'
-      else if (symbol === 'XRPUSDT') formattedSymbol = 'XRP/USDT'
-      else if (symbol === 'DOGEUSDT') formattedSymbol = 'DOGE/USDT'
-      else if (symbol === 'ADAUSDT') formattedSymbol = 'ADA/USDT'
-      else if (symbol === 'AVAXUSDT') formattedSymbol = 'AVAX/USDT'
-      else if (symbol === 'DOTUSDT') formattedSymbol = 'DOT/USDT'
-      else if (symbol === 'MATICUSDT') formattedSymbol = 'MATIC/USDT'
-      else if (symbol === 'LINKUSDT') formattedSymbol = 'LINK/USDT'
-      else if (symbol === 'UNIUSDT') formattedSymbol = 'UNI/USDT'
-      else if (symbol === 'ATOMUSDT') formattedSymbol = 'ATOM/USDT'
-      else if (symbol === 'LTCUSDT') formattedSymbol = 'LTC/USDT'
-      else if (symbol === 'NEARUSDT') formattedSymbol = 'NEAR/USDT'
-      else formattedSymbol = symbol
-      
-      realPrices[formattedSymbol] = price
-      setIsRealTime(true)
-      bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
-    }
-    
-    binanceWS.connect()
-    const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
-    symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
-    
-    const updateSignals = () => {
+    const updateSignalsFromCandles = async () => {
       const newSignals: Signal[] = []
+      
       for (const symbol of SYMBOLS) {
-        const price = realPrices[symbol]
-        if (price) {
-          const high = price * 1.02
-          const low = price * 0.98
-          const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
+        try {
+          const cleanSymbol = symbol.replace('/USDT', '')
+          const candles = await binanceCandles.get15MinCandles(cleanSymbol, 100)
+          if (candles.length === 0) continue
+          
+          const prices = candles.map(c => c.close)
+          const highs = candles.map(c => c.high)
+          const lows = candles.map(c => c.low)
+          const currentPrice = prices[prices.length - 1]
+          const currentHigh = highs[highs.length - 1]
+          const currentLow = lows[lows.length - 1]
+          
+          realPrices[symbol] = currentPrice
+          
+          // Обновляем историю цен для индикаторов
+          if (!priceHistory[symbol]) {
+            priceHistory[symbol] = prices.slice(-100)
+          } else {
+            // Добавляем только новую свечу, если она изменилась
+            const lastCandleTime = candles[candles.length - 1].time
+            if (lastCandleTime !== lastCandleTime[symbol]) {
+              priceHistory[symbol].push(currentPrice)
+              if (priceHistory[symbol].length > 100) priceHistory[symbol].shift()
+              lastCandleTime[symbol] = lastCandleTime
+            }
+          }
+          
+          const signal = analyzeIndicators(symbol, currentPrice, currentHigh, currentLow, scalpingMode)
           if (signal) newSignals.push(signal)
+          
+          await new Promise(r => setTimeout(r, 50))
+        } catch (e) {
+          console.error(`Ошибка обработки ${symbol}:`, e)
         }
       }
+      
       newSignals.sort((a, b) => b.strength - a.strength)
       setSignals(newSignals)
-      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (${scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'})`)
+      setIsRealTime(true)
+      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (15-минутные свечи)`)
     }
     
-    updateSignals()
-    const interval = setInterval(updateSignals, 30000)
+    updateSignalsFromCandles()
+    // Запускаем каждые 15 минут (900000 мс)
+    const interval = setInterval(updateSignalsFromCandles, 900000)
     
-    return () => {
-      symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
-      clearInterval(interval)
-    }
+    return () => clearInterval(interval)
   }, [scalpingMode])
 
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
         for (const signal of signals) {
-          // ЗАЩИТА: не открываем сделку, если уже есть позиция по этому символу
           const cleanSymbol = signal.symbol.replace('/USDT', '')
           const existingPosition = positions.find(p => p.symbol === cleanSymbol)
           if (existingPosition) {
@@ -504,7 +501,10 @@ function App() {
             >
               {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
             </button>
-            {isRealTime && <div className="flex items-center gap-1 text-xs text-red-400"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>REAL-TIME</div>}
+            <div className="flex items-center gap-1 text-xs text-green-400">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              15m СВЕЧИ
+            </div>
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
@@ -532,7 +532,7 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
             <div className="text-3xl font-bold text-yellow-500">{scalpingMode ? '2/5' : '3/5'}</div>
             <div className="text-gray-400 text-sm mt-1">Индикаторов</div>
-            <div className="text-xs text-green-400 mt-2">{scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}</div>
+            <div className="text-xs text-green-400 mt-2">15m свечи</div>
           </div>
         </div>
 
@@ -605,7 +605,7 @@ function App() {
                   {autoTradeEnabled && (
                     <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
                       <p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p>
-                      <p className="text-gray-400 text-sm mt-1">При появлении сигналов сделки будут открываться автоматически</p>
+                      <p className="text-gray-400 text-sm mt-1">При появлении сигналов (15-минутные свечи) сделки будут открываться автоматически</p>
                     </div>
                   )}
                   
@@ -763,14 +763,14 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора: RSI + MACD)' : '📈 СВИНГ (3 индикатора: RSI + MACD + EMA)'} | Мониторинг {SYMBOLS.length} активов
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора: RSI + MACD)' : '📈 СВИНГ (3 индикатора: RSI + MACD + EMA)'} | 15-минутные свечи | Мониторинг {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (
                 <div className="text-center text-gray-500 py-16">
                   ⏳ Нет сигналов<br/>
-                  <span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span>
+                  <span className="text-xs text-gray-600">Анализируем 15-минутные свечи. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span>
                 </div>
               ) : (
                 signals.map((signal, idx) => {
