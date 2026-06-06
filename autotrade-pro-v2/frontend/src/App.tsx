@@ -361,7 +361,7 @@ function App() {
     window.location.reload()
   }
 
-  // НОВАЯ ЛОГИКА: Получение 15-минутных свечей вместо LIVE
+  // НОВАЯ ЛОГИКА: Проверяем каждую минуту, но по 15-минутным свечам
   useEffect(() => {
     const updateSignalsFromCandles = async () => {
       const newSignals: Signal[] = []
@@ -369,15 +369,20 @@ function App() {
       for (const symbol of SYMBOLS) {
         try {
           const cleanSymbol = symbol.replace('/USDT', '')
+          // Получаем последние 100 свечей (15-минутные)
           const candles = await binanceCandles.get15MinCandles(cleanSymbol, 100)
           if (candles.length === 0) continue
           
+          // Берём последнюю (текущую) свечу — она обновляется каждую минуту
+          const latestCandle = candles[candles.length - 1]
+          const currentPrice = latestCandle.close
+          const currentHigh = latestCandle.high
+          const currentLow = latestCandle.low
+          
+          // Для индикаторов используем историю закрытых свечей
           const prices = candles.map(c => c.close)
           const highs = candles.map(c => c.high)
           const lows = candles.map(c => c.low)
-          const currentPrice = prices[prices.length - 1]
-          const currentHigh = highs[highs.length - 1]
-          const currentLow = lows[lows.length - 1]
           
           realPrices[symbol] = currentPrice
           
@@ -385,12 +390,12 @@ function App() {
           if (!priceHistory[symbol]) {
             priceHistory[symbol] = prices.slice(-100)
           } else {
-            // Добавляем только новую свечу, если она изменилась
-            const lastCandleTime = candles[candles.length - 1].time
-            if (lastCandleTime !== lastCandleTime[symbol]) {
+            // Обновляем только если новая свеча
+            const lastTime = lastCandleTime[symbol] || 0
+            if (latestCandle.time !== lastTime) {
               priceHistory[symbol].push(currentPrice)
               if (priceHistory[symbol].length > 100) priceHistory[symbol].shift()
-              lastCandleTime[symbol] = lastCandleTime
+              lastCandleTime[symbol] = latestCandle.time
             }
           }
           
@@ -406,12 +411,12 @@ function App() {
       newSignals.sort((a, b) => b.strength - a.strength)
       setSignals(newSignals)
       setIsRealTime(true)
-      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (15-минутные свечи)`)
+      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (проверка каждую минуту по 15-минутным свечам)`)
     }
     
     updateSignalsFromCandles()
-    // Запускаем каждые 15 минут (900000 мс)
-    const interval = setInterval(updateSignalsFromCandles, 900000)
+    // ПРОВЕРЯЕМ КАЖДУЮ МИНУТУ, но свечи 15-минутные
+    const interval = setInterval(updateSignalsFromCandles, 60000) // 60 секунд = 1 минута
     
     return () => clearInterval(interval)
   }, [scalpingMode])
@@ -503,7 +508,7 @@ function App() {
             </button>
             <div className="flex items-center gap-1 text-xs text-green-400">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              15m СВЕЧИ
+              15m СВЕЧИ (проверка每分钟)
             </div>
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
@@ -605,7 +610,7 @@ function App() {
                   {autoTradeEnabled && (
                     <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
                       <p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p>
-                      <p className="text-gray-400 text-sm mt-1">При появлении сигналов (15-минутные свечи) сделки будут открываться автоматически</p>
+                      <p className="text-gray-400 text-sm mt-1">При появлении сигналов (проверка каждую минуту по 15-минутным свечам) сделки будут открываться автоматически</p>
                     </div>
                   )}
                   
@@ -719,7 +724,7 @@ function App() {
                             <span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>
                               {trade.side === 'Buy' ? '🟢 BUY' : '🔴 SELL'}
                             </span>
-                          </td>
+                          </tr>
                           <td className="py-2 text-right">${trade.price?.toFixed(2) || '—'}</td>
                           <td className={`py-2 text-right font-bold ${trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}`}>
                             {trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}
@@ -763,14 +768,14 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора: RSI + MACD)' : '📈 СВИНГ (3 индикатора: RSI + MACD + EMA)'} | 15-минутные свечи | Мониторинг {SYMBOLS.length} активов
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора: RSI + MACD)' : '📈 СВИНГ (3 индикатора: RSI + MACD + EMA)'} | 15-минутные свечи (проверка每分钟) | Мониторинг {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (
                 <div className="text-center text-gray-500 py-16">
                   ⏳ Нет сигналов<br/>
-                  <span className="text-xs text-gray-600">Анализируем 15-минутные свечи. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span>
+                  <span className="text-xs text-gray-600">Анализируем 15-минутные свечи (проверка каждую минуту). Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span>
                 </div>
               ) : (
                 signals.map((signal, idx) => {
