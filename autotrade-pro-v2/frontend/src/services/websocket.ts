@@ -1,4 +1,4 @@
-// WebSocket соединение с Binance для реальных цен
+// websocket.ts - ИСПРАВЛЕННАЯ ВЕРСИЯ
 
 type PriceCallback = (symbol: string, price: number) => void
 
@@ -7,66 +7,48 @@ class BinanceWebSocket {
   private callbacks: Map<string, PriceCallback[]> = new Map()
   private prices: Map<string, number> = new Map()
   private connected: boolean = false
+  private reconnectAttempts: number = 0
 
-  // Подписка на обновления цены
-  subscribe(symbol: string, callback: PriceCallback) {
-    if (!this.callbacks.has(symbol)) {
-      this.callbacks.set(symbol, [])
-    }
-    this.callbacks.get(symbol)!.push(callback)
-    
-    // Если есть сохраненная цена, вызываем сразу
-    if (this.prices.has(symbol)) {
-      callback(symbol, this.prices.get(symbol)!)
-    }
-  }
-
-  // Отписка
-  unsubscribe(symbol: string, callback: PriceCallback) {
-    const callbacks = this.callbacks.get(symbol)
-    if (callbacks) {
-      const index = callbacks.indexOf(callback)
-      if (index !== -1) callbacks.splice(index, 1)
-    }
-  }
-
-  // Получить текущую цену
-  getPrice(symbol: string): number | null {
-    return this.prices.get(symbol) || null
-  }
-
-  // Подключиться к WebSocket
   connect() {
     if (this.ws && this.connected) return
 
-    // Формируем стрим для всех нужных символов
-    const symbols = ['btcusdt', 'ethusdt', 'solusdt', 'bnbusdt', 'xrpusdt', 'dogeusdt', 'adausdt']
-    const streams = symbols.map(s => `${s}@trade`).join('/')
+    // Подписываемся на все популярные пары
+    const symbols = [
+      'btcusdt', 'ethusdt', 'solusdt', 'bnbusdt', 'xrpusdt',
+      'dogeusdt', 'adausdt', 'avaxusdt', 'dotusdt', 'maticusdt',
+      'linkusdt', 'uniusdt', 'atomusdt', 'ltcusdt', 'nearusdt'
+    ]
+    
+    const streams = symbols.map(s => `${s}@ticker`).join('/')
     const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`
 
     this.ws = new WebSocket(wsUrl)
     
     this.ws.onopen = () => {
-      console.log('✅ Binance WebSocket подключен')
+      console.log('✅ Binance WebSocket подключен (через поток)')
       this.connected = true
+      this.reconnectAttempts = 0
     }
 
     this.ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      const stream = data.stream
-      const trade = data.data
-      
-      if (trade && trade.s && trade.p) {
-        const symbol = trade.s.toUpperCase()
-        const price = parseFloat(trade.p)
+      try {
+        const data = JSON.parse(event.data)
+        const stream = data.stream
+        const ticker = data.data
         
-        this.prices.set(symbol, price)
-        
-        // Оповещаем подписчиков
-        const callbacks = this.callbacks.get(symbol)
-        if (callbacks) {
-          callbacks.forEach(cb => cb(symbol, price))
+        if (ticker && ticker.s && ticker.c) {
+          const symbol = ticker.s.toUpperCase()
+          const price = parseFloat(ticker.c)
+          
+          this.prices.set(symbol, price)
+          
+          const callbacks = this.callbacks.get(symbol)
+          if (callbacks) {
+            callbacks.forEach(cb => cb(symbol, price))
+          }
         }
+      } catch (e) {
+        console.error('Ошибка обработки WebSocket сообщения:', e)
       }
     }
 
@@ -81,7 +63,32 @@ class BinanceWebSocket {
     }
   }
 
-  // Отключиться
+  subscribe(symbol: string, callback: PriceCallback) {
+    const upperSymbol = symbol.toUpperCase()
+    if (!this.callbacks.has(upperSymbol)) {
+      this.callbacks.set(upperSymbol, [])
+    }
+    this.callbacks.get(upperSymbol)!.push(callback)
+    
+    // Если уже есть цена, вызываем сразу
+    if (this.prices.has(upperSymbol)) {
+      callback(upperSymbol, this.prices.get(upperSymbol)!)
+    }
+  }
+
+  unsubscribe(symbol: string, callback: PriceCallback) {
+    const upperSymbol = symbol.toUpperCase()
+    const callbacks = this.callbacks.get(upperSymbol)
+    if (callbacks) {
+      const index = callbacks.indexOf(callback)
+      if (index !== -1) callbacks.splice(index, 1)
+    }
+  }
+
+  getPrice(symbol: string): number | null {
+    return this.prices.get(symbol.toUpperCase()) || null
+  }
+
   disconnect() {
     if (this.ws) {
       this.ws.close()
