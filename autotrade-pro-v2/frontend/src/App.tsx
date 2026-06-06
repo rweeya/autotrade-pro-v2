@@ -24,7 +24,7 @@ interface Signal {
   }
 }
 
-// ========== 180+ АКТИВОВ ==========
+// ========== 300+ АКТИВОВ ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -38,7 +38,21 @@ const SYMBOLS = [
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
   'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
   'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
-  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT'
+  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
+  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
+  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
+  'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
+  'RACA/USDT', 'HIGH/USDT', 'STG/USDT', 'LQTY/USDT', 'TRU/USDT',
+  'BOND/USDT', 'MDX/USDT', 'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT',
+  'CAKE/USDT', 'XVS/USDT', 'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT',
+  'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT', 'CITY/USDT',
+  'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT', '1INCH/USDT',
+  'AAVE/USDT', 'ABT/USDT', 'ACH/USDT', 'ADX/USDT', 'AEVO/USDT',
+  'AGLD/USDT', 'ALCX/USDT', 'ALPHA/USDT', 'ALPINE/USDT', 'AMB/USDT',
+  'AMP/USDT', 'ANC/USDT', 'ANT/USDT', 'APE/USDT', 'API3/USDT',
+  'ARK/USDT', 'ARPA/USDT', 'AST/USDT', 'ASTR/USDT', 'ATA/USDT',
+  'AUCTION/USDT', 'AUDIO/USDT', 'AURA/USDT', 'AXL/USDT', 'BADGER/USDT',
+  'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
@@ -308,30 +322,27 @@ function App() {
   }
 
   useEffect(() => {
+    const symbolMap: Record<string, string> = {
+      'BTCUSDT': 'BTC/USDT', 'ETHUSDT': 'ETH/USDT', 'SOLUSDT': 'SOL/USDT',
+      'BNBUSDT': 'BNB/USDT', 'XRPUSDT': 'XRP/USDT', 'DOGEUSDT': 'DOGE/USDT',
+      'ADAUSDT': 'ADA/USDT', 'AVAXUSDT': 'AVAX/USDT', 'DOTUSDT': 'DOT/USDT',
+      'MATICUSDT': 'MATIC/USDT', 'LINKUSDT': 'LINK/USDT', 'UNIUSDT': 'UNI/USDT',
+      'ATOMUSDT': 'ATOM/USDT', 'LTCUSDT': 'LTC/USDT', 'NEARUSDT': 'NEAR/USDT',
+      'FILUSDT': 'FIL/USDT', 'APTUSDT': 'APT/USDT', 'ARBUSDT': 'ARB/USDT',
+      'OPUSDT': 'OP/USDT', 'INJUSDT': 'INJ/USDT', 'SUIUSDT': 'SUI/USDT',
+      'IMXUSDT': 'IMX/USDT', 'HBARUSDT': 'HBAR/USDT', 'VETUSDT': 'VET/USDT',
+      'GRTUSDT': 'GRT/USDT', 'RNDRUSDT': 'RNDR/USDT', 'MKRUSDT': 'MKR/USDT',
+      'AAVEUSDT': 'AAVE/USDT', 'SNXUSDT': 'SNX/USDT', 'CRVUSDT': 'CRV/USDT'
+    }
+    
     const updatePrice = (symbol: string, price: number) => {
-      let formattedSymbol = symbol
-      if (symbol === 'BTCUSDT') formattedSymbol = 'BTC/USDT'
-      else if (symbol === 'ETHUSDT') formattedSymbol = 'ETH/USDT'
-      else if (symbol === 'SOLUSDT') formattedSymbol = 'SOL/USDT'
-      else if (symbol === 'BNBUSDT') formattedSymbol = 'BNB/USDT'
-      else if (symbol === 'XRPUSDT') formattedSymbol = 'XRP/USDT'
-      else if (symbol === 'DOGEUSDT') formattedSymbol = 'DOGE/USDT'
-      else if (symbol === 'ADAUSDT') formattedSymbol = 'ADA/USDT'
-      else if (symbol === 'AVAXUSDT') formattedSymbol = 'AVAX/USDT'
-      else if (symbol === 'DOTUSDT') formattedSymbol = 'DOT/USDT'
-      else if (symbol === 'MATICUSDT') formattedSymbol = 'MATIC/USDT'
-      else if (symbol === 'LINKUSDT') formattedSymbol = 'LINK/USDT'
-      else if (symbol === 'UNIUSDT') formattedSymbol = 'UNI/USDT'
-      else if (symbol === 'ATOMUSDT') formattedSymbol = 'ATOM/USDT'
-      else if (symbol === 'LTCUSDT') formattedSymbol = 'LTC/USDT'
-      else if (symbol === 'NEARUSDT') formattedSymbol = 'NEAR/USDT'
-      else formattedSymbol = symbol.replace('USDT', '/USDT')
+      const formattedSymbol = symbolMap[symbol] || symbol.replace('USDT', '/USDT')
       
-      realPrices[formattedSymbol] = price
-      bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
-      
-      // ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ updateSignals
-      updateSignals()
+      if (price && formattedSymbol) {
+        realPrices[formattedSymbol] = price
+        console.log(`💰 Цена обновлена: ${formattedSymbol} = ${price}`)
+        updateSignals()
+      }
     }
     
     binanceWS.connect()
@@ -339,12 +350,6 @@ function App() {
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
     console.log(`🌐 WebSocket подключён, подписан на ${symbolsToSubscribe.length} символов`)
-    
-    // Принудительный вызов через 2 секунды для теста
-    setTimeout(() => {
-      console.log('🔄 ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ updateSignals через 2 секунды')
-      updateSignals()
-    }, 2000)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
