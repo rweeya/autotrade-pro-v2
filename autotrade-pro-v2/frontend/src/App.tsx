@@ -24,33 +24,40 @@ interface Signal {
   }
 }
 
-// ========== 200+ АКТИВОВ (максимально) ==========
+// ========== 150+ АКТИВОВ ==========
 const SYMBOLS = [
   // Топ-20
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
-  // Альткоины (40)
+  // Альткоины (50)
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
   'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
   'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
   'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
   'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
-  // Мемы (10)
+  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
+  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
+  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
+  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
+  // Мемы (15)
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
   'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
-  // Новые и популярные (30)
+  'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
+  // Новые и популярные (35)
   'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
   'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
   'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
   'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
   'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
   'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
-  // Фан токены (10)
+  'RACA/USDT', 'HIGH/USDT', 'STG/USDT', 'LQTY/USDT', 'TRU/USDT',
+  // Фан токены (15)
   'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT',
-  'CITY/USDT', 'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT'
+  'CITY/USDT', 'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT',
+  'NAP/USDT', 'SPA/USDT', 'ASR/USDT', 'OG/USDT', 'LEG/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -66,20 +73,28 @@ const DEMO_PRICES: Record<string, number> = {
   'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11, 'THETA/USDT': 1.85, 'EOS/USDT': 0.85,
   'XTZ/USDT': 1.05, 'KSM/USDT': 28.5, 'ZEC/USDT': 28.5, 'DASH/USDT': 32.5,
   'COMP/USDT': 48.5, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22, 'ZRX/USDT': 0.32,
-  'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
+  'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'ICP/USDT': 12.5, 'STX/USDT': 1.85,
+  'KAS/USDT': 0.12, 'RUNE/USDT': 4.2, 'EGLD/USDT': 48.5, 'FLOW/USDT': 0.85,
+  'WAVES/USDT': 2.15, 'NEO/USDT': 12.5, 'IOTA/USDT': 0.25, 'XDC/USDT': 0.042,
+  'ONE/USDT': 0.018, 'HOT/USDT': 0.0025, 'CRO/USDT': 0.12, 'OKB/USDT': 48.5,
+  'LEO/USDT': 5.2, 'CELO/USDT': 0.65, 'ROSE/USDT': 0.085, 'KLAY/USDT': 0.18,
+  'CKB/USDT': 0.0085, 'ERG/USDT': 1.25, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
   'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
   'DOGS/USDT': 0.00012, 'NOT/USDT': 0.008, 'BRETT/USDT': 0.12, 'MOG/USDT': 0.000008,
-  'MYRO/USDT': 0.18, 'SEI/USDT': 0.42, 'TIA/USDT': 11.5, 'PYTH/USDT': 0.48,
-  'JUP/USDT': 0.95, 'ONDO/USDT': 1.15, 'STRK/USDT': 1.85, 'WLD/USDT': 5.2,
-  'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72, 'FET/USDT': 2.15, 'LDO/USDT': 1.85,
-  'BLUR/USDT': 0.42, 'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2,
-  'SSV/USDT': 28.5, 'RPL/USDT': 28.5, 'DGB/USDT': 0.0085, 'DCR/USDT': 18.5,
-  'BTG/USDT': 28.5, 'NMR/USDT': 18.5, 'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032,
-  'REEF/USDT': 0.0028, 'COTI/USDT': 0.085, 'WIN/USDT': 0.00012, 'ALICE/USDT': 1.25,
-  'TLM/USDT': 0.018, 'MBOX/USDT': 0.28, 'DAR/USDT': 0.085, 'RACA/USDT': 0.00018,
-  'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85, 'ACM/USDT': 2.5,
-  'BAR/USDT': 3.0, 'CITY/USDT': 2.8, 'PSG/USDT': 4.0, 'JUV/USDT': 3.5,
-  'ATM/USDT': 2.2, 'INTER/USDT': 3.8
+  'MYRO/USDT': 0.18, 'POPCAT/USDT': 0.42, 'MEW/USDT': 0.008, 'WEN/USDT': 0.00012,
+  'BABYDOGE/USDT': 0.000000002, 'LEASH/USDT': 650, 'SEI/USDT': 0.42, 'TIA/USDT': 11.5,
+  'PYTH/USDT': 0.48, 'JUP/USDT': 0.95, 'ONDO/USDT': 1.15, 'STRK/USDT': 1.85,
+  'WLD/USDT': 5.2, 'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72, 'FET/USDT': 2.15,
+  'LDO/USDT': 1.85, 'BLUR/USDT': 0.42, 'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85,
+  'GNS/USDT': 4.2, 'SSV/USDT': 28.5, 'RPL/USDT': 28.5, 'DGB/USDT': 0.0085,
+  'DCR/USDT': 18.5, 'BTG/USDT': 28.5, 'NMR/USDT': 18.5, 'STORJ/USDT': 0.65,
+  'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028, 'COTI/USDT': 0.085, 'WIN/USDT': 0.00012,
+  'ALICE/USDT': 1.25, 'TLM/USDT': 0.018, 'MBOX/USDT': 0.28, 'DAR/USDT': 0.085,
+  'RACA/USDT': 0.00018, 'HIGH/USDT': 2.15, 'STG/USDT': 0.52, 'LQTY/USDT': 1.15,
+  'TRU/USDT': 0.12, 'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85,
+  'ACM/USDT': 2.5, 'BAR/USDT': 3.0, 'CITY/USDT': 2.8, 'PSG/USDT': 4.0,
+  'JUV/USDT': 3.5, 'ATM/USDT': 2.2, 'INTER/USDT': 3.8, 'NAP/USDT': 2.1,
+  'SPA/USDT': 1.8, 'ASR/USDT': 2.3, 'OG/USDT': 1.9, 'LEG/USDT': 1.7
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -141,9 +156,9 @@ function calculateMACD(prices: number[], fast = 8, slow = 17, signal = 5): { mac
 
 function generatePriceHistory(currentPrice: number): number[] {
   const history: number[] = []
-  let price = currentPrice * 0.9
+  let price = currentPrice * 0.95
   for (let i = 0; i < 50; i++) {
-    const change = (Math.random() - 0.5) * 0.01
+    const change = (Math.random() - 0.5) * 0.015
     price = price * (1 + change)
     history.push(price)
   }
@@ -165,8 +180,6 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   const prices = priceHistory[symbol]
   const rsi = calculateRSI(prices, 10)
-  const ema20 = calculateEMA(prices, 20)
-  const ema50 = calculateEMA(prices, 50)
   
   const macdData = calculateMACD(prices)
   
@@ -185,29 +198,29 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   if (isScalping) {
     // СКАЛЬПИНГ: более мягкие условия
-    const buyScalping = rsi < 55 && (macdCross === 'bullish' || currMacd.macd > 0)
-    const sellScalping = rsi > 45 && (macdCross === 'bearish' || currMacd.macd < 0)
+    const buyScalping = rsi < 60 && (macdCross === 'bullish' || currMacd.macd > 0)
+    const sellScalping = rsi > 40 && (macdCross === 'bearish' || currMacd.macd < 0)
     if (buyScalping) {
       allBuyConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (<55)`, `MACD бычий`)
+      reasons.push(`RSI:${Math.round(rsi)} (<60)`, `MACD бычий`)
     } else if (sellScalping) {
       allSellConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (>45)`, `MACD медвежий`)
+      reasons.push(`RSI:${Math.round(rsi)} (>40)`, `MACD медвежий`)
     }
   } else {
     // СВИНГ: стандартные условия
-    const buySwing = rsi < 45 && macdCross === 'bullish' && currentPrice > ema20
-    const sellSwing = rsi > 55 && macdCross === 'bearish' && currentPrice < ema20
+    const buySwing = rsi < 45 && macdCross === 'bullish'
+    const sellSwing = rsi > 55 && macdCross === 'bearish'
     if (buySwing) {
       allBuyConditions = true
       strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD бычий`, `Цена выше EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD бычий`)
     } else if (sellSwing) {
       allSellConditions = true
       strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD медвежий`, `Цена ниже EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD медвежий`)
     }
   }
   
@@ -218,7 +231,7 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
       timestamp: new Date(),
       indicators: {
         rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
-        macdHistogram: currMacd.histogram, ema20, ema50
+        macdHistogram: currMacd.histogram, ema20: 0, ema50: 0
       }
     }
   }
@@ -230,7 +243,7 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
       timestamp: new Date(),
       indicators: {
         rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
-        macdHistogram: currMacd.histogram, ema20, ema50
+        macdHistogram: currMacd.histogram, ema20: 0, ema50: 0
       }
     }
   }
@@ -396,7 +409,7 @@ function App() {
     }
     
     updateSignals()
-    const interval = setInterval(updateSignals, 15000) // Каждые 15 секунд
+    const interval = setInterval(updateSignals, 15000)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
@@ -504,12 +517,12 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<55 + MACD' : 'RSI<45 + MACD'}</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<60' : 'RSI<45'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>45 + MACD' : 'RSI>55 + MACD'}</div>
+            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>40' : 'RSI>55'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
             <div className="text-3xl font-bold text-yellow-500">{scalpingMode ? '⚡' : '📈'}</div>
@@ -620,15 +633,17 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | WebSocket LIVE | Мониторинг {SYMBOLS.length} активов | Обновление каждые 15 сек</div>
+              <div className="text-sm font-semibold text-red-300">
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | Мониторинг {SYMBOLS.length} активов | Обновление 15 сек
+              </div>
             </div>
             <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span></div>) : (signals.map((signal, idx) => {
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов</span></div>) : (signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
                 return (<div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
                   <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/{scalpingMode ? '2' : '3'})</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4 text-xs">
-                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < (scalpingMode ? 55 : 45) ? 'text-green-400' : signal.indicators.rsi > (scalpingMode ? 45 : 55) ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
+                  <div className="grid grid-cols-3 gap-2 mt-4 text-xs">
+                    <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < (scalpingMode ? 60 : 45) ? 'text-green-400' : signal.indicators.rsi > (scalpingMode ? 40 : 55) ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
                     <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div></div>
                     <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="text-white text-xs">${signal.price.toLocaleString()}</div></div>
                   </div>
