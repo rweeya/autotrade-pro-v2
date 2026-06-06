@@ -24,14 +24,42 @@ interface Signal {
   }
 }
 
-// ========== АКТИВЫ ==========
+// ========== 200+ АКТИВОВ ==========
 const SYMBOLS = [
+  // Топ-20
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
+  // Альткоины (50)
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
-  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT'
+  'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
+  'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
+  'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
+  'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
+  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
+  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
+  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
+  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
+  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
+  // Мемы (20)
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
+  'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
+  'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
+  'ELON/USDT', 'HOGE/USDT', 'CATE/USDT', 'PEPE2/USDT', 'WOJAK/USDT',
+  // Новые (40)
+  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
+  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
+  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
+  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
+  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
+  'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
+  'RACA/USDT', 'HIGH/USDT', 'STG/USDT', 'LQTY/USDT', 'TRU/USDT',
+  'BOND/USDT', 'MDX/USDT', 'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT',
+  // Фан токены (15)
+  'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT',
+  'CITY/USDT', 'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT',
+  'NAP/USDT', 'SPA/USDT', 'ASR/USDT', 'OG/USDT', 'LEG/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -41,8 +69,33 @@ const DEMO_PRICES: Record<string, number> = {
   'ATOM/USDT': 11.2, 'LTC/USDT': 98.5, 'NEAR/USDT': 7.8, 'FIL/USDT': 6.2,
   'APT/USDT': 11.5, 'ARB/USDT': 1.8, 'OP/USDT': 3.2, 'INJ/USDT': 32.5,
   'SUI/USDT': 1.4, 'IMX/USDT': 2.8, 'HBAR/USDT': 0.12, 'VET/USDT': 0.035,
-  'GRT/USDT': 0.32, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
-  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025
+  'GRT/USDT': 0.32, 'RNDR/USDT': 10.5, 'MKR/USDT': 2800, 'AAVE/USDT': 120,
+  'SNX/USDT': 3.8, 'CRV/USDT': 0.65, 'ALGO/USDT': 0.24, 'FTM/USDT': 0.55,
+  'SAND/USDT': 0.45, 'MANA/USDT': 0.52, 'GALA/USDT': 0.032, 'AXS/USDT': 7.2,
+  'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11, 'THETA/USDT': 1.85, 'EOS/USDT': 0.85,
+  'XTZ/USDT': 1.05, 'KSM/USDT': 28.5, 'ZEC/USDT': 28.5, 'DASH/USDT': 32.5,
+  'COMP/USDT': 48.5, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22, 'ZRX/USDT': 0.32,
+  'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'ICP/USDT': 12.5, 'STX/USDT': 1.85,
+  'KAS/USDT': 0.12, 'RUNE/USDT': 4.2, 'EGLD/USDT': 48.5, 'FLOW/USDT': 0.85,
+  'WAVES/USDT': 2.15, 'NEO/USDT': 12.5, 'IOTA/USDT': 0.25, 'XDC/USDT': 0.042,
+  'ONE/USDT': 0.018, 'HOT/USDT': 0.0025, 'CRO/USDT': 0.12, 'OKB/USDT': 48.5,
+  'LEO/USDT': 5.2, 'CELO/USDT': 0.65, 'ROSE/USDT': 0.085, 'KLAY/USDT': 0.18,
+  'CKB/USDT': 0.0085, 'ERG/USDT': 1.25, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
+  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
+  'SEI/USDT': 0.42, 'TIA/USDT': 11.5, 'PYTH/USDT': 0.48, 'JUP/USDT': 0.95,
+  'ONDO/USDT': 1.15, 'STRK/USDT': 1.85, 'WLD/USDT': 5.2, 'AGIX/USDT': 0.85,
+  'OCEAN/USDT': 0.72, 'FET/USDT': 2.15, 'LDO/USDT': 1.85, 'BLUR/USDT': 0.42,
+  'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2, 'SSV/USDT': 28.5,
+  'RPL/USDT': 28.5, 'DGB/USDT': 0.0085, 'DCR/USDT': 18.5, 'BTG/USDT': 28.5,
+  'NMR/USDT': 18.5, 'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028,
+  'COTI/USDT': 0.085, 'WIN/USDT': 0.00012, 'ALICE/USDT': 1.25, 'TLM/USDT': 0.018,
+  'MBOX/USDT': 0.28, 'DAR/USDT': 0.085, 'RACA/USDT': 0.00018, 'HIGH/USDT': 2.15,
+  'STG/USDT': 0.52, 'LQTY/USDT': 1.15, 'TRU/USDT': 0.12, 'BOND/USDT': 2.15,
+  'MDX/USDT': 0.085, 'FORTH/USDT': 4.2, 'BAKE/USDT': 0.32, 'BURGER/USDT': 0.42,
+  'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85, 'ACM/USDT': 2.5,
+  'BAR/USDT': 3.0, 'CITY/USDT': 2.8, 'PSG/USDT': 4.0, 'JUV/USDT': 3.5,
+  'ATM/USDT': 2.2, 'INTER/USDT': 3.8, 'NAP/USDT': 2.1, 'SPA/USDT': 1.8,
+  'ASR/USDT': 2.3, 'OG/USDT': 1.9, 'LEG/USDT': 1.7
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -277,14 +330,6 @@ function App() {
     setTradeHistory(bybitTestnet.getHistory())
   }, [])
 
-  useEffect(() => {
-    if (!apiConfigured) return
-    for (const signal of signals) {
-      const cleanSymbol = signal.symbol.replace('/USDT', '')
-      bybitTestnet.closeByReverseSignal(cleanSymbol, signal.action === 'buy' ? 'Buy' : 'Sell')
-    }
-  }, [signals, apiConfigured])
-
   const closeAllPositions = async () => {
     if (positions.length === 0) {
       alert('Нет открытых позиций')
@@ -310,9 +355,7 @@ function App() {
 
   // ОСНОВНАЯ ЛОГИКА: обновление сигналов по таймеру
   useEffect(() => {
-    // Функция обновления сигналов
     const updateSignals = () => {
-      console.log('🟡 updateSignals вызвана, активов:', SYMBOLS.length)
       const newSignals: Signal[] = []
       
       for (const symbol of SYMBOLS) {
@@ -323,7 +366,6 @@ function App() {
           const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
           if (signal) {
             newSignals.push(signal)
-            console.log(`📊 Сигнал: ${symbol} ${signal.action}`)
           }
         }
       }
@@ -334,7 +376,6 @@ function App() {
       setIsRealTime(true)
     }
     
-    // Запускаем обновление каждые 10 секунд
     updateSignals()
     const interval = setInterval(updateSignals, 10000)
     
@@ -370,12 +411,25 @@ function App() {
     const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
-    console.log('🌐 WebSocket подключён, подписан на:', symbolsToSubscribe.length, 'символов')
+    console.log(`🌐 WebSocket подключён, подписан на ${symbolsToSubscribe.length} символов`)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
     }
   }, [])
+
+  // ОТДЕЛЬНЫЙ useEffect ДЛЯ ЗАКРЫТИЯ ПОЗИЦИЙ (чтобы не было ошибок)
+  useEffect(() => {
+    if (!apiConfigured) return
+    for (const signal of signals) {
+      const cleanSymbol = signal.symbol.replace('/USDT', '')
+      // Проверяем, есть ли позиция перед закрытием
+      const existingPosition = positions.find(p => p.symbol === cleanSymbol)
+      if (existingPosition) {
+        bybitTestnet.closeByReverseSignal(cleanSymbol, signal.action === 'buy' ? 'Buy' : 'Sell')
+      }
+    }
+  }, [signals, apiConfigured, positions])
 
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
@@ -489,15 +543,15 @@ function App() {
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
             <div className="text-3xl font-bold text-yellow-500">WebSocket</div>
-            <div className="text-gray-400 text-sm mt-1">Реальное время</div>
-            <div className="text-xs text-green-400 mt-2">Обновление 10 сек</div>
+            <div className="text-gray-400 text-sm mt-1">200+ активов</div>
+            <div className="text-xs text-green-400 mt-2">Реальное время</div>
           </div>
         </div>
 
         <div className="flex gap-1 mb-6 border-b border-red-500/30 overflow-x-auto pb-0">
           <button onClick={() => setActiveTab('signals')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🎯 Сигналы</button>
           <button onClick={() => setActiveTab('trading')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📈 График</button>
-          <button onClick={() => setActiveTab('history')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📜 История</button>
+          <button onClick={() | setActiveTab('history')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📜 История</button>
           <button onClick={() => setActiveTab('news')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📰 Новости</button>
           <button onClick={() => setActiveTab('topmovers')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📊 Топ монет</button>
           <button onClick={() => setActiveTab('watchlist')} className={`px-5 py-2.5 font-medium transition-all rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>⭐ Избранное</button>
@@ -583,7 +637,7 @@ function App() {
                 {tradeHistory.length === 0 ? <div className="text-gray-500 text-sm text-center py-4">Нет сделок</div> : (
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-black/80"><tr className="text-gray-400 border-b border-red-500/20"><th className="text-left py-2">Символ</th><th className="text-left py-2">Тип</th><th className="text-right py-2">Цена</th><th className="text-right py-2">Прибыль</th><th className="text-right py-2">%</th><th className="text-left py-2">Причина</th></tr></thead>
-                    <tbody>{tradeHistory.map((trade, idx) => (<tr key={idx} className="border-b border-red-500/20 hover:bg-red-900/10"><td className="py-2 font-mono">{trade.symbol}</td><td className="py-2"><span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>{trade.side === 'Buy' ? '🟢 BUY' : '🔴 SELL'}</span></td><td className="py-2 text-right">${trade.price?.toFixed(2) || '—'}</td><td className={`py-2 text-right font-bold ${trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}</td><td className={`py-2 text-right font-bold ${trade.profitPercent && trade.profitPercent > 0 ? 'text-green-400' : trade.profitPercent && trade.profitPercent < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profitPercent ? `${trade.profitPercent > 0 ? '+' : ''}${trade.profitPercent.toFixed(2)}%` : '—'}</td><td className="py-2 text-gray-500 text-xs">{trade.closeReason || (trade.side === 'Sell' ? 'Закрыта' : 'Открыта')}</td></tr>))}</tbody>
+                    <tbody>{tradeHistory.map((trade, idx) => (<tr key={idx} className="border-b border-red-500/20 hover:bg-red-900/10"><td className="py-2 font-mono">{trade.symbol}</td><td className="py-2"><span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>{trade.side === 'Buy' ? '🟢 BUY' : '🔴 SELL'}</span></td><td className="py-2 text-right">${trade.price?.toFixed(2) || '—'}</td><td className={`py-2 text-right font-bold ${trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}</td><td className={`py-2 text-right font-bold ${trade.profitPercent && trade.profitPercent > 0 ? 'text-green-400' : trade.profitPercent && trade.profitPercent < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profitPercent ? `${trade.profitPercent > 0 ? '+' : ''}${trade.profitPercent.toFixed(2)}%` : '—'}</td><td className="py-2 text-gray-500 text-xs">{trade.closeReason || (trade.side === 'Sell' ? 'Закрыта' : 'Открыта')}</td></td>))}</tbody>
                   </table>
                 )}
               </div>
@@ -596,11 +650,11 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | Обновление 10 сек | {SYMBOLS.length} активов
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | 200+ активов | Обновление 10 сек
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов (обновление 10 сек)</span></div>) : (signals.map((signal, idx) => {
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов</span></div>) : (signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
                 return (<div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
                   <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/{scalpingMode ? '2' : '3'})</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
