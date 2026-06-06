@@ -35,6 +35,11 @@ const SYMBOLS = [
   'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
   'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
   'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
+  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
+  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
+  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
+  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
+  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
   'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
   'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
@@ -52,7 +57,8 @@ const SYMBOLS = [
   'AMP/USDT', 'ANC/USDT', 'ANT/USDT', 'APE/USDT', 'API3/USDT',
   'ARK/USDT', 'ARPA/USDT', 'AST/USDT', 'ASTR/USDT', 'ATA/USDT',
   'AUCTION/USDT', 'AUDIO/USDT', 'AURA/USDT', 'AXL/USDT', 'BADGER/USDT',
-  'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT'
+  'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT',
+  'BOND/USDT', 'BRETT/USDT', 'C98/USDT', 'CAKE/USDT', 'CELR/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
@@ -302,45 +308,31 @@ function App() {
   }
 
   const updateSignals = () => {
-    console.log(`🟡 updateSignals вызвана, realPrices: ${Object.keys(realPrices).length} активов`)
-    
+    console.log(`🟡 realPrices: ${Object.keys(realPrices).length} / ${SYMBOLS.length} активов`)
     const newSignals: Signal[] = []
     for (const symbol of SYMBOLS) {
       const price = realPrices[symbol]
       if (price) {
         const signal = analyzeIndicators(symbol, price, scalpingMode)
-        if (signal) {
-          console.log(`📊 Сигнал: ${symbol} ${signal.action} по цене ${price}`)
-          newSignals.push(signal)
-        }
+        if (signal) newSignals.push(signal)
       }
     }
-    
     newSignals.sort((a, b) => b.strength - a.strength)
     setSignals(newSignals)
-    console.log(`✅ Итог: ${newSignals.length} сигналов из ${SYMBOLS.length} активов`)
+    if (newSignals.length) console.log(`✅ Сигналов: ${newSignals.length}`)
   }
 
   useEffect(() => {
-    const symbolMap: Record<string, string> = {
-      'BTCUSDT': 'BTC/USDT', 'ETHUSDT': 'ETH/USDT', 'SOLUSDT': 'SOL/USDT',
-      'BNBUSDT': 'BNB/USDT', 'XRPUSDT': 'XRP/USDT', 'DOGEUSDT': 'DOGE/USDT',
-      'ADAUSDT': 'ADA/USDT', 'AVAXUSDT': 'AVAX/USDT', 'DOTUSDT': 'DOT/USDT',
-      'MATICUSDT': 'MATIC/USDT', 'LINKUSDT': 'LINK/USDT', 'UNIUSDT': 'UNI/USDT',
-      'ATOMUSDT': 'ATOM/USDT', 'LTCUSDT': 'LTC/USDT', 'NEARUSDT': 'NEAR/USDT',
-      'FILUSDT': 'FIL/USDT', 'APTUSDT': 'APT/USDT', 'ARBUSDT': 'ARB/USDT',
-      'OPUSDT': 'OP/USDT', 'INJUSDT': 'INJ/USDT', 'SUIUSDT': 'SUI/USDT',
-      'IMXUSDT': 'IMX/USDT', 'HBARUSDT': 'HBAR/USDT', 'VETUSDT': 'VET/USDT',
-      'GRTUSDT': 'GRT/USDT', 'RNDRUSDT': 'RNDR/USDT', 'MKRUSDT': 'MKR/USDT',
-      'AAVEUSDT': 'AAVE/USDT', 'SNXUSDT': 'SNX/USDT', 'CRVUSDT': 'CRV/USDT'
+    const symbolMap: Record<string, string> = {}
+    for (const s of SYMBOLS) {
+      const raw = s.replace('/USDT', '')
+      symbolMap[raw] = s
     }
     
     const updatePrice = (symbol: string, price: number) => {
-      const formattedSymbol = symbolMap[symbol] || symbol.replace('USDT', '/USDT')
-      
-      if (price && formattedSymbol) {
+      const formattedSymbol = symbolMap[symbol]
+      if (formattedSymbol && price) {
         realPrices[formattedSymbol] = price
-        console.log(`💰 Цена обновлена: ${formattedSymbol} = ${price}`)
         updateSignals()
       }
     }
@@ -349,7 +341,7 @@ function App() {
     const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
-    console.log(`🌐 WebSocket подключён, подписан на ${symbolsToSubscribe.length} символов`)
+    console.log(`🌐 WebSocket подписан на ${symbolsToSubscribe.length} символов (300+)`)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
@@ -377,7 +369,7 @@ function App() {
               qty: parseFloat(qty.toFixed(6)),
               price: signal.price
             })
-            console.log(`✅ Ордер открыт: ${side} ${signal.symbol}`)
+            console.log(`✅ Ордер: ${side} ${signal.symbol}`)
           } catch (error: any) {
             console.error('❌ Ошибка:', error.message)
           }
@@ -401,7 +393,6 @@ function App() {
             <button onClick={toggleScalpingMode} className={`px-3 py-1 rounded-lg text-xs font-bold ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}>
               {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
             </button>
-            <div className="flex items-center gap-1 text-xs text-green-400"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>LIVE</div>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
         </div>
@@ -512,10 +503,10 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | {SYMBOLS.length} активов</div>
             </div>
             <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов</span></div>) : (signals.map((signal, idx) => {
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов</div>) : (signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
                 return (
                   <div key={idx} className="p-5 hover:bg-red-900/10 cursor-pointer" onClick={() => openBybit(signal.symbol)}>
@@ -527,7 +518,7 @@ function App() {
                       <span className="text-yellow-400">⚡ {stars}</span>
                     </div>
                     <div className="grid grid-cols-4 gap-2 mt-4 text-xs">
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < 45 ? 'text-green-400' : signal.indicators.rsi > 55 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className="font-bold">{signal.indicators.rsi}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)}/${signal.indicators.ema50.toFixed(0)}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="text-white">${signal.price.toLocaleString()}</div></div>
