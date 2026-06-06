@@ -6,7 +6,6 @@ import TopMovers from './components/TopMovers'
 import Watchlist from './components/Watchlist'
 import { binanceWS } from './services/websocket'
 import { bybitTestnet } from './services/bybitTestnet'
-import { binanceCandles } from './services/binanceCandles'
 
 interface Signal {
   symbol: string
@@ -25,35 +24,33 @@ interface Signal {
   }
 }
 
-// ========== 200+ АКТИВОВ ==========
+// ========== 200+ АКТИВОВ (максимально) ==========
 const SYMBOLS = [
+  // Топ-20
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
+  // Альткоины (40)
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
+  'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
+  'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
+  'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
+  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
+  // Мемы (10)
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
   'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
-  'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
-  'ELON/USDT', 'HOGE/USDT', 'CATE/USDT', 'PEPE2/USDT', 'WOJAK/USDT',
-  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
-  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'THETA/USDT',
-  'XDC/USDT', 'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT',
-  'LEO/USDT', 'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT',
-  'ERG/USDT', 'RVN/USDT', 'SC/USDT', 'AR/USDT', 'HNT/USDT',
-  'LPT/USDT', 'BAL/USDT', 'YFI/USDT', 'SUSHI/USDT', '1INCH/USDT',
-  'DYDX/USDT', 'PERP/USDT', 'GMX/USDT', 'SEI/USDT', 'TIA/USDT',
-  'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT', 'STRK/USDT', 'WLD/USDT',
-  'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT', 'LDO/USDT', 'BLUR/USDT',
-  'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT', 'SSV/USDT', 'RPL/USDT',
-  'DGB/USDT', 'DCR/USDT', 'BTG/USDT', 'NMR/USDT', 'STORJ/USDT',
-  'ANKR/USDT', 'REEF/USDT', 'COTI/USDT', 'WIN/USDT', 'ALICE/USDT',
-  'TLM/USDT', 'MBOX/USDT', 'DAR/USDT', 'RACA/USDT', 'HIGH/USDT',
-  'STG/USDT', 'LQTY/USDT', 'TRU/USDT', 'BOND/USDT', 'MDX/USDT',
-  'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT', 'CAKE/USDT', 'XVS/USDT',
-  'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT',
-  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT'
+  // Новые и популярные (30)
+  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
+  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
+  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
+  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
+  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
+  'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
+  // Фан токены (10)
+  'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT',
+  'CITY/USDT', 'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -64,31 +61,30 @@ const DEMO_PRICES: Record<string, number> = {
   'APT/USDT': 11.5, 'ARB/USDT': 1.8, 'OP/USDT': 3.2, 'INJ/USDT': 32.5,
   'SUI/USDT': 1.4, 'IMX/USDT': 2.8, 'HBAR/USDT': 0.12, 'VET/USDT': 0.035,
   'GRT/USDT': 0.32, 'RNDR/USDT': 10.5, 'MKR/USDT': 2800, 'AAVE/USDT': 120,
-  'SNX/USDT': 3.8, 'CRV/USDT': 0.65, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
+  'SNX/USDT': 3.8, 'CRV/USDT': 0.65, 'ALGO/USDT': 0.24, 'FTM/USDT': 0.55,
+  'SAND/USDT': 0.45, 'MANA/USDT': 0.52, 'GALA/USDT': 0.032, 'AXS/USDT': 7.2,
+  'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11, 'THETA/USDT': 1.85, 'EOS/USDT': 0.85,
+  'XTZ/USDT': 1.05, 'KSM/USDT': 28.5, 'ZEC/USDT': 28.5, 'DASH/USDT': 32.5,
+  'COMP/USDT': 48.5, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22, 'ZRX/USDT': 0.32,
+  'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
   'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
-  'ALGO/USDT': 0.24, 'FTM/USDT': 0.55, 'SAND/USDT': 0.45, 'MANA/USDT': 0.52,
-  'GALA/USDT': 0.032, 'AXS/USDT': 7.2, 'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11,
-  'THETA/USDT': 1.85, 'EOS/USDT': 0.85, 'XTZ/USDT': 1.05, 'KSM/USDT': 28.5,
-  'ZEC/USDT': 28.5, 'DASH/USDT': 32.5, 'COMP/USDT': 48.5, 'SEI/USDT': 0.42,
-  'TIA/USDT': 11.5, 'PYTH/USDT': 0.48, 'JUP/USDT': 0.95, 'ONDO/USDT': 1.15,
-  'STRK/USDT': 1.85, 'WLD/USDT': 5.2, 'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72,
-  'FET/USDT': 2.15, 'LDO/USDT': 1.85, 'BLUR/USDT': 0.42, 'RDNT/USDT': 0.28,
-  'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2, 'SSV/USDT': 28.5, 'RPL/USDT': 28.5,
-  'DGB/USDT': 0.0085, 'DCR/USDT': 18.5, 'BTG/USDT': 28.5, 'NMR/USDT': 18.5,
-  'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028, 'COTI/USDT': 0.085,
-  'WIN/USDT': 0.00012, 'ALICE/USDT': 1.25, 'TLM/USDT': 0.018, 'MBOX/USDT': 0.28,
-  'DAR/USDT': 0.085, 'RACA/USDT': 0.00018, 'HIGH/USDT': 2.15, 'STG/USDT': 0.52,
-  'LQTY/USDT': 1.15, 'TRU/USDT': 0.12, 'BOND/USDT': 2.15, 'MDX/USDT': 0.085,
-  'FORTH/USDT': 4.2, 'BAKE/USDT': 0.32, 'BURGER/USDT': 0.42, 'CAKE/USDT': 2.15,
-  'XVS/USDT': 8.5, 'ALPACA/USDT': 0.18, 'BETA/USDT': 0.065, 'LAZIO/USDT': 1.85,
-  'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22,
-  'ZRX/USDT': 0.32, 'OMG/USDT': 0.48, 'QTUM/USDT': 3.2
+  'DOGS/USDT': 0.00012, 'NOT/USDT': 0.008, 'BRETT/USDT': 0.12, 'MOG/USDT': 0.000008,
+  'MYRO/USDT': 0.18, 'SEI/USDT': 0.42, 'TIA/USDT': 11.5, 'PYTH/USDT': 0.48,
+  'JUP/USDT': 0.95, 'ONDO/USDT': 1.15, 'STRK/USDT': 1.85, 'WLD/USDT': 5.2,
+  'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72, 'FET/USDT': 2.15, 'LDO/USDT': 1.85,
+  'BLUR/USDT': 0.42, 'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2,
+  'SSV/USDT': 28.5, 'RPL/USDT': 28.5, 'DGB/USDT': 0.0085, 'DCR/USDT': 18.5,
+  'BTG/USDT': 28.5, 'NMR/USDT': 18.5, 'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032,
+  'REEF/USDT': 0.0028, 'COTI/USDT': 0.085, 'WIN/USDT': 0.00012, 'ALICE/USDT': 1.25,
+  'TLM/USDT': 0.018, 'MBOX/USDT': 0.28, 'DAR/USDT': 0.085, 'RACA/USDT': 0.00018,
+  'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85, 'ACM/USDT': 2.5,
+  'BAR/USDT': 3.0, 'CITY/USDT': 2.8, 'PSG/USDT': 4.0, 'JUV/USDT': 3.5,
+  'ATM/USDT': 2.2, 'INTER/USDT': 3.8
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
 let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
-let lastCandleTime: Record<string, number> = {}
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -97,7 +93,7 @@ const formatTime = (date: Date): string => {
   })
 }
 
-function calculateRSI(prices: number[], period: number = 14): number {
+function calculateRSI(prices: number[], period: number = 10): number {
   if (prices.length < period + 1) return 50
   let gains = 0, losses = 0
   for (let i = prices.length - period; i < prices.length; i++) {
@@ -122,7 +118,7 @@ function calculateEMA(prices: number[], period: number): number {
   return ema
 }
 
-function calculateMACD(prices: number[], fast = 12, slow = 26, signal = 9): { macd: number; signal: number; histogram: number } {
+function calculateMACD(prices: number[], fast = 8, slow = 17, signal = 5): { macd: number; signal: number; histogram: number } {
   if (prices.length < slow + signal) {
     return { macd: 0, signal: 0, histogram: 0 }
   }
@@ -145,19 +141,13 @@ function calculateMACD(prices: number[], fast = 12, slow = 26, signal = 9): { ma
 
 function generatePriceHistory(currentPrice: number): number[] {
   const history: number[] = []
-  let price = currentPrice * 0.8
-  for (let i = 0; i < 100; i++) {
-    const change = (Math.random() - 0.5) * 0.02
+  let price = currentPrice * 0.9
+  for (let i = 0; i < 50; i++) {
+    const change = (Math.random() - 0.5) * 0.01
     price = price * (1 + change)
     history.push(price)
   }
   return history
-}
-
-function checkEmaCross(prevEma20: number, prevEma50: number, currEma20: number, currEma50: number): 'golden' | 'death' | null {
-  if (prevEma20 <= prevEma50 && currEma20 > currEma50) return 'golden'
-  if (prevEma20 >= prevEma50 && currEma20 < currEma50) return 'death'
-  return null
 }
 
 function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, currSignal: number): 'bullish' | 'bearish' | null {
@@ -171,10 +161,10 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
     priceHistory[symbol] = generatePriceHistory(currentPrice)
   }
   priceHistory[symbol].push(currentPrice)
-  if (priceHistory[symbol].length > 100) priceHistory[symbol].shift()
+  if (priceHistory[symbol].length > 50) priceHistory[symbol].shift()
   
   const prices = priceHistory[symbol]
-  const rsi = calculateRSI(prices)
+  const rsi = calculateRSI(prices, 10)
   const ema20 = calculateEMA(prices, 20)
   const ema50 = calculateEMA(prices, 50)
   
@@ -186,10 +176,6 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2] : macdData
   const currMacd = macdData
-  
-  const prevEma20 = prices.length >= 21 ? calculateEMA(prices.slice(0, -1), 20) : ema20
-  const prevEma50 = prices.length >= 51 ? calculateEMA(prices.slice(0, -1), 50) : ema50
-  const emaCross = checkEmaCross(prevEma20, prevEma50, ema20, ema50)
   const macdCross = checkMacdCross(prevMacd.macd, prevMacd.signal, currMacd.macd, currMacd.signal)
   
   let reasons: string[] = []
@@ -198,28 +184,30 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   let strength = 0
   
   if (isScalping) {
-    const buyScalping = rsi < 55 && macdCross === 'bullish'
-    const sellScalping = rsi > 45 && macdCross === 'bearish'
+    // СКАЛЬПИНГ: более мягкие условия
+    const buyScalping = rsi < 55 && (macdCross === 'bullish' || currMacd.macd > 0)
+    const sellScalping = rsi > 45 && (macdCross === 'bearish' || currMacd.macd < 0)
     if (buyScalping) {
       allBuyConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (<55)`, `MACD bullish`)
+      reasons.push(`RSI:${Math.round(rsi)} (<55)`, `MACD бычий`)
     } else if (sellScalping) {
       allSellConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (>45)`, `MACD bearish`)
+      reasons.push(`RSI:${Math.round(rsi)} (>45)`, `MACD медвежий`)
     }
   } else {
-    const buySwing = rsi < 45 && macdCross === 'bullish' && emaCross === 'golden'
-    const sellSwing = rsi > 55 && macdCross === 'bearish' && emaCross === 'death'
+    // СВИНГ: стандартные условия
+    const buySwing = rsi < 45 && macdCross === 'bullish' && currentPrice > ema20
+    const sellSwing = rsi > 55 && macdCross === 'bearish' && currentPrice < ema20
     if (buySwing) {
       allBuyConditions = true
       strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD bullish`, `EMA↑`)
+      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD бычий`, `Цена выше EMA20`)
     } else if (sellSwing) {
       allSellConditions = true
       strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD bearish`, `EMA↓`)
+      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD медвежий`, `Цена ниже EMA20`)
     }
   }
   
@@ -361,53 +349,59 @@ function App() {
     window.location.reload()
   }
 
+  // WebSocket логика
   useEffect(() => {
-    const updateSignalsFromCandles = async () => {
-      const newSignals: Signal[] = []
+    const updatePrice = (symbol: string, price: number) => {
+      let formattedSymbol = symbol
+      if (symbol === 'BTCUSDT') formattedSymbol = 'BTC/USDT'
+      else if (symbol === 'ETHUSDT') formattedSymbol = 'ETH/USDT'
+      else if (symbol === 'SOLUSDT') formattedSymbol = 'SOL/USDT'
+      else if (symbol === 'BNBUSDT') formattedSymbol = 'BNB/USDT'
+      else if (symbol === 'XRPUSDT') formattedSymbol = 'XRP/USDT'
+      else if (symbol === 'DOGEUSDT') formattedSymbol = 'DOGE/USDT'
+      else if (symbol === 'ADAUSDT') formattedSymbol = 'ADA/USDT'
+      else if (symbol === 'AVAXUSDT') formattedSymbol = 'AVAX/USDT'
+      else if (symbol === 'DOTUSDT') formattedSymbol = 'DOT/USDT'
+      else if (symbol === 'MATICUSDT') formattedSymbol = 'MATIC/USDT'
+      else if (symbol === 'LINKUSDT') formattedSymbol = 'LINK/USDT'
+      else if (symbol === 'UNIUSDT') formattedSymbol = 'UNI/USDT'
+      else if (symbol === 'ATOMUSDT') formattedSymbol = 'ATOM/USDT'
+      else if (symbol === 'LTCUSDT') formattedSymbol = 'LTC/USDT'
+      else if (symbol === 'NEARUSDT') formattedSymbol = 'NEAR/USDT'
+      else formattedSymbol = symbol.replace('USDT', '/USDT')
       
-      for (const symbol of SYMBOLS) {
-        try {
-          const cleanSymbol = symbol.replace('/USDT', '')
-          const candles = await binanceCandles.get15MinCandles(cleanSymbol, 100)
-          if (candles.length === 0) continue
-          
-          const latestCandle = candles[candles.length - 1]
-          const currentPrice = latestCandle.close
-          const currentHigh = latestCandle.high
-          const currentLow = latestCandle.low
-          
-          realPrices[symbol] = currentPrice
-          
-          if (!priceHistory[symbol]) {
-            priceHistory[symbol] = candles.map(c => c.close).slice(-100)
-          } else {
-            const lastTime = lastCandleTime[symbol] || 0
-            if (latestCandle.time !== lastTime) {
-              priceHistory[symbol].push(currentPrice)
-              if (priceHistory[symbol].length > 100) priceHistory[symbol].shift()
-              lastCandleTime[symbol] = latestCandle.time
-            }
-          }
-          
-          const signal = analyzeIndicators(symbol, currentPrice, currentHigh, currentLow, scalpingMode)
-          if (signal) newSignals.push(signal)
-          
-          await new Promise(r => setTimeout(r, 50))
-        } catch (e) {
-          console.error(`Ошибка обработки ${symbol}:`, e)
-        }
-      }
-      
-      newSignals.sort((a, b) => b.strength - a.strength)
-      setSignals(newSignals)
+      realPrices[formattedSymbol] = price
       setIsRealTime(true)
-      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов`)
+      bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
     }
     
-    updateSignalsFromCandles()
-    const interval = setInterval(updateSignalsFromCandles, 60000)
+    binanceWS.connect()
+    const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
+    symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
-    return () => clearInterval(interval)
+    const updateSignals = () => {
+      const newSignals: Signal[] = []
+      for (const symbol of SYMBOLS) {
+        const price = realPrices[symbol]
+        if (price) {
+          const high = price * 1.01
+          const low = price * 0.99
+          const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
+          if (signal) newSignals.push(signal)
+        }
+      }
+      newSignals.sort((a, b) => b.strength - a.strength)
+      setSignals(newSignals)
+      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (${scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'})`)
+    }
+    
+    updateSignals()
+    const interval = setInterval(updateSignals, 15000) // Каждые 15 секунд
+    
+    return () => {
+      symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
+      clearInterval(interval)
+    }
   }, [scalpingMode])
 
   useEffect(() => {
@@ -492,10 +486,7 @@ function App() {
             <button onClick={toggleScalpingMode} className={`px-3 py-1 rounded-lg text-xs font-bold transition ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}>
               {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
             </button>
-            <div className="flex items-center gap-1 text-xs text-green-400">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              15m свечи
-            </div>
+            {isRealTime && <div className="flex items-center gap-1 text-xs text-red-400"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>REAL-TIME</div>}
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
@@ -513,17 +504,17 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<55 + MACD' : 'RSI<45 + MACD + EMA'}</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<55 + MACD' : 'RSI<45 + MACD'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>45 + MACD' : 'RSI>55 + MACD + EMA'}</div>
+            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>45 + MACD' : 'RSI>55 + MACD'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
-            <div className="text-3xl font-bold text-yellow-500">{scalpingMode ? '2/5' : '3/5'}</div>
-            <div className="text-gray-400 text-sm mt-1">Индикаторов</div>
-            <div className="text-xs text-green-400 mt-2">15m свечи</div>
+            <div className="text-3xl font-bold text-yellow-500">{scalpingMode ? '⚡' : '📈'}</div>
+            <div className="text-gray-400 text-sm mt-1">Режим</div>
+            <div className="text-xs text-green-400 mt-2">WebSocket LIVE</div>
           </div>
         </div>
 
@@ -542,7 +533,7 @@ function App() {
             <div className="mb-4 flex justify-between items-center">
               <div className="text-sm text-gray-400">Выберите актив для анализа</div>
               <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-4 py-2 text-white text-sm">
-                {SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}
+                {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <TradingChart symbol={selectedSymbol} />
@@ -561,14 +552,8 @@ function App() {
               
               {!apiConfigured ? (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-gray-400 text-sm mb-1">API Key</label>
-                    <input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Введите API Key от Bybit Testnet" className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white" />
-                  </div>
-                  <div>
-                    <label className="block text-gray-400 text-sm mb-1">API Secret</label>
-                    <input type="password" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} placeholder="Введите API Secret" className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white" />
-                  </div>
+                  <div><label className="block text-gray-400 text-sm mb-1">API Key</label><input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Введите API Key от Bybit Testnet" className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white" /></div>
+                  <div><label className="block text-gray-400 text-sm mb-1">API Secret</label><input type="password" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} placeholder="Введите API Secret" className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white" /></div>
                   <button onClick={saveApiKeys} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold transition">Сохранить ключи</button>
                   <div className="text-xs text-gray-500 mt-2">Ключи можно получить в Bybit Testnet: API Management → Create New Key</div>
                 </div>
@@ -580,24 +565,10 @@ function App() {
                       {autoTradeEnabled ? '🔴 ОСТАНОВИТЬ' : '🟢 ВКЛЮЧИТЬ'} АВТОТОРГОВЛЮ
                     </button>
                     <button onClick={resetAccount} className="bg-yellow-600/50 hover:bg-yellow-600 px-4 py-2 rounded-lg text-sm transition">🔄 Сбросить счёт</button>
-                    {positions.length > 0 && (
-                      <button onClick={closeAllPositions} className="bg-red-700/80 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">
-                        🔒 ЗАКРЫТЬ ВСЕ ({positions.length})
-                      </button>
-                    )}
+                    {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && (
-                    <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
-                      <p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p>
-                      <p className="text-gray-400 text-sm mt-1">При появлении сигналов сделки будут открываться автоматически</p>
-                    </div>
-                  )}
-                  {!autoTradeEnabled && apiConfigured && (
-                    <div className="bg-gray-500/20 border border-gray-500/50 rounded-lg p-4">
-                      <p className="text-gray-400 font-bold">⚫ АВТОТОРГОВЛЯ ОСТАНОВЛЕНА</p>
-                      <p className="text-gray-400 text-sm mt-1">Нажмите "ВКЛЮЧИТЬ АВТОТОРГОВЛЮ" для активации</p>
-                    </div>
-                  )}
+                  {autoTradeEnabled && (<div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">При появлении сигналов сделки будут открываться автоматически</p></div>)}
+                  {!autoTradeEnabled && apiConfigured && (<div className="bg-gray-500/20 border border-gray-500/50 rounded-lg p-4"><p className="text-gray-400 font-bold">⚫ АВТОТОРГОВЛЯ ОСТАНОВЛЕНА</p><p className="text-gray-400 text-sm mt-1">Нажмите "ВКЛЮЧИТЬ АВТОТОРГОВЛЮ" для активации</p></div>)}
                 </div>
               )}
             </div>
@@ -620,42 +591,28 @@ function App() {
                   <div className="flex justify-between text-sm mt-1"><span className="text-gray-400">Макс. сумма на сделку:</span><span className="text-yellow-400 font-bold">${maxPositionAmount.toLocaleString()} ({maxRiskPercent}%)</span></div>
                   <div className="flex justify-between text-sm mt-1"><span className="text-gray-400">Макс. риск за сделку (SL):</span><span className="text-red-400">${(maxPositionAmount * (STOP_LOSS_PERCENT / 100)).toLocaleString()}</span></div>
                 </div>
-                <div className="text-xs text-gray-500 border-t border-red-500/30 pt-3 mt-2">⚠️ При {maxRiskPercent}% риска на сделку, после {Math.floor(100 / maxRiskPercent)} убыточных сделок подряд баланс обнулится</div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30"><h3 className="text-lg font-bold text-red-400 mb-3">💰 БАЛАНС</h3><div className="text-3xl font-bold text-white">${balance.toLocaleString()}</div><div className="text-xs text-gray-500 mt-1">Демо-счёт Bybit Testnet</div></div>
               <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
-                <h3 className="text-lg font-bold text-red-400 mb-3">💰 БАЛАНС</h3>
-                <div className="text-3xl font-bold text-white">${balance.toLocaleString()}</div>
-                <div className="text-xs text-gray-500 mt-1">Демо-счёт Bybit Testnet</div>
-              </div>
-              <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
-                <h3 className="text-lg font-bold text-red-400 mb-3 flex justify-between items-center">
-                  📊 ОТКРЫТЫЕ ПОЗИЦИИ
-                  {positions.length > 0 && (<button onClick={closeAllPositions} className="text-xs bg-red-700/50 hover:bg-red-700 px-2 py-1 rounded transition">Закрыть всё</button>)}
-                </h3>
-                {positions.length === 0 ? (<div className="text-gray-500 text-sm">Нет открытых позиций</div>) : (positions.map((pos, idx) => (<div key={idx} className="border-b border-red-500/20 py-2 flex justify-between items-center"><span>{pos.side === 'Buy' ? '🟢' : '🔴'} {pos.symbol}</span><span>${pos.price}</span><span className="text-xs">{pos.qty}</span></div>)))}
+                <h3 className="text-lg font-bold text-red-400 mb-3 flex justify-between items-center">📊 ОТКРЫТЫЕ ПОЗИЦИИ{positions.length > 0 && <button onClick={closeAllPositions} className="text-xs bg-red-700/50 hover:bg-red-700 px-2 py-1 rounded transition">Закрыть всё</button>}</h3>
+                {positions.length === 0 ? <div className="text-gray-500 text-sm">Нет открытых позиций</div> : positions.map((pos, idx) => (<div key={idx} className="border-b border-red-500/20 py-2 flex justify-between items-center"><span>{pos.side === 'Buy' ? '🟢' : '🔴'} {pos.symbol}</span><span>${pos.price}</span><span className="text-xs">{pos.qty}</span></div>))}
               </div>
             </div>
 
             <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
               <h3 className="text-lg font-bold text-red-400 mb-3">📜 ИСТОРИЯ СДЕЛОК</h3>
               <div className="max-h-[300px] overflow-y-auto">
-                {tradeHistory.length === 0 ? (<div className="text-gray-500 text-sm text-center py-4">Нет сделок</div>) : (
+                {tradeHistory.length === 0 ? <div className="text-gray-500 text-sm text-center py-4">Нет сделок</div> : (
                   <table className="w-full text-xs">
                     <thead className="sticky top-0 bg-black/80"><tr className="text-gray-400 border-b border-red-500/20"><th className="text-left py-2">Символ</th><th className="text-left py-2">Тип</th><th className="text-right py-2">Цена</th><th className="text-right py-2">Прибыль</th><th className="text-right py-2">%</th><th className="text-left py-2">Причина</th></tr></thead>
                     <tbody>{tradeHistory.map((trade, idx) => (<tr key={idx} className="border-b border-red-500/20 hover:bg-red-900/10"><td className="py-2 font-mono">{trade.symbol}</td><td className="py-2"><span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>{trade.side === 'Buy' ? '🟢 BUY' : '🔴 SELL'}</span></td><td className="py-2 text-right">${trade.price?.toFixed(2) || '—'}</td><td className={`py-2 text-right font-bold ${trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}</td><td className={`py-2 text-right font-bold ${trade.profitPercent && trade.profitPercent > 0 ? 'text-green-400' : trade.profitPercent && trade.profitPercent < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profitPercent ? `${trade.profitPercent > 0 ? '+' : ''}${trade.profitPercent.toFixed(2)}%` : '—'}</td><td className="py-2 text-gray-500 text-xs">{trade.closeReason || (trade.side === 'Sell' ? 'Закрыта' : 'Открыта')}</td></tr>))}</tbody>
                   </table>
                 )}
               </div>
-              {tradeHistory.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-red-500/30 grid grid-cols-3 gap-3 text-center">
-                  <div><div className="text-gray-500 text-xs">Всего сделок</div><div className="text-white font-bold text-lg">{tradeHistory.length}</div></div>
-                  <div><div className="text-gray-500 text-xs">Профит</div><div className={`font-bold text-lg ${bybitTestnet.getTotalProfit() >= 0 ? 'text-green-400' : 'text-red-400'}`}>${bybitTestnet.getTotalProfit().toFixed(2)}</div></div>
-                  <div><div className="text-gray-500 text-xs">Винрейт</div><div className="text-yellow-400 font-bold text-lg">{bybitTestnet.getWinRate().toFixed(1)}%</div></div>
-                </div>
-              )}
+              {tradeHistory.length > 0 && (<div className="mt-4 pt-3 border-t border-red-500/30 grid grid-cols-3 gap-3 text-center"><div><div className="text-gray-500 text-xs">Всего сделок</div><div className="text-white font-bold text-lg">{tradeHistory.length}</div></div><div><div className="text-gray-500 text-xs">Профит</div><div className={`font-bold text-lg ${bybitTestnet.getTotalProfit() >= 0 ? 'text-green-400' : 'text-red-400'}`}>${bybitTestnet.getTotalProfit().toFixed(2)}</div></div><div><div className="text-gray-500 text-xs">Винрейт</div><div className="text-yellow-400 font-bold text-lg">{bybitTestnet.getWinRate().toFixed(1)}%</div></div></div>)}
             </div>
           </div>
         )}
@@ -663,17 +620,16 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора: RSI + MACD)' : '📈 СВИНГ (3 индикатора: RSI + MACD + EMA)'} | 15-минутные свечи | Мониторинг {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | WebSocket LIVE | Мониторинг {SYMBOLS.length} активов | Обновление каждые 15 сек</div>
             </div>
             <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Анализируем 15-минутные свечи. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span></div>) : (signals.map((signal, idx) => {
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span></div>) : (signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
                 return (<div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
                   <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/{scalpingMode ? '2' : '3'})</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4 text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4 text-xs">
                     <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < (scalpingMode ? 55 : 45) ? 'text-green-400' : signal.indicators.rsi > (scalpingMode ? 45 : 55) ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
                     <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div></div>
-                    {!scalpingMode && (<div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div></div>)}
                     <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="text-white text-xs">${signal.price.toLocaleString()}</div></div>
                   </div>
                   <div className="mt-3 text-xs text-red-300">🎯 {signal.reasons.join(' • ')}</div>
