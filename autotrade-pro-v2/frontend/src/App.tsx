@@ -164,27 +164,92 @@ function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, 
   return null
 }
 
-// ВРЕМЕННЫЙ ТЕСТОВЫЙ РЕЖИМ: открывает сделки для BTC, ETH, SOL
+// РЕАЛЬНЫЕ СИГНАЛЫ (не тестовые)
 function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number, isScalping: boolean): Signal | null {
-  // ТЕСТ: открываем сделки для BTC, ETH, SOL чтобы проверить автоторговлю
-  if (symbol === 'BTC/USDT' || symbol === 'ETH/USDT' || symbol === 'SOL/USDT') {
+  if (!priceHistory[symbol]) {
+    priceHistory[symbol] = generatePriceHistory(currentPrice)
+  }
+  priceHistory[symbol].push(currentPrice)
+  if (priceHistory[symbol].length > 100) priceHistory[symbol].shift()
+  
+  const prices = priceHistory[symbol]
+  const rsi = calculateRSI(prices)
+  const ema20 = calculateEMA(prices, 20)
+  const ema50 = calculateEMA(prices, 50)
+  
+  const macdData = calculateMACD(prices)
+  
+  if (!macdHistory[symbol]) macdHistory[symbol] = []
+  macdHistory[symbol].push(macdData)
+  if (macdHistory[symbol].length > 5) macdHistory[symbol].shift()
+  
+  const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2] : macdData
+  const currMacd = macdData
+  
+  const prevEma20 = prices.length >= 21 ? calculateEMA(prices.slice(0, -1), 20) : ema20
+  const prevEma50 = prices.length >= 51 ? calculateEMA(prices.slice(0, -1), 50) : ema50
+  const emaCross = checkEmaCross(prevEma20, prevEma50, ema20, ema50)
+  const macdCross = checkMacdCross(prevMacd.macd, prevMacd.signal, currMacd.macd, currMacd.signal)
+  
+  let reasons: string[] = []
+  let allBuyConditions = false
+  let allSellConditions = false
+  let strength = 0
+  
+  if (isScalping) {
+    // СКАЛЬПИНГ: RSI + MACD (2 индикатора)
+    const buyScalping = rsi < 55 && macdCross === 'bullish'
+    const sellScalping = rsi > 45 && macdCross === 'bearish'
+    
+    if (buyScalping) {
+      allBuyConditions = true
+      strength = 2
+      reasons.push(`RSI:${Math.round(rsi)} (<55)`, `MACD bullish`)
+    } else if (sellScalping) {
+      allSellConditions = true
+      strength = 2
+      reasons.push(`RSI:${Math.round(rsi)} (>45)`, `MACD bearish`)
+    }
+  } else {
+    // СВИНГ: RSI + MACD + EMA (3 индикатора)
+    const buySwing = rsi < 45 && macdCross === 'bullish' && emaCross === 'golden'
+    const sellSwing = rsi > 55 && macdCross === 'bearish' && emaCross === 'death'
+    
+    if (buySwing) {
+      allBuyConditions = true
+      strength = 3
+      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD bullish`, `EMA↑`)
+    } else if (sellSwing) {
+      allSellConditions = true
+      strength = 3
+      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD bearish`, `EMA↓`)
+    }
+  }
+  
+  if (allBuyConditions) {
     return {
-      symbol,
-      action: Math.random() > 0.5 ? 'buy' : 'sell',
-      price: currentPrice,
-      strength: 3,
-      reasons: ['🔴 ТЕСТОВЫЙ СИГНАЛ', 'Проверка автоторговли'],
+      symbol, action: 'buy', price: currentPrice, strength,
+      reasons,
       timestamp: new Date(),
       indicators: {
-        rsi: 50,
-        macd: 0,
-        macdSignal: 0,
-        macdHistogram: 0,
-        ema20: currentPrice,
-        ema50: currentPrice
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50
       }
     }
   }
+  
+  if (allSellConditions) {
+    return {
+      symbol, action: 'sell', price: currentPrice, strength,
+      reasons,
+      timestamp: new Date(),
+      indicators: {
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50
+      }
+    }
+  }
+  
   return null
 }
 
@@ -357,6 +422,14 @@ function App() {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
         for (const signal of signals) {
+          // ЗАЩИТА: не открываем сделку, если уже есть позиция по этому символу
+          const cleanSymbol = signal.symbol.replace('/USDT', '')
+          const existingPosition = positions.find(p => p.symbol === cleanSymbol)
+          if (existingPosition) {
+            console.log(`⚠️ Позиция по ${signal.symbol} уже открыта, пропускаем`)
+            continue
+          }
+          
           const maxPositionAmount = balance * (maxRiskPercent / 100)
           let qty = maxPositionAmount / signal.price
           
@@ -369,7 +442,7 @@ function App() {
           
           try {
             const order = await bybitTestnet.placeOrder({
-              symbol: signal.symbol.replace('/USDT', ''),
+              symbol: cleanSymbol,
               side,
               qty: parseFloat(qty.toFixed(6)),
               price: signal.price
@@ -387,7 +460,7 @@ function App() {
       }
       executeTrades()
     }
-  }, [signals, autoTradeEnabled, apiConfigured, balance, maxRiskPercent])
+  }, [signals, autoTradeEnabled, apiConfigured, balance, maxRiskPercent, positions])
 
   const saveApiKeys = () => {
     if (apiKey && apiSecret) {
@@ -449,17 +522,17 @@ function App() {
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-green-500/30">
             <div className="text-3xl font-bold text-green-500">{buys}</div>
             <div className="text-gray-400 text-sm mt-1">BUY сигналов</div>
-            <div className="text-xs text-green-400 mt-2">Тестовый режим</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? 'RSI<55 + MACD' : 'RSI<45 + MACD + EMA'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-500">{sells}</div>
             <div className="text-gray-400 text-sm mt-1">SELL сигналов</div>
-            <div className="text-xs text-red-400 mt-2">Тестовый режим</div>
+            <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>45 + MACD' : 'RSI>55 + MACD + EMA'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
-            <div className="text-3xl font-bold text-yellow-500">ТЕСТ</div>
-            <div className="text-gray-400 text-sm mt-1">Режим</div>
-            <div className="text-xs text-green-400 mt-2">Проверка автоторговли</div>
+            <div className="text-3xl font-bold text-yellow-500">{scalpingMode ? '2/5' : '3/5'}</div>
+            <div className="text-gray-400 text-sm mt-1">Индикаторов</div>
+            <div className="text-xs text-green-400 mt-2">{scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}</div>
           </div>
         </div>
 
@@ -690,12 +763,15 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 ТЕСТОВЫЙ РЕЖИМ — сигналы для BTC, ETH, SOL (проверка автоторговли)
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (2 индикатора: RSI + MACD)' : '📈 СВИНГ (3 индикатора: RSI + MACD + EMA)'} | Мониторинг {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (
-                <div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Ожидаем генерации тестовых сигналов</span></div>
+                <div className="text-center text-gray-500 py-16">
+                  ⏳ Нет сигналов<br/>
+                  <span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов. Ожидаем совпадения {scalpingMode ? '2' : '3'} индикаторов</span>
+                </div>
               ) : (
                 signals.map((signal, idx) => {
                   const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
@@ -707,26 +783,30 @@ function App() {
                           <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                             {signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}
                           </span>
-                          <span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/3)</span>
+                          <span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/{scalpingMode ? '2' : '3'})</span>
                         </div>
                         <div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4 text-xs">
                         <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">Тип</div>
-                          <div className="text-white text-xs">ТЕСТОВЫЙ</div>
+                          <div className="text-gray-500">RSI</div>
+                          <div className={`font-bold ${signal.indicators.rsi < (scalpingMode ? 55 : 45) ? 'text-green-400' : signal.indicators.rsi > (scalpingMode ? 45 : 55) ? 'text-red-400' : 'text-white'}`}>
+                            {signal.indicators.rsi}
+                          </div>
                         </div>
+                        <div className="bg-black/40 rounded-lg p-2 text-center">
+                          <div className="text-gray-500">MACD</div>
+                          <div className="text-white text-xs">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div>
+                        </div>
+                        {!scalpingMode && (
+                          <div className="bg-black/40 rounded-lg p-2 text-center">
+                            <div className="text-gray-500">EMA20/50</div>
+                            <div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)} / ${signal.indicators.ema50.toFixed(0)}</div>
+                          </div>
+                        )}
                         <div className="bg-black/40 rounded-lg p-2 text-center">
                           <div className="text-gray-500">Цена</div>
                           <div className="text-white text-xs">${signal.price.toLocaleString()}</div>
-                        </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">Причина</div>
-                          <div className="text-red-300 text-xs">Проверка автоторговли</div>
-                        </div>
-                        <div className="bg-black/40 rounded-lg p-2 text-center">
-                          <div className="text-gray-500">Статус</div>
-                          <div className="text-yellow-400 text-xs">Активен</div>
                         </div>
                       </div>
                       <div className="mt-3 text-xs text-red-300">🎯 {signal.reasons.join(' • ')}</div>
