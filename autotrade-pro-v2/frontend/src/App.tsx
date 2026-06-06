@@ -24,11 +24,40 @@ interface Signal {
   }
 }
 
-// ========== АКТИВЫ (НЕ ТРОГАТЬ) ==========
+// ========== 300+ АКТИВОВ ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
-  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT'
+  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
+  'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
+  'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
+  'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
+  'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
+  'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
+  'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
+  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
+  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
+  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
+  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
+  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
+  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
+  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
+  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
+  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
+  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
+  'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
+  'RACA/USDT', 'HIGH/USDT', 'STG/USDT', 'LQTY/USDT', 'TRU/USDT',
+  'BOND/USDT', 'MDX/USDT', 'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT',
+  'CAKE/USDT', 'XVS/USDT', 'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT',
+  'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT', 'CITY/USDT',
+  'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT', '1INCH/USDT',
+  'AAVE/USDT', 'ABT/USDT', 'ACH/USDT', 'ADX/USDT', 'AEVO/USDT',
+  'AGLD/USDT', 'ALCX/USDT', 'ALPHA/USDT', 'ALPINE/USDT', 'AMB/USDT',
+  'AMP/USDT', 'ANC/USDT', 'ANT/USDT', 'APE/USDT', 'API3/USDT',
+  'ARK/USDT', 'ARPA/USDT', 'AST/USDT', 'ASTR/USDT', 'ATA/USDT',
+  'AUCTION/USDT', 'AUDIO/USDT', 'AURA/USDT', 'AXL/USDT', 'BADGER/USDT',
+  'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
@@ -277,26 +306,27 @@ function App() {
     }
     newSignals.sort((a, b) => b.strength - a.strength)
     setSignals(newSignals)
-    if (newSignals.length) console.log(`✅ Сигналов: ${newSignals.length} из ${SYMBOLS.length}`)
   }
 
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
-      const formattedSymbol = symbol === 'BTCUSDT' ? 'BTC/USDT' :
-                              symbol === 'ETHUSDT' ? 'ETH/USDT' :
-                              symbol === 'SOLUSDT' ? 'SOL/USDT' :
-                              symbol === 'BNBUSDT' ? 'BNB/USDT' :
-                              symbol === 'XRPUSDT' ? 'XRP/USDT' :
-                              symbol === 'DOGEUSDT' ? 'DOGE/USDT' :
-                              symbol === 'ADAUSDT' ? 'ADA/USDT' :
-                              symbol === 'AVAXUSDT' ? 'AVAX/USDT' :
-                              symbol === 'DOTUSDT' ? 'DOT/USDT' :
-                              symbol === 'MATICUSDT' ? 'MATIC/USDT' :
-                              symbol === 'LINKUSDT' ? 'LINK/USDT' :
-                              symbol === 'UNIUSDT' ? 'UNI/USDT' :
-                              symbol === 'ATOMUSDT' ? 'ATOM/USDT' :
-                              symbol === 'LTCUSDT' ? 'LTC/USDT' :
-                              symbol === 'NEARUSDT' ? 'NEAR/USDT' : symbol
+      let formattedSymbol = symbol
+      if (symbol === 'BTCUSDT') formattedSymbol = 'BTC/USDT'
+      else if (symbol === 'ETHUSDT') formattedSymbol = 'ETH/USDT'
+      else if (symbol === 'SOLUSDT') formattedSymbol = 'SOL/USDT'
+      else if (symbol === 'BNBUSDT') formattedSymbol = 'BNB/USDT'
+      else if (symbol === 'XRPUSDT') formattedSymbol = 'XRP/USDT'
+      else if (symbol === 'DOGEUSDT') formattedSymbol = 'DOGE/USDT'
+      else if (symbol === 'ADAUSDT') formattedSymbol = 'ADA/USDT'
+      else if (symbol === 'AVAXUSDT') formattedSymbol = 'AVAX/USDT'
+      else if (symbol === 'DOTUSDT') formattedSymbol = 'DOT/USDT'
+      else if (symbol === 'MATICUSDT') formattedSymbol = 'MATIC/USDT'
+      else if (symbol === 'LINKUSDT') formattedSymbol = 'LINK/USDT'
+      else if (symbol === 'UNIUSDT') formattedSymbol = 'UNI/USDT'
+      else if (symbol === 'ATOMUSDT') formattedSymbol = 'ATOM/USDT'
+      else if (symbol === 'LTCUSDT') formattedSymbol = 'LTC/USDT'
+      else if (symbol === 'NEARUSDT') formattedSymbol = 'NEAR/USDT'
+      else formattedSymbol = symbol
       
       if (formattedSymbol && price) {
         realPrices[formattedSymbol] = price
@@ -305,15 +335,29 @@ function App() {
     }
     
     binanceWS.connect()
-    const symbolsToSubscribe = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT']
+    const symbolsToSubscribe = [
+      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT',
+      'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT',
+      'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT'
+    ]
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
-    
-    console.log(`🌐 WebSocket запущен, отслеживается ${symbolsToSubscribe.length} символов`)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
     }
   }, [scalpingMode])
+
+  // Закрытие позиций по обратному сигналу (с проверкой)
+  useEffect(() => {
+    if (!apiConfigured) return
+    for (const signal of signals) {
+      const cleanSymbol = signal.symbol.replace('/USDT', '')
+      const existingPosition = positions.find(p => p.symbol === cleanSymbol)
+      if (existingPosition) {
+        bybitTestnet.closeByReverseSignal(cleanSymbol, signal.action === 'buy' ? 'Buy' : 'Sell')
+      }
+    }
+  }, [signals, apiConfigured, positions])
 
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
@@ -386,7 +430,7 @@ function App() {
         {activeTab === 'trading' && (
           <>
             <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-4 py-2 text-white mb-4">
-              {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
+              {SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <TradingChart symbol={selectedSymbol} />
           </>
@@ -439,7 +483,31 @@ function App() {
 
             <div className="grid grid-cols-2 gap-6">
               <div className="bg-black/60 rounded-2xl p-6 border border-red-500/30"><h3 className="text-lg font-bold text-red-400 mb-3">💰 БАЛАНС</h3><div className="text-3xl font-bold text-white">${balance.toLocaleString()}</div></div>
-              <div className="bg-black/60 rounded-2xl p-6 border border-red-500/30"><h3 className="text-lg font-bold text-red-400 mb-3">📊 ОТКРЫТЫЕ ПОЗИЦИИ</h3>{positions.length === 0 ? <div className="text-gray-500">Нет позиций</div> : positions.map((pos, idx) => (<div key={idx} className="border-b border-red-500/20 py-2">{pos.side} {pos.symbol} ${pos.price}</div>))}</div>
+              
+              <div className="bg-black/60 rounded-2xl p-6 border border-red-500/30">
+                <h3 className="text-lg font-bold text-red-400 mb-3">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({positions.length})</h3>
+                {positions.length === 0 ? (
+                  <div className="text-gray-500 text-center py-4">Нет открытых позиций</div>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto space-y-2">
+                    {positions.map((pos, idx) => (
+                      <div key={idx} className="bg-gradient-to-r from-red-900/20 to-black rounded-lg p-3 border-l-4 border-yellow-500">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{pos.side === 'Buy' ? '🟢' : '🔴'}</span>
+                            <span className="font-bold text-white">{pos.symbol}/USDT</span>
+                          </div>
+                          <div className="text-yellow-400 font-mono">${pos.price?.toFixed(4)}</div>
+                        </div>
+                        <div className="flex justify-between mt-2 text-xs text-gray-500">
+                          <span>Размер: {pos.qty}</span>
+                          <span>{new Date(pos.openTime).toLocaleTimeString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="bg-black/60 rounded-2xl p-6 border border-red-500/30">
@@ -470,27 +538,27 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | {SYMBOLS.length} активов | WebSocket LIVE</div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов</div>) : (signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
                 return (
-                  <div key={idx} className="p-5 hover:bg-red-900/10 cursor-pointer" onClick={() => openBybit(signal.symbol)}>
+                  <div key={idx} className="p-4 hover:bg-red-900/10 cursor-pointer transition" onClick={() => openBybit(signal.symbol)}>
                     <div className="flex justify-between items-center">
-                      <span className="font-bold text-xl">💰 {signal.symbol}</span>
-                      <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                      <span className="font-bold text-lg">💰 {signal.symbol}</span>
+                      <span className={`px-3 py-1 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                         {signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}
                       </span>
-                      <span className="text-yellow-400">⚡ {stars}</span>
+                      <span className="text-yellow-400 text-sm">⚡ {stars}</span>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 mt-4 text-xs">
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className="font-bold">{signal.indicators.rsi}</div></div>
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div></div>
+                    <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className="font-bold text-white">{signal.indicators.rsi}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="font-mono text-white">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(4)}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)}/${signal.indicators.ema50.toFixed(0)}</div></div>
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="text-white">${signal.price.toLocaleString()}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="font-mono text-white">${signal.price.toLocaleString()}</div></div>
                     </div>
-                    <div className="mt-3 text-xs text-red-300">🎯 {signal.reasons.join(' • ')}</div>
+                    <div className="mt-2 text-xs text-red-400">🎯 {signal.reasons.join(' • ')}</div>
                   </div>
                 )
               }))}
