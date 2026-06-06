@@ -4,6 +4,7 @@ import SignalHistory from './components/SignalHistory'
 import News from './components/News'
 import TopMovers from './components/TopMovers'
 import Watchlist from './components/Watchlist'
+import { binanceWS } from './services/websocket'
 import { bybitTestnet } from './services/bybitTestnet'
 
 interface Signal {
@@ -23,14 +24,11 @@ interface Signal {
   }
 }
 
-// ========== АКТИВЫ ==========
+// ========== АКТИВЫ (НЕ ТРОГАТЬ) ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
-  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
-  'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
-  'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
-  'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT'
+  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
@@ -124,8 +122,8 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   let reasons: string[] = []
   
   if (isScalping) {
-    const buyScalping = rsi < 60 && (macdCross === 'bullish' || currMacd > 0)
-    const sellScalping = rsi > 40 && (macdCross === 'bearish' || currMacd < 0)
+    const buyScalping = rsi < 60 && (macdCross === 'bullish' || currMacd > -0.2)
+    const sellScalping = rsi > 40 && (macdCross === 'bearish' || currMacd < 0.2)
     if (buyScalping) {
       allBuyConditions = true
       strength = 2
@@ -268,30 +266,7 @@ function App() {
     }
   }
 
-  // ЗАГРУЗКА ЦЕН ЧЕРЕЗ REST API (вместо WebSocket)
-  const fetchAllPrices = async () => {
-    console.log(`🟡 Загрузка цен для ${SYMBOLS.length} активов...`)
-    let loadedCount = 0
-    
-    for (const symbol of SYMBOLS) {
-      try {
-        const cleanSymbol = symbol.replace('/USDT', '')
-        const url = `https://api.binance.com/api/v3/ticker/price?symbol=${cleanSymbol}`
-        const response = await fetch(`https://cors-anywhere.herokuapp.com/${url}`)
-        const data = await response.json()
-        
-        if (data.price) {
-          realPrices[symbol] = parseFloat(data.price)
-          loadedCount++
-        }
-      } catch (e) {
-        // тихо пропускаем ошибки
-      }
-    }
-    
-    console.log(`💰 Загружено цен: ${loadedCount} из ${SYMBOLS.length}`)
-    
-    // Обновляем сигналы
+  const updateSignals = () => {
     const newSignals: Signal[] = []
     for (const symbol of SYMBOLS) {
       const price = realPrices[symbol]
@@ -302,13 +277,42 @@ function App() {
     }
     newSignals.sort((a, b) => b.strength - a.strength)
     setSignals(newSignals)
-    console.log(`✅ Сигналов: ${newSignals.length} из ${SYMBOLS.length}`)
+    if (newSignals.length) console.log(`✅ Сигналов: ${newSignals.length} из ${SYMBOLS.length}`)
   }
 
   useEffect(() => {
-    fetchAllPrices()
-    const interval = setInterval(fetchAllPrices, 30000)
-    return () => clearInterval(interval)
+    const updatePrice = (symbol: string, price: number) => {
+      const formattedSymbol = symbol === 'BTCUSDT' ? 'BTC/USDT' :
+                              symbol === 'ETHUSDT' ? 'ETH/USDT' :
+                              symbol === 'SOLUSDT' ? 'SOL/USDT' :
+                              symbol === 'BNBUSDT' ? 'BNB/USDT' :
+                              symbol === 'XRPUSDT' ? 'XRP/USDT' :
+                              symbol === 'DOGEUSDT' ? 'DOGE/USDT' :
+                              symbol === 'ADAUSDT' ? 'ADA/USDT' :
+                              symbol === 'AVAXUSDT' ? 'AVAX/USDT' :
+                              symbol === 'DOTUSDT' ? 'DOT/USDT' :
+                              symbol === 'MATICUSDT' ? 'MATIC/USDT' :
+                              symbol === 'LINKUSDT' ? 'LINK/USDT' :
+                              symbol === 'UNIUSDT' ? 'UNI/USDT' :
+                              symbol === 'ATOMUSDT' ? 'ATOM/USDT' :
+                              symbol === 'LTCUSDT' ? 'LTC/USDT' :
+                              symbol === 'NEARUSDT' ? 'NEAR/USDT' : symbol
+      
+      if (formattedSymbol && price) {
+        realPrices[formattedSymbol] = price
+        updateSignals()
+      }
+    }
+    
+    binanceWS.connect()
+    const symbolsToSubscribe = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT']
+    symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
+    
+    console.log(`🌐 WebSocket запущен, отслеживается ${symbolsToSubscribe.length} символов`)
+    
+    return () => {
+      symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
+    }
   }, [scalpingMode])
 
   useEffect(() => {
