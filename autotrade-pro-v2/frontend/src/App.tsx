@@ -26,12 +26,10 @@ interface Signal {
 
 // ========== 150+ АКТИВОВ ==========
 const SYMBOLS = [
-  // Топ-20
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
   'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
   'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
-  // Альткоины (50)
   'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
   'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
   'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
@@ -42,22 +40,14 @@ const SYMBOLS = [
   'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
   'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
   'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
-  // Мемы (15)
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
-  'DOGS/USDT', 'NOT/USDT', 'BRETT/USDT', 'MOG/USDT', 'MYRO/USDT',
-  'POPCAT/USDT', 'MEW/USDT', 'WEN/USDT', 'BABYDOGE/USDT', 'LEASH/USDT',
-  // Новые и популярные (35)
   'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
   'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
   'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
   'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
   'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
-  'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
-  'RACA/USDT', 'HIGH/USDT', 'STG/USDT', 'LQTY/USDT', 'TRU/USDT',
-  // Фан токены (15)
   'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT',
-  'CITY/USDT', 'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT',
-  'NAP/USDT', 'SPA/USDT', 'ASR/USDT', 'OG/USDT', 'LEG/USDT'
+  'CITY/USDT', 'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -80,21 +70,15 @@ const DEMO_PRICES: Record<string, number> = {
   'LEO/USDT': 5.2, 'CELO/USDT': 0.65, 'ROSE/USDT': 0.085, 'KLAY/USDT': 0.18,
   'CKB/USDT': 0.0085, 'ERG/USDT': 1.25, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
   'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
-  'DOGS/USDT': 0.00012, 'NOT/USDT': 0.008, 'BRETT/USDT': 0.12, 'MOG/USDT': 0.000008,
-  'MYRO/USDT': 0.18, 'POPCAT/USDT': 0.42, 'MEW/USDT': 0.008, 'WEN/USDT': 0.00012,
-  'BABYDOGE/USDT': 0.000000002, 'LEASH/USDT': 650, 'SEI/USDT': 0.42, 'TIA/USDT': 11.5,
-  'PYTH/USDT': 0.48, 'JUP/USDT': 0.95, 'ONDO/USDT': 1.15, 'STRK/USDT': 1.85,
-  'WLD/USDT': 5.2, 'AGIX/USDT': 0.85, 'OCEAN/USDT': 0.72, 'FET/USDT': 2.15,
-  'LDO/USDT': 1.85, 'BLUR/USDT': 0.42, 'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85,
-  'GNS/USDT': 4.2, 'SSV/USDT': 28.5, 'RPL/USDT': 28.5, 'DGB/USDT': 0.0085,
-  'DCR/USDT': 18.5, 'BTG/USDT': 28.5, 'NMR/USDT': 18.5, 'STORJ/USDT': 0.65,
-  'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028, 'COTI/USDT': 0.085, 'WIN/USDT': 0.00012,
-  'ALICE/USDT': 1.25, 'TLM/USDT': 0.018, 'MBOX/USDT': 0.28, 'DAR/USDT': 0.085,
-  'RACA/USDT': 0.00018, 'HIGH/USDT': 2.15, 'STG/USDT': 0.52, 'LQTY/USDT': 1.15,
-  'TRU/USDT': 0.12, 'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85,
+  'SEI/USDT': 0.42, 'TIA/USDT': 11.5, 'PYTH/USDT': 0.48, 'JUP/USDT': 0.95,
+  'ONDO/USDT': 1.15, 'STRK/USDT': 1.85, 'WLD/USDT': 5.2, 'AGIX/USDT': 0.85,
+  'OCEAN/USDT': 0.72, 'FET/USDT': 2.15, 'LDO/USDT': 1.85, 'BLUR/USDT': 0.42,
+  'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2, 'SSV/USDT': 28.5,
+  'RPL/USDT': 28.5, 'DGB/USDT': 0.0085, 'DCR/USDT': 18.5, 'BTG/USDT': 28.5,
+  'NMR/USDT': 18.5, 'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028,
+  'COTI/USDT': 0.085, 'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85,
   'ACM/USDT': 2.5, 'BAR/USDT': 3.0, 'CITY/USDT': 2.8, 'PSG/USDT': 4.0,
-  'JUV/USDT': 3.5, 'ATM/USDT': 2.2, 'INTER/USDT': 3.8, 'NAP/USDT': 2.1,
-  'SPA/USDT': 1.8, 'ASR/USDT': 2.3, 'OG/USDT': 1.9, 'LEG/USDT': 1.7
+  'JUV/USDT': 3.5, 'ATM/USDT': 2.2, 'INTER/USDT': 3.8
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -197,7 +181,6 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   let strength = 0
   
   if (isScalping) {
-    // СКАЛЬПИНГ: более мягкие условия
     const buyScalping = rsi < 60 && (macdCross === 'bullish' || currMacd.macd > 0)
     const sellScalping = rsi > 40 && (macdCross === 'bearish' || currMacd.macd < 0)
     if (buyScalping) {
@@ -210,7 +193,6 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
       reasons.push(`RSI:${Math.round(rsi)} (>40)`, `MACD медвежий`)
     }
   } else {
-    // СВИНГ: стандартные условия
     const buySwing = rsi < 45 && macdCross === 'bullish'
     const sellSwing = rsi > 55 && macdCross === 'bearish'
     if (buySwing) {
@@ -362,7 +344,7 @@ function App() {
     window.location.reload()
   }
 
-  // WebSocket логика
+  // WebSocket логика с обновлением КАЖДУЮ СЕКУНДУ
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
@@ -409,7 +391,8 @@ function App() {
     }
     
     updateSignals()
-    const interval = setInterval(updateSignals, 15000)
+    // ⚡ ОБНОВЛЕНИЕ КАЖДУЮ СЕКУНДУ ⚡
+    const interval = setInterval(updateSignals, 1000)
     
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
@@ -499,7 +482,10 @@ function App() {
             <button onClick={toggleScalpingMode} className={`px-3 py-1 rounded-lg text-xs font-bold transition ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}>
               {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
             </button>
-            {isRealTime && <div className="flex items-center gap-1 text-xs text-red-400"><div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>REAL-TIME</div>}
+            <div className="flex items-center gap-1 text-xs text-green-400">
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              LIVE 1С
+            </div>
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
@@ -525,9 +511,9 @@ function App() {
             <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>40' : 'RSI>55'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
-            <div className="text-3xl font-bold text-yellow-500">{scalpingMode ? '⚡' : '📈'}</div>
-            <div className="text-gray-400 text-sm mt-1">Режим</div>
-            <div className="text-xs text-green-400 mt-2">WebSocket LIVE</div>
+            <div className="text-3xl font-bold text-yellow-500">⚡1С</div>
+            <div className="text-gray-400 text-sm mt-1">Обновление</div>
+            <div className="text-xs text-green-400 mt-2">Каждую секунду</div>
           </div>
         </div>
 
@@ -562,7 +548,6 @@ function App() {
           <div className="space-y-6">
             <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-6 border border-red-500/30">
               <h3 className="text-xl font-bold text-red-400 mb-4">🤖 НАСТРОЙКА АВТОТОРГОВЛИ</h3>
-              
               {!apiConfigured ? (
                 <div className="space-y-4">
                   <div><label className="block text-gray-400 text-sm mb-1">API Key</label><input type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="Введите API Key от Bybit Testnet" className="w-full bg-black/50 border border-red-500/50 rounded-lg p-3 text-white" /></div>
@@ -580,7 +565,7 @@ function App() {
                     <button onClick={resetAccount} className="bg-yellow-600/50 hover:bg-yellow-600 px-4 py-2 rounded-lg text-sm transition">🔄 Сбросить счёт</button>
                     {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition flex items-center gap-2">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && (<div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">При появлении сигналов сделки будут открываться автоматически</p></div>)}
+                  {autoTradeEnabled && (<div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">При появлении сигналов сделки будут открываться автоматически (обновление 1 сек)</p></div>)}
                   {!autoTradeEnabled && apiConfigured && (<div className="bg-gray-500/20 border border-gray-500/50 rounded-lg p-4"><p className="text-gray-400 font-bold">⚫ АВТОТОРГОВЛЯ ОСТАНОВЛЕНА</p><p className="text-gray-400 text-sm mt-1">Нажмите "ВКЛЮЧИТЬ АВТОТОРГОВЛЮ" для активации</p></div>)}
                 </div>
               )}
@@ -634,11 +619,11 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | Мониторинг {SYMBOLS.length} активов | Обновление 15 сек
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | Обновление КАЖДУЮ СЕКУНДУ | {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов</span></div>) : (signals.map((signal, idx) => {
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов (обновление 1 сек)</span></div>) : (signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
                 return (<div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
                   <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/{scalpingMode ? '2' : '3'})</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
