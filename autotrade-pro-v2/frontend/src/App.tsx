@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import TradingChart from './components/TradingChart'
 import SignalHistory from './components/SignalHistory'
 import News from './components/News'
@@ -24,7 +24,7 @@ interface Signal {
   }
 }
 
-// ========== 200+ АКТИВОВ ==========
+// ========== 150+ АКТИВОВ ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -35,18 +35,8 @@ const SYMBOLS = [
   'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
   'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
   'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
-  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
-  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
-  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
-  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
-  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
-  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
-  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
-  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
-  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
-  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
-  'LAZIO/USDT', 'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT'
+  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT'
 ]
 
 const DEMO_PRICES: Record<string, number> = {
@@ -61,17 +51,9 @@ const DEMO_PRICES: Record<string, number> = {
   'SAND/USDT': 0.45, 'MANA/USDT': 0.52, 'GALA/USDT': 0.032, 'AXS/USDT': 7.2,
   'ENJ/USDT': 0.32, 'CHZ/USDT': 0.11, 'THETA/USDT': 1.85, 'EOS/USDT': 0.85,
   'XTZ/USDT': 1.05, 'KSM/USDT': 28.5, 'ZEC/USDT': 28.5, 'DASH/USDT': 32.5,
-  'COMP/USDT': 48.5, 'ZIL/USDT': 0.025, 'BAT/USDT': 0.22, 'ZRX/USDT': 0.32,
-  'OMG/USDT': 0.48, 'QTUM/USDT': 3.2, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2,
-  'BONK/USDT': 0.000028, 'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025,
-  'SEI/USDT': 0.42, 'TIA/USDT': 11.5, 'PYTH/USDT': 0.48, 'JUP/USDT': 0.95,
-  'ONDO/USDT': 1.15, 'STRK/USDT': 1.85, 'WLD/USDT': 5.2, 'AGIX/USDT': 0.85,
-  'OCEAN/USDT': 0.72, 'FET/USDT': 2.15, 'LDO/USDT': 1.85, 'BLUR/USDT': 0.42,
-  'RDNT/USDT': 0.28, 'MAGIC/USDT': 0.85, 'GNS/USDT': 4.2, 'SSV/USDT': 28.5,
-  'RPL/USDT': 28.5, 'DGB/USDT': 0.0085, 'DCR/USDT': 18.5, 'BTG/USDT': 28.5,
-  'NMR/USDT': 18.5, 'STORJ/USDT': 0.65, 'ANKR/USDT': 0.032, 'REEF/USDT': 0.0028,
-  'COTI/USDT': 0.085, 'LAZIO/USDT': 1.85, 'SANTOS/USDT': 3.2, 'PORTO/USDT': 2.85,
-  'ACM/USDT': 2.5, 'BAR/USDT': 3.0
+  'COMP/USDT': 48.5, 'PEPE/USDT': 0.000015, 'WIF/USDT': 3.2, 'BONK/USDT': 0.000028,
+  'FLOKI/USDT': 0.00025, 'SHIB/USDT': 0.000025, 'SEI/USDT': 0.42, 'TIA/USDT': 11.5,
+  'PYTH/USDT': 0.48, 'JUP/USDT': 0.95, 'ONDO/USDT': 1.15
 }
 
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
@@ -265,10 +247,12 @@ function App() {
     localStorage.setItem('max_risk_percent', safePercent.toString())
   }
 
+  // Сохраняем состояние автоторговли
   useEffect(() => {
     localStorage.setItem('auto_trade_enabled', String(autoTradeEnabled))
   }, [autoTradeEnabled])
 
+  // Обновление баланса
   useEffect(() => {
     const handleBalanceUpdate = () => {
       setBalance(bybitTestnet.getBalance())
@@ -279,6 +263,7 @@ function App() {
     return () => window.removeEventListener('balance-updated', handleBalanceUpdate)
   }, [])
 
+  // Кровавые капли
   useEffect(() => {
     const createBloodDrop = () => {
       const drop = document.createElement('div')
@@ -294,11 +279,13 @@ function App() {
     return () => clearInterval(interval)
   }, [])
 
+  // Таймер времени
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
+  // Загрузка API конфигурации
   useEffect(() => {
     setApiConfigured(bybitTestnet.isConfigured())
     setBalance(bybitTestnet.getBalance())
@@ -306,6 +293,7 @@ function App() {
     setTradeHistory(bybitTestnet.getHistory())
   }, [])
 
+  // Закрытие всех позиций
   const closeAllPositions = async () => {
     if (positions.length === 0) {
       alert('Нет открытых позиций')
@@ -322,6 +310,7 @@ function App() {
     }
   }
 
+  // Переключение режима
   const toggleScalpingMode = () => {
     const newMode = !scalpingMode
     setScalpingMode(newMode)
@@ -329,37 +318,33 @@ function App() {
     window.location.reload()
   }
 
-  // ОСНОВНАЯ ЛОГИКА: обновление сигналов по таймеру
-  useEffect(() => {
-    const updateSignals = () => {
-      const newSignals: Signal[] = []
-      
-      for (const symbol of SYMBOLS) {
-        const price = realPrices[symbol]
-        if (price) {
-          const high = price * 1.01
-          const low = price * 0.99
-          const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
-          if (signal) {
-            newSignals.push(signal)
-          }
+  // Функция обновления сигналов (будет вызываться при каждом изменении цен)
+  const updateSignals = () => {
+    const newSignals: Signal[] = []
+    
+    for (const symbol of SYMBOLS) {
+      const price = realPrices[symbol]
+      if (price) {
+        const high = price * 1.01
+        const low = price * 0.99
+        const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
+        if (signal) {
+          newSignals.push(signal)
         }
       }
-      
-      newSignals.sort((a, b) => b.strength - a.strength)
-      setSignals(newSignals)
-      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (${scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'})`)
-      setIsRealTime(true)
     }
     
-    updateSignals()
-    const interval = setInterval(updateSignals, 10000)
-    
-    return () => clearInterval(interval)
-  }, [scalpingMode])
+    newSignals.sort((a, b) => b.strength - a.strength)
+    setSignals(newSignals)
+    if (newSignals.length > 0) {
+      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов`)
+    }
+    setIsRealTime(true)
+  }
 
-  // WebSocket для обновления цен
+  // ОСНОВНАЯ ЛОГИКА: WebSocket + автообновление сигналов
   useEffect(() => {
+    // Функция обновления цены от WebSocket
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
       if (symbol === 'BTCUSDT') formattedSymbol = 'BTC/USDT'
@@ -381,6 +366,9 @@ function App() {
       
       realPrices[formattedSymbol] = price
       bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
+      
+      // КЛЮЧЕВОЕ: вызываем обновление сигналов при каждом изменении цены
+      updateSignals()
     }
     
     binanceWS.connect()
@@ -389,12 +377,15 @@ function App() {
     
     console.log(`🌐 WebSocket подключён, подписан на ${symbolsToSubscribe.length} символов`)
     
+    // Первоначальное обновление
+    updateSignals()
+    
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
     }
-  }, [])
+  }, [scalpingMode])
 
-  // Закрытие позиций по обратному сигналу с проверкой
+  // Закрытие позиций по обратному сигналу
   useEffect(() => {
     if (!apiConfigured) return
     for (const signal of signals) {
@@ -406,6 +397,7 @@ function App() {
     }
   }, [signals, apiConfigured, positions])
 
+  // Автоторговля
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
@@ -518,7 +510,7 @@ function App() {
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
             <div className="text-3xl font-bold text-yellow-500">WebSocket</div>
-            <div className="text-gray-400 text-sm mt-1">200+ активов</div>
+            <div className="text-gray-400 text-sm mt-1">Автообновление</div>
             <div className="text-xs text-green-400 mt-2">Реальное время</div>
           </div>
         </div>
@@ -611,48 +603,12 @@ function App() {
               <div className="max-h-[300px] overflow-y-auto">
                 {tradeHistory.length === 0 ? <div className="text-gray-500 text-sm text-center py-4">Нет сделок</div> : (
                   <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-black/80">
-                      <tr className="text-gray-400 border-b border-red-500/20">
-                        <th className="text-left py-2">Символ</th>
-                        <th className="text-left py-2">Тип</th>
-                        <th className="text-right py-2">Цена</th>
-                        <th className="text-right py-2">Прибыль</th>
-                        <th className="text-right py-2">%</th>
-                        <th className="text-left py-2">Причина</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tradeHistory.map((trade, idx) => (
-                        <tr key={idx} className="border-b border-red-500/20 hover:bg-red-900/10">
-                          <td className="py-2 font-mono">{trade.symbol}</td>
-                          <td className="py-2">
-                            <span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>
-                              {trade.side === 'Buy' ? '🟢 BUY' : '🔴 SELL'}
-                            </span>
-                          </td>
-                          <td className="py-2 text-right">${trade.price?.toFixed(2) || '—'}</td>
-                          <td className={`py-2 text-right font-bold ${trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                            {trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}
-                          </td>
-                          <td className={`py-2 text-right font-bold ${trade.profitPercent && trade.profitPercent > 0 ? 'text-green-400' : trade.profitPercent && trade.profitPercent < 0 ? 'text-red-400' : 'text-gray-400'}`}>
-                            {trade.profitPercent ? `${trade.profitPercent > 0 ? '+' : ''}${trade.profitPercent.toFixed(2)}%` : '—'}
-                          </td>
-                          <td className="py-2 text-gray-500 text-xs">
-                            {trade.closeReason || (trade.side === 'Sell' ? 'Закрыта' : 'Открыта')}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
+                    <thead className="sticky top-0 bg-black/80"><tr className="text-gray-400 border-b border-red-500/20"><th className="text-left py-2">Символ</th><th className="text-left py-2">Тип</th><th className="text-right py-2">Цена</th><th className="text-right py-2">Прибыль</th><th className="text-right py-2">%</th><th className="text-left py-2">Причина</th></tr></thead>
+                    <tbody>{tradeHistory.map((trade, idx) => (<tr key={idx} className="border-b border-red-500/20 hover:bg-red-900/10"><td className="py-2 font-mono">{trade.symbol}</td><td className="py-2"><span className={trade.side === 'Buy' ? 'text-green-400' : 'text-red-400'}>{trade.side === 'Buy' ? '🟢 BUY' : '🔴 SELL'}</span></td><td className="py-2 text-right">${trade.price?.toFixed(2) || '—'}</td><td className={`py-2 text-right font-bold ${trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}</td><td className={`py-2 text-right font-bold ${trade.profitPercent && trade.profitPercent > 0 ? 'text-green-400' : trade.profitPercent && trade.profitPercent < 0 ? 'text-red-400' : 'text-gray-400'}`}>{trade.profitPercent ? `${trade.profitPercent > 0 ? '+' : ''}${trade.profitPercent.toFixed(2)}%` : '—'}</td><td className="py-2 text-gray-500 text-xs">{trade.closeReason || (trade.side === 'Sell' ? 'Закрыта' : 'Открыта')}</td><tr>))}</tbody>
                   </table>
                 )}
               </div>
-              {tradeHistory.length > 0 && (
-                <div className="mt-4 pt-3 border-t border-red-500/30 grid grid-cols-3 gap-3 text-center">
-                  <div><div className="text-gray-500 text-xs">Всего сделок</div><div className="text-white font-bold text-lg">{tradeHistory.length}</div></div>
-                  <div><div className="text-gray-500 text-xs">Профит</div><div className={`font-bold text-lg ${bybitTestnet.getTotalProfit() >= 0 ? 'text-green-400' : 'text-red-400'}`}>${bybitTestnet.getTotalProfit().toFixed(2)}</div></div>
-                  <div><div className="text-gray-500 text-xs">Винрейт</div><div className="text-yellow-400 font-bold text-lg">{bybitTestnet.getWinRate().toFixed(1)}%</div></div>
-                </div>
-              )}
+              {tradeHistory.length > 0 && (<div className="mt-4 pt-3 border-t border-red-500/30 grid grid-cols-3 gap-3 text-center"><div><div className="text-gray-500 text-xs">Всего сделок</div><div className="text-white font-bold text-lg">{tradeHistory.length}</div></div><div><div className="text-gray-500 text-xs">Профит</div><div className={`font-bold text-lg ${bybitTestnet.getTotalProfit() >= 0 ? 'text-green-400' : 'text-red-400'}`}>${bybitTestnet.getTotalProfit().toFixed(2)}</div></div><div><div className="text-gray-500 text-xs">Винрейт</div><div className="text-yellow-400 font-bold text-lg">{bybitTestnet.getWinRate().toFixed(1)}%</div></div></div>)}
             </div>
           </div>
         )}
@@ -661,7 +617,7 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | 200+ активов | Обновление 10 сек
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | Реальное время | {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
