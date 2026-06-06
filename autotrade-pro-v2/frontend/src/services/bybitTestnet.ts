@@ -121,12 +121,18 @@ class BybitTestnetTrading {
     localStorage.setItem(`price_${symbol}`, price.toString())
   }
 
+  // ИСПРАВЛЕННАЯ ФУНКЦИЯ - больше не спамит ошибками
   async closeByReverseSignal(symbol: string, signalSide: string): Promise<boolean> {
+    // Проверяем, есть ли позиция
     const positionIndex = this.positions.findIndex(p => p.symbol === symbol)
-    if (positionIndex === -1) return false
+    if (positionIndex === -1) {
+      // Нет позиции — просто выходим, без ошибки
+      return false
+    }
     
     const position = this.positions[positionIndex]
     
+    // Проверяем, противоположный ли сигнал
     if ((position.side === 'Buy' && signalSide === 'Sell') ||
         (position.side === 'Sell' && signalSide === 'Buy')) {
       const currentPrice = parseFloat(localStorage.getItem(`price_${symbol}`) || position.entryPrice.toString())
@@ -141,23 +147,20 @@ class BybitTestnetTrading {
       throw new Error('API ключи не настроены')
     }
 
-    // ========== ЖЁСТКАЯ ЗАЩИТА ОТ СЛИВА БАЛАНСА ==========
+    // Защита от слива баланса
     if (this.balance < 50) {
       throw new Error(`❌ Баланс слишком низкий ($${this.balance.toFixed(2)}). Минимальный порог $50. Сбросьте счёт.`)
     }
 
     const cost = params.qty * (params.price || 0)
     
-    // Нельзя потратить больше 100% баланса за одну сделку (можно выбрать любой процент в интерфейсе)
     if (cost > this.balance) {
-      throw new Error(`❌ Сумма сделки $${cost.toFixed(2)} превышает баланс ($${this.balance.toFixed(2)}). Уменьшите размер позиции.`)
+      throw new Error(`❌ Сумма сделки $${cost.toFixed(2)} превышает баланс ($${this.balance.toFixed(2)})`)
     }
 
-    // Нельзя открыть сделку если остаток после сделки будет меньше $10
     if (this.balance - cost < 10) {
       throw new Error(`❌ После сделки баланс будет $${(this.balance - cost).toFixed(2)} (минимальный порог $10)`)
     }
-    // ========== КОНЕЦ ЗАЩИТЫ ==========
 
     const order: Order = {
       id: Date.now().toString(),
