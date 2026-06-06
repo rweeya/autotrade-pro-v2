@@ -61,7 +61,6 @@ const DEMO_PRICES: Record<string, number> = {
 let realPrices: Record<string, number> = { ...DEMO_PRICES }
 let priceHistory: Record<string, number[]> = {}
 let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
-let lastPrices: Record<string, number> = {}
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -322,8 +321,10 @@ function App() {
     window.location.reload()
   }
 
-  // WebSocket логика с обновлением каждую секунду
+  // ========== ОСНОВНАЯ ЛОГИКА: ОБНОВЛЕНИЕ СИГНАЛОВ ПРИ КАЖДОМ ТИКЕ ==========
   useEffect(() => {
+    let updateTimeoutId: NodeJS.Timeout | null = null
+    
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
       if (symbol === 'BTCUSDT') formattedSymbol = 'BTC/USDT'
@@ -343,37 +344,39 @@ function App() {
       else if (symbol === 'NEARUSDT') formattedSymbol = 'NEAR/USDT'
       else formattedSymbol = symbol.replace('USDT', '/USDT')
       
+      const oldPrice = realPrices[formattedSymbol]
       realPrices[formattedSymbol] = price
       setIsRealTime(true)
       bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
+      
+      // Если цена изменилась — обновляем сигналы (с debounce)
+      if (oldPrice !== price) {
+        if (updateTimeoutId) clearTimeout(updateTimeoutId)
+        updateTimeoutId = setTimeout(() => {
+          const newSignals: Signal[] = []
+          for (const s of SYMBOLS) {
+            const p = realPrices[s]
+            if (p) {
+              const high = p * 1.01
+              const low = p * 0.99
+              const signal = analyzeIndicators(s, p, high, low, scalpingMode)
+              if (signal) newSignals.push(signal)
+            }
+          }
+          newSignals.sort((a, b) => b.strength - a.strength)
+          setSignals(newSignals)
+          console.log(`🔄 Сигналы обновлены: ${newSignals.length} сигналов`)
+        }, 100)
+      }
     }
     
     binanceWS.connect()
     const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
-    const updateSignals = () => {
-      const newSignals: Signal[] = []
-      for (const symbol of SYMBOLS) {
-        const price = realPrices[symbol]
-        if (price) {
-          const high = price * 1.01
-          const low = price * 0.99
-          const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
-          if (signal) newSignals.push(signal)
-        }
-      }
-      newSignals.sort((a, b) => b.strength - a.strength)
-      setSignals(newSignals)
-      console.log(`✅ Обновлено: ${newSignals.length} сигналов из ${SYMBOLS.length} активов (${scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'})`)
-    }
-    
-    updateSignals()
-    const interval = setInterval(updateSignals, 1000)
-    
     return () => {
       symbolsToSubscribe.forEach(sym => binanceWS.unsubscribe(sym, updatePrice))
-      clearInterval(interval)
+      if (updateTimeoutId) clearTimeout(updateTimeoutId)
     }
   }, [scalpingMode])
 
@@ -461,7 +464,7 @@ function App() {
             </button>
             <div className="flex items-center gap-1 text-xs text-green-400">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              LIVE 1С
+              LIVE
             </div>
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-red-400">LIVE</span>
@@ -488,9 +491,9 @@ function App() {
             <div className="text-xs text-red-400 mt-2">{scalpingMode ? 'RSI>40' : 'RSI>55'}</div>
           </div>
           <div className="bg-black/60 backdrop-blur-lg rounded-2xl p-5 border border-yellow-500/30">
-            <div className="text-3xl font-bold text-yellow-500">⚡1С</div>
-            <div className="text-gray-400 text-sm mt-1">Обновление</div>
-            <div className="text-xs text-green-400 mt-2">Каждую секунду</div>
+            <div className="text-3xl font-bold text-yellow-500">WebSocket</div>
+            <div className="text-gray-400 text-sm mt-1">Реальное время</div>
+            <div className="text-xs text-green-400 mt-2">Автообновление</div>
           </div>
         </div>
 
@@ -596,11 +599,11 @@ function App() {
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
               <div className="text-sm font-semibold text-red-300">
-                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | Обновление КАЖДУЮ СЕКУНДУ | {SYMBOLS.length} активов
+                🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | WebSocket LIVE | Реальное время | {SYMBOLS.length} активов
               </div>
             </div>
             <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов (обновление 1 сек)</span></div>) : (signals.map((signal, idx) => {
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов<br/><span className="text-xs text-gray-600">Мониторим {SYMBOLS.length} активов</span></div>) : (signals.map((signal, idx) => {
                 const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
                 return (<div key={idx} className="p-5 hover:bg-red-900/10 transition cursor-pointer" onClick={() => openBybit(signal.symbol)}>
                   <div className="flex justify-between items-start flex-wrap gap-3"><div className="flex items-center gap-3"><span className="font-bold text-xl text-white">💰 {signal.symbol}</span><span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>{signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}</span><span className="text-yellow-400 text-sm">⚡ {stars} ({signal.strength}/{scalpingMode ? '2' : '3'})</span></div><div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div></div>
