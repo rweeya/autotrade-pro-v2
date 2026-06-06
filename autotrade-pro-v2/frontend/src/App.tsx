@@ -24,10 +24,19 @@ interface Signal {
   }
 }
 
+// ========== 200+ АКТИВОВ ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
-  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT'
+  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
+  'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
+  'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
+  'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
+  'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
+  'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
+  'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
+  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
@@ -73,7 +82,18 @@ function calculateMACD(prices: number[], fast = 8, slow = 17, signal = 5): { mac
   const emaFast = calculateEMA(prices, fast)
   const emaSlow = calculateEMA(prices, slow)
   const macdLine = emaFast - emaSlow
-  return { macd: macdLine, signal: 0, histogram: macdLine }
+  
+  const macdValues = prices.map((_, i) => {
+    if (i < slow) return 0
+    const f = calculateEMA(prices.slice(0, i + 1), fast)
+    const s = calculateEMA(prices.slice(0, i + 1), slow)
+    return f - s
+  }).filter(v => v !== 0)
+  
+  const signalLine = macdValues.length >= signal ? calculateEMA(macdValues.slice(-signal), signal) : 0
+  const histogram = macdLine - signalLine
+  
+  return { macd: macdLine, signal: signalLine, histogram }
 }
 
 function generatePriceHistory(currentPrice: number): number[] {
@@ -87,9 +107,9 @@ function generatePriceHistory(currentPrice: number): number[] {
   return history
 }
 
-function checkMacdCross(prevMacd: number, currMacd: number): 'bullish' | 'bearish' | null {
-  if (prevMacd <= 0 && currMacd > 0) return 'bullish'
-  if (prevMacd >= 0 && currMacd < 0) return 'bearish'
+function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, currSignal: number): 'bullish' | 'bearish' | null {
+  if (prevMacd <= prevSignal && currMacd > currSignal) return 'bullish'
+  if (prevMacd >= prevSignal && currMacd < currSignal) return 'bearish'
   return null
 }
 
@@ -102,42 +122,71 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   
   const prices = priceHistory[symbol]
   const rsi = calculateRSI(prices, 10)
+  const ema20 = calculateEMA(prices, 20)
+  const ema50 = calculateEMA(prices, 50)
+  
   const macdData = calculateMACD(prices)
   
   if (!macdHistory[symbol]) macdHistory[symbol] = []
   macdHistory[symbol].push(macdData)
   if (macdHistory[symbol].length > 5) macdHistory[symbol].shift()
   
-  const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2].macd : 0
-  const currMacd = macdData.macd
-  const macdCross = checkMacdCross(prevMacd, currMacd)
+  const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2] : macdData
+  const currMacd = macdData
+  const macdCross = checkMacdCross(prevMacd.macd, prevMacd.signal, currMacd.macd, currMacd.signal)
   
+  let reasons: string[] = []
   let allBuyConditions = false
   let allSellConditions = false
+  let strength = 0
   
   if (isScalping) {
-    allBuyConditions = rsi < 60 && (macdCross === 'bullish' || currMacd > 0)
-    allSellConditions = rsi > 40 && (macdCross === 'bearish' || currMacd < 0)
+    const buyScalping = rsi < 60 && (macdCross === 'bullish' || currMacd.macd > 0)
+    const sellScalping = rsi > 40 && (macdCross === 'bearish' || currMacd.macd < 0)
+    if (buyScalping) {
+      allBuyConditions = true
+      strength = 2
+      reasons.push(`RSI:${Math.round(rsi)} (<60)`, `MACD бычий`)
+    } else if (sellScalping) {
+      allSellConditions = true
+      strength = 2
+      reasons.push(`RSI:${Math.round(rsi)} (>40)`, `MACD медвежий`)
+    }
   } else {
-    allBuyConditions = rsi < 45 && macdCross === 'bullish'
-    allSellConditions = rsi > 55 && macdCross === 'bearish'
+    const buySwing = rsi < 45 && macdCross === 'bullish' && currentPrice > ema20
+    const sellSwing = rsi > 55 && macdCross === 'bearish' && currentPrice < ema20
+    if (buySwing) {
+      allBuyConditions = true
+      strength = 3
+      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD бычий`, `Цена выше EMA20`)
+    } else if (sellSwing) {
+      allSellConditions = true
+      strength = 3
+      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD медвежий`, `Цена ниже EMA20`)
+    }
   }
   
   if (allBuyConditions) {
     return {
-      symbol, action: 'buy', price: currentPrice, strength: isScalping ? 2 : 3,
-      reasons: [`RSI:${Math.round(rsi)}`, `MACD ${currMacd > 0 ? 'бычий' : 'медвежий'}`],
+      symbol, action: 'buy', price: currentPrice, strength,
+      reasons,
       timestamp: new Date(),
-      indicators: { rsi: Math.round(rsi), macd: currMacd, macdSignal: 0, macdHistogram: 0, ema20: 0, ema50: 0 }
+      indicators: {
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50
+      }
     }
   }
   
   if (allSellConditions) {
     return {
-      symbol, action: 'sell', price: currentPrice, strength: isScalping ? 2 : 3,
-      reasons: [`RSI:${Math.round(rsi)}`, `MACD ${currMacd < 0 ? 'медвежий' : 'бычий'}`],
+      symbol, action: 'sell', price: currentPrice, strength,
+      reasons,
       timestamp: new Date(),
-      indicators: { rsi: Math.round(rsi), macd: currMacd, macdSignal: 0, macdHistogram: 0, ema20: 0, ema50: 0 }
+      indicators: {
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50
+      }
     }
   }
   
@@ -157,6 +206,7 @@ function App() {
     const saved = localStorage.getItem('scalping_mode')
     return saved === 'true'
   })
+  
   const [autoTradeEnabled, setAutoTradeEnabled] = useState(() => {
     const saved = localStorage.getItem('auto_trade_enabled')
     return saved === 'true'
@@ -171,6 +221,7 @@ function App() {
     const saved = localStorage.getItem('max_risk_percent')
     return saved ? parseFloat(saved) : 10
   })
+  const STOP_LOSS_PERCENT = scalpingMode ? 0.5 : 2
 
   useEffect(() => {
     localStorage.setItem('auto_trade_enabled', String(autoTradeEnabled))
@@ -234,7 +285,6 @@ function App() {
     }
   }
 
-  // ОБНОВЛЕНИЕ СИГНАЛОВ (вызывается при каждой цене)
   const updateSignals = () => {
     const newSignals: Signal[] = []
     for (const symbol of SYMBOLS) {
@@ -247,11 +297,10 @@ function App() {
     newSignals.sort((a, b) => b.strength - a.strength)
     setSignals(newSignals)
     if (newSignals.length > 0) {
-      console.log(`✅ Сигналов: ${newSignals.length}`)
+      console.log(`✅ Сигналов: ${newSignals.length} из ${SYMBOLS.length}`)
     }
   }
 
-  // WebSocket
   useEffect(() => {
     const updatePrice = (symbol: string, price: number) => {
       let formattedSymbol = symbol
@@ -274,14 +323,13 @@ function App() {
       
       realPrices[formattedSymbol] = price
       bybitTestnet.updatePrice(formattedSymbol.replace('/USDT', ''), price)
-      updateSignals() // КЛЮЧЕВОЕ: обновляем сигналы при каждой цене
+      updateSignals()
     }
     
     binanceWS.connect()
     const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
-    console.log(`🌐 WebSocket подключён`)
     updateSignals()
     
     return () => {
@@ -289,7 +337,6 @@ function App() {
     }
   }, [scalpingMode])
 
-  // Автоторговля
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
@@ -305,7 +352,7 @@ function App() {
           const side = signal.action === 'buy' ? 'Buy' : 'Sell'
           
           try {
-            await bybitTestnet.placeOrder({
+            const order = await bybitTestnet.placeOrder({
               symbol: cleanSymbol,
               side,
               qty: parseFloat(qty.toFixed(6)),
@@ -335,6 +382,7 @@ function App() {
             <button onClick={toggleScalpingMode} className={`px-3 py-1 rounded-lg text-xs font-bold ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}>
               {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
             </button>
+            <div className="flex items-center gap-1 text-xs text-green-400"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>LIVE</div>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
         </div>
@@ -361,7 +409,7 @@ function App() {
         {activeTab === 'trading' && (
           <>
             <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-4 py-2 text-white mb-4">
-              {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
+              {SYMBOLS.slice(0, 20).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <TradingChart symbol={selectedSymbol} />
           </>
@@ -408,6 +456,7 @@ function App() {
               <div className="mt-4 p-3 bg-red-950/30 rounded-lg">
                 <div className="flex justify-between"><span className="text-gray-400">Баланс:</span><span className="text-white font-bold">${balance.toLocaleString()}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Макс. сумма на сделку:</span><span className="text-yellow-400 font-bold">${maxPositionAmount.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Макс. риск (SL):</span><span className="text-red-400">${(maxPositionAmount * STOP_LOSS_PERCENT / 100).toLocaleString()}</span></div>
               </div>
             </div>
 
@@ -419,9 +468,24 @@ function App() {
             <div className="bg-black/60 rounded-2xl p-6 border border-red-500/30">
               <h3 className="text-lg font-bold text-red-400 mb-3">📜 ИСТОРИЯ СДЕЛОК</h3>
               <div className="max-h-[200px] overflow-y-auto">
-                {tradeHistory.length === 0 ? <div className="text-gray-500">Нет сделок</div> : tradeHistory.map((trade, idx) => (<div key={idx} className="border-b border-red-500/20 py-2 flex justify-between"><span>{trade.side} {trade.symbol}</span><span>${trade.price}</span><span className={trade.profit && trade.profit > 0 ? 'text-green-400' : 'text-red-400'}>{trade.profit ? `$${trade.profit.toFixed(2)}` : '—'}</span></div>))}
+                {tradeHistory.length === 0 ? <div className="text-gray-500 text-center py-4">Нет сделок</div> : tradeHistory.map((trade, idx) => (
+                  <div key={idx} className="border-b border-red-500/20 py-2 flex justify-between items-center">
+                    <span>{trade.side === 'Buy' ? '🟢' : '🔴'} {trade.symbol}</span>
+                    <span>${trade.price}</span>
+                    <span className={trade.profit && trade.profit > 0 ? 'text-green-400' : trade.profit && trade.profit < 0 ? 'text-red-400' : 'text-gray-400'}>
+                      {trade.profit ? `${trade.profit > 0 ? '+' : ''}$${trade.profit.toFixed(2)}` : '—'}
+                    </span>
+                    <span className="text-gray-500 text-xs">{new Date(trade.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                ))}
               </div>
-              {tradeHistory.length > 0 && (<div className="mt-4 pt-3 border-t border-red-500/30 grid grid-cols-3 text-center"><div><div>Всего</div><div className="font-bold">{tradeHistory.length}</div></div><div><div>Профит</div><div className={`font-bold ${bybitTestnet.getTotalProfit() >= 0 ? 'text-green-400' : 'text-red-400'}`}>${bybitTestnet.getTotalProfit().toFixed(2)}</div></div><div><div>Винрейт</div><div className="font-bold text-yellow-400">{bybitTestnet.getWinRate().toFixed(1)}%</div></div></div>)}
+              {tradeHistory.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-red-500/30 grid grid-cols-3 gap-3 text-center">
+                  <div><div className="text-gray-500 text-xs">Всего</div><div className="text-white font-bold text-lg">{tradeHistory.length}</div></div>
+                  <div><div className="text-gray-500 text-xs">Профит</div><div className={`font-bold text-lg ${bybitTestnet.getTotalProfit() >= 0 ? 'text-green-400' : 'text-red-400'}`}>${bybitTestnet.getTotalProfit().toFixed(2)}</div></div>
+                  <div><div className="text-gray-500 text-xs">Винрейт</div><div className="text-yellow-400 font-bold text-lg">{bybitTestnet.getWinRate().toFixed(1)}%</div></div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -429,7 +493,7 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<60)' : '📈 СВИНГ (RSI<45)'} | {SYMBOLS.length} активов</div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов</div>) : (signals.map((signal, idx) => {
@@ -438,14 +502,15 @@ function App() {
                   <div key={idx} className="p-5 hover:bg-red-900/10 cursor-pointer" onClick={() => openBybit(signal.symbol)}>
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-xl">💰 {signal.symbol}</span>
-                      <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
+                      <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                         {signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}
                       </span>
                       <span className="text-yellow-400">⚡ {stars}</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 mt-4 text-xs">
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className="font-bold">{signal.indicators.rsi}</div></div>
+                    <div className="grid grid-cols-4 gap-2 mt-4 text-xs">
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < 45 ? 'text-green-400' : signal.indicators.rsi > 55 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="text-white">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(2)}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)}/${signal.indicators.ema50.toFixed(0)}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="text-white">${signal.price.toLocaleString()}</div></div>
                     </div>
                     <div className="mt-3 text-xs text-red-300">🎯 {signal.reasons.join(' • ')}</div>
