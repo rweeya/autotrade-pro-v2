@@ -430,7 +430,6 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [trades, prices]);
 
-  // ==================== ОРИГИНАЛЬНЫЙ ИНТЕРФЕЙС ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-gray-900">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -514,13 +513,13 @@ const App: React.FC = () => {
             <TradingChart symbol={selectedSymbol} />
           </div>
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
-            <Watchlist symbols={SYMBOLS} prices={prices} onSelect={setSelectedSymbol} />
+            <Watchlist />
           </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
-            <TopMovers symbols={SYMBOLS} prices={prices} />
+            <TopMovers />
           </div>
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
             <News />
@@ -528,7 +527,7 @@ const App: React.FC = () => {
         </div>
         
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30 mb-6">
-          <SignalHistory signals={signals} trades={trades} />
+          <SignalHistory />
         </div>
         
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
