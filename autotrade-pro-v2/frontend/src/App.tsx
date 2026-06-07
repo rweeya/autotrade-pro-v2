@@ -7,7 +7,7 @@ import Watchlist from './components/Watchlist';
 import { createWebSocketManager, PriceData } from './services/websocket';
 import { BybitTestnet, OrderSide, OrderType, TimeInForce, PositionInfo } from './services/bybitTestnet';
 
-// ==================== 300+ АКТИВОВ (НЕ ТРОГАТЬ!) ====================
+// ==================== 300+ АКТИВОВ ====================
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -43,17 +43,6 @@ const SYMBOLS = [
   'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT'
 ];
 
-// Кэш для исторических данных (OHLCV)
-interface CandleData {
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-// Сигнал
 interface Signal {
   id: string;
   symbol: string;
@@ -65,7 +54,6 @@ interface Signal {
   macd?: number;
 }
 
-// Сделка
 interface Trade {
   id: string;
   symbol: string;
@@ -82,7 +70,6 @@ interface Trade {
   slPrice?: number;
 }
 
-// Для MACD
 interface MACDValues {
   macd: number;
   signal: number;
@@ -90,7 +77,6 @@ interface MACDValues {
 }
 
 const App: React.FC = () => {
-  // ==================== СОСТОЯНИЯ ====================
   const [prices, setPrices] = useState<Map<string, PriceData>>(new Map());
   const [signals, setSignals] = useState<Signal[]>(() => {
     const saved = localStorage.getItem('signals');
@@ -109,13 +95,12 @@ const App: React.FC = () => {
   const [lastTradeTime, setLastTradeTime] = useState<Map<string, number>>(new Map());
   const [isProcessing, setIsProcessing] = useState<Map<string, boolean>>(new Map());
 
-  // Refs для хранения цен и индикаторов
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const macdHistoryRef = useRef<Map<string, MACDValues[]>>(new Map());
   const wsManagerRef = useRef<any>(null);
   const bybitRef = useRef<BybitTestnet | null>(null);
 
-  // ==================== ЗАГРУЗКА БАЛАНСА ====================
+  // Загрузка баланса
   useEffect(() => {
     const loadBalance = async () => {
       try {
@@ -128,13 +113,11 @@ const App: React.FC = () => {
       }
     };
     loadBalance();
-
-    // Интервал обновления баланса
     const interval = setInterval(loadBalance, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // ==================== РАСЧЁТ ВИНРЕЙТА ====================
+  // Расчёт винрейта
   useEffect(() => {
     const closedTrades = trades.filter(t => t.status === 'closed' && t.pnl !== undefined);
     if (closedTrades.length === 0) {
@@ -148,7 +131,7 @@ const App: React.FC = () => {
     setTotalPnL(totalPnLSum);
   }, [trades]);
 
-  // ==================== СОХРАНЕНИЕ В LOCALSTORAGE ====================
+  // Сохранение в localStorage
   useEffect(() => {
     localStorage.setItem('signals', JSON.stringify(signals.slice(-500)));
   }, [signals]);
@@ -157,7 +140,7 @@ const App: React.FC = () => {
     localStorage.setItem('trades', JSON.stringify(trades));
   }, [trades]);
 
-  // ==================== РАСЧЁТ RSI ====================
+  // Расчёт RSI
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (prices.length < period + 1) return 50;
     
@@ -181,7 +164,7 @@ const App: React.FC = () => {
     return 100 - (100 / (1 + rs));
   };
 
-  // ==================== РАСЧЁТ MACD ====================
+  // Расчёт EMA
   const calculateEMA = (prices: number[], period: number): number[] => {
     const ema: number[] = [];
     const multiplier = 2 / (period + 1);
@@ -196,6 +179,7 @@ const App: React.FC = () => {
     return ema;
   };
 
+  // Расчёт MACD
   const calculateMACD = (prices: number[], fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9): MACDValues => {
     if (prices.length < slowPeriod + signalPeriod) {
       return { macd: 0, signal: 0, histogram: 0 };
@@ -206,7 +190,6 @@ const App: React.FC = () => {
     
     const macdLine = fastEMA[fastEMA.length - 1] - slowEMA[slowEMA.length - 1];
     
-    // Расчёт сигнальной линии (EMA от MACD)
     const macdValues: number[] = [];
     for (let i = 0; i < fastEMA.length; i++) {
       macdValues.push(fastEMA[i] - slowEMA[i]);
@@ -219,73 +202,48 @@ const App: React.FC = () => {
     return { macd: macdLine, signal: signalLine, histogram };
   };
 
-  // ==================== ГЕНЕРАЦИЯ СИГНАЛОВ (МЯГКИЕ УСЛОВИЯ!) ====================
+  // Генерация сигналов (мягкие условия)
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const priceHistory = priceHistoryRef.current.get(symbol);
     if (!priceHistory || priceHistory.length < 50) return null;
     
-    // Расчёт RSI
     const rsi = calculateRSI(priceHistory, 14);
-    
-    // Расчёт MACD
     const macd = calculateMACD(priceHistory, 12, 26, 9);
     
-    // ========== МЯГКИЕ УСЛОВИЯ ДЛЯ BUY ==========
-    // RSI < 55 И MACD бычий (пересечение снизу вверх ИЛИ просто MACD > 0)
+    // Мягкие условия для BUY
     let isBuySignal = false;
-    let buyReason = '';
-    
     if (rsi < 55) {
-      // Проверяем бычий MACD: либо MACD > 0, либо гистограмма > 0
       const isMacdBullish = macd.macd > 0 || macd.histogram > 0;
-      
-      // Также проверяем пересечение (было отрицательным, стало положительным)
       const macdHistory = macdHistoryRef.current.get(symbol);
       let isCrossOver = false;
       if (macdHistory && macdHistory.length >= 2) {
         const prevMacd = macdHistory[macdHistory.length - 2];
-        const currMacd = macd;
-        isCrossOver = prevMacd.macd <= 0 && currMacd.macd > 0;
+        isCrossOver = prevMacd.macd <= 0 && macd.macd > 0;
       }
-      
       if (isMacdBullish || isCrossOver) {
         isBuySignal = true;
-        buyReason = `RSI=${rsi.toFixed(1)}<55, MACD=${macd.macd.toFixed(2)}>0`;
       }
     }
     
-    // ========== МЯГКИЕ УСЛОВИЯ ДЛЯ SELL ==========
-    // RSI > 45 И MACD медвежий (пересечение сверху вниз ИЛИ просто MACD < 0)
+    // Мягкие условия для SELL
     let isSellSignal = false;
-    let sellReason = '';
-    
     if (rsi > 45) {
-      // Проверяем медвежий MACD: либо MACD < 0, либо гистограмма < 0
       const isMacdBearish = macd.macd < 0 || macd.histogram < 0;
-      
-      // Проверяем пересечение (было положительным, стало отрицательным)
       const macdHistory = macdHistoryRef.current.get(symbol);
       let isCrossUnder = false;
       if (macdHistory && macdHistory.length >= 2) {
         const prevMacd = macdHistory[macdHistory.length - 2];
-        const currMacd = macd;
-        isCrossUnder = prevMacd.macd >= 0 && currMacd.macd < 0;
+        isCrossUnder = prevMacd.macd >= 0 && macd.macd < 0;
       }
-      
       if (isMacdBearish || isCrossUnder) {
         isSellSignal = true;
-        sellReason = `RSI=${rsi.toFixed(1)}>45, MACD=${macd.macd.toFixed(2)}<0`;
       }
     }
     
-    // Если нет сигнала
     if (!isBuySignal && !isSellSignal) return null;
     
-    // Определяем тип сигнала
     const signalType = isBuySignal ? 'BUY' : 'SELL';
-    const reason = isBuySignal ? buyReason : sellReason;
-    
-    console.log(`📊 Сигнал ${signalType} для ${symbol}: ${reason}`);
+    console.log(`📊 Сигнал ${signalType} для ${symbol}: RSI=${rsi.toFixed(1)}, MACD=${macd.macd.toFixed(2)}`);
     
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
@@ -299,68 +257,51 @@ const App: React.FC = () => {
     };
   };
 
-  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ ====================
+  // Исполнение сделки
   const executeTrade = async (signal: Signal) => {
     const { symbol, type, price } = signal;
     
-    // Проверка на частые сделки (не чаще 1 раза в 3 минуты)
     const lastTrade = lastTradeTime.get(symbol);
     if (lastTrade && Date.now() - lastTrade < 180000) {
       console.log(`⏰ Пропуск ${symbol}: слишком частая сделка`);
       return;
     }
     
-    // Проверка на уже открытую позицию
     const openPosition = trades.find(t => t.symbol === symbol && t.status === 'open');
     if (openPosition) {
       console.log(`🚫 Позиция по ${symbol} уже открыта`);
       return;
     }
     
-    // Проверка на обработку
     if (isProcessing.get(symbol)) return;
     setIsProcessing(prev => new Map(prev).set(symbol, true));
     
     try {
       const bybit = bybitRef.current;
-      if (!bybit) {
-        console.error('Bybit не инициализирован');
-        return;
-      }
+      if (!bybit) return;
       
-      // Получаем текущий баланс
       const currentBalance = await bybit.getBalance();
-      
-      // Расчёт размера позиции (5% от баланса)
       const riskAmount = currentBalance * (riskPercent / 100);
       const quantity = riskAmount / price;
-      
-      // Округляем количество (для USDT пары)
       const roundedQty = Math.floor(quantity * 1000) / 1000;
       
-      if (roundedQty <= 0) {
-        console.error('Некорректное количество');
-        return;
-      }
+      if (roundedQty <= 0) return;
       
-      // Расчёт TP/SL
       const tpPrice = type === 'BUY' ? price * 1.03 : price * 0.97;
       const slPrice = type === 'BUY' ? price * 0.98 : price * 1.02;
       
-      // Открываем позицию
       const orderResult = await bybit.placeOrder({
         symbol,
-        side: type,
+        side: type === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
         orderType: OrderType.MARKET,
         quantity: roundedQty,
         timeInForce: TimeInForce.IOC
       });
       
       if (orderResult && orderResult.orderId) {
-        // Устанавливаем TP/SL
         await bybit.setTradingStop({
           symbol,
-          side: type,
+          side: type === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
           takeProfit: tpPrice,
           stopLoss: slPrice
         });
@@ -379,27 +320,15 @@ const App: React.FC = () => {
         
         setTrades(prev => [...prev, newTrade]);
         setLastTradeTime(prev => new Map(prev).set(symbol, Date.now()));
+        setSignals(prev => prev.map(s => s.id === signal.id ? { ...s, status: 'executed' } : s));
         
-        // Обновляем статус сигнала
-        setSignals(prev => prev.map(s => 
-          s.id === signal.id ? { ...s, status: 'executed' } : s
-        ));
-        
-        console.log(`✅ Открыта ${type} позиция по ${symbol}, кол-во: ${roundedQty}, TP: ${tpPrice}, SL: ${slPrice}`);
-        
-        // Обновляем баланс
+        console.log(`✅ Открыта ${type} позиция по ${symbol}`);
         const newBalance = await bybit.getBalance();
         setBalance(newBalance);
-      } else {
-        setSignals(prev => prev.map(s => 
-          s.id === signal.id ? { ...s, status: 'failed' } : s
-        ));
       }
     } catch (error) {
-      console.error(`Ошибка при открытии позиции ${symbol}:`, error);
-      setSignals(prev => prev.map(s => 
-        s.id === signal.id ? { ...s, status: 'failed' } : s
-      ));
+      console.error(error);
+      setSignals(prev => prev.map(s => s.id === signal.id ? { ...s, status: 'failed' } : s));
     } finally {
       setIsProcessing(prev => {
         const newMap = new Map(prev);
@@ -409,15 +338,13 @@ const App: React.FC = () => {
     }
   };
 
-  // ==================== ОБНОВЛЕНИЕ ЦЕН И ИНДИКАТОРОВ ====================
+  // Обновление истории цен
   const updatePriceHistory = useCallback((symbol: string, price: number) => {
-    // Обновляем историю цен
     let history = priceHistoryRef.current.get(symbol) || [];
     history.push(price);
     if (history.length > 200) history = history.slice(-200);
     priceHistoryRef.current.set(symbol, history);
     
-    // Рассчитываем и сохраняем MACD историю
     if (history.length >= 50) {
       const macd = calculateMACD(history, 12, 26, 9);
       let macdHistory = macdHistoryRef.current.get(symbol) || [];
@@ -426,24 +353,20 @@ const App: React.FC = () => {
       macdHistoryRef.current.set(symbol, macdHistory);
     }
     
-    // Генерируем сигнал
     const signal = generateSignal(symbol, price);
     if (signal) {
       setSignals(prev => [signal, ...prev]);
-      
-      // Автоматическое исполнение
       if (autoTrade) {
         executeTrade(signal);
       }
     }
-  }, [autoTrade, executeTrade]);
+  }, [autoTrade]);
 
-  // ==================== ПОДПИСКА НА WEBSOCKET ====================
+  // WebSocket подписка
   useEffect(() => {
     const wsManager = createWebSocketManager();
     wsManagerRef.current = wsManager;
     
-    // Подписываемся на все символы
     SYMBOLS.forEach(symbol => {
       wsManager.subscribe(symbol, (data: PriceData) => {
         setPrices(prev => new Map(prev).set(symbol, data));
@@ -456,7 +379,7 @@ const App: React.FC = () => {
     };
   }, [updatePriceHistory]);
 
-  // ==================== ЗАКРЫТИЕ СДЕЛОК ПО TP/SL (МОНИТОРИНГ) ====================
+  // Мониторинг позиций
   useEffect(() => {
     const checkPositions = async () => {
       const bybit = bybitRef.current;
@@ -467,11 +390,9 @@ const App: React.FC = () => {
         const openTrades = trades.filter(t => t.status === 'open');
         
         for (const trade of openTrades) {
-          const position = positions.find(p => p.symbol === trade.symbol);
+          const position = positions.find((p: PositionInfo) => p.symbol === trade.symbol);
           
-          // Если позиция закрыта (не найдена или размер 0)
           if (!position || Math.abs(parseFloat(position.size)) < 0.0001) {
-            // Получаем текущую цену для расчёта PnL
             const currentPrice = prices.get(trade.symbol)?.price || trade.entryPrice;
             const pnl = trade.side === 'BUY' 
               ? (currentPrice - trade.entryPrice) * trade.quantity
@@ -484,11 +405,9 @@ const App: React.FC = () => {
                 : t
             ));
             
-            // Обновляем баланс
             const newBalance = await bybit.getBalance();
             setBalance(newBalance);
-            
-            console.log(`📉 Позиция ${trade.symbol} закрыта. PnL: $${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`);
+            console.log(`📉 Позиция ${trade.symbol} закрыта. PnL: $${pnl.toFixed(2)}`);
           }
         }
       } catch (error) {
@@ -500,10 +419,8 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [trades, prices]);
 
-  // ==================== РЕНДЕР ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-gray-900">
-      {/* Кровавый эффект */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {[...Array(20)].map((_, i) => (
           <div
@@ -519,12 +436,9 @@ const App: React.FC = () => {
       </div>
       
       <div className="relative z-10 container mx-auto px-4 py-6">
-        {/* Хедер */}
         <div className="flex justify-between items-center mb-6 bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
           <div>
-            <h1 className="text-3xl font-bold text-red-500 flex items-center gap-2">
-              💀 AUTO TRADE PRO V2 💀
-            </h1>
+            <h1 className="text-3xl font-bold text-red-500">💀 AUTO TRADE PRO V2 💀</h1>
             <p className="text-gray-400 text-sm">Скальпинг терминал | 300+ активов | Bybit Testnet</p>
           </div>
           <div className="text-right">
@@ -535,7 +449,6 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        {/* Панель управления */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
             <label className="text-gray-400 text-sm">🤖 АВТОТОРГОВЛЯ</label>
@@ -581,15 +494,9 @@ const App: React.FC = () => {
             <div className="text-2xl font-bold text-green-400">
               ${prices.get(selectedSymbol)?.price?.toFixed(4) || '0'}
             </div>
-            <div className={`text-sm ${
-              (prices.get(selectedSymbol)?.change24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'
-            }`}>
-              24h: {(prices.get(selectedSymbol)?.change24h || 0).toFixed(2)}%
-            </div>
           </div>
         </div>
         
-        {/* График и виджеты */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
             <TradingChart symbol={selectedSymbol} />
@@ -608,12 +515,10 @@ const App: React.FC = () => {
           </div>
         </div>
         
-        {/* История сигналов */}
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30 mb-6">
           <SignalHistory signals={signals} trades={trades} />
         </div>
         
-        {/* Таблица открытых позиций */}
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
           <h2 className="text-xl font-bold text-red-400 mb-4">📋 ОТКРЫТЫЕ ПОЗИЦИИ</h2>
           <div className="overflow-x-auto">
@@ -623,7 +528,6 @@ const App: React.FC = () => {
                   <th className="text-left py-2">МОНЕТА</th>
                   <th className="text-left py-2">ТИП</th>
                   <th className="text-right py-2">ЦЕНА ВХ.</th>
-                  <th className="text-right py-2">КОЛ-ВО</th>
                   <th className="text-right py-2">TP</th>
                   <th className="text-right py-2">SL</th>
                   <th className="text-right py-2">ТЕКУЩИЙ P&L</th>
@@ -644,7 +548,6 @@ const App: React.FC = () => {
                         {trade.side}
                       </td>
                       <td className="text-right py-2">${trade.entryPrice.toFixed(4)}</td>
-                      <td className="text-right py-2">{trade.quantity.toFixed(4)}</td>
                       <td className="text-right py-2 text-green-400">${trade.tpPrice?.toFixed(4)}</td>
                       <td className="text-right py-2 text-red-400">${trade.slPrice?.toFixed(4)}</td>
                       <td className={`text-right py-2 ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -653,13 +556,6 @@ const App: React.FC = () => {
                     </tr>
                   );
                 })}
-                {trades.filter(t => t.status === 'open').length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-gray-500">
-                      НЕТ ОТКРЫТЫХ ПОЗИЦИЙ
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
