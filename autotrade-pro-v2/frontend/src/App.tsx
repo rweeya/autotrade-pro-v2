@@ -24,7 +24,7 @@ interface Signal {
   }
 }
 
-// ========== 300+ АКТИВОВ ==========
+// ========== АКТИВЫ (НЕ ТРОГАТЬ) ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -63,6 +63,7 @@ const SYMBOLS = [
 let realPrices: Record<string, number> = {}
 let priceHistory: Record<string, number[]> = {}
 let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
+let lastTradeTime: Record<string, number> = {} // Защита от повторных сделок
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -103,7 +104,18 @@ function calculateMACD(prices: number[], fast = 8, slow = 17, signal = 5): { mac
   const emaFast = calculateEMA(prices, fast)
   const emaSlow = calculateEMA(prices, slow)
   const macdLine = emaFast - emaSlow
-  return { macd: macdLine, signal: 0, histogram: macdLine }
+  
+  const macdValues = prices.map((_, i) => {
+    if (i < slow) return 0
+    const f = calculateEMA(prices.slice(0, i + 1), fast)
+    const s = calculateEMA(prices.slice(0, i + 1), slow)
+    return f - s
+  }).filter(v => v !== 0)
+  
+  const signalLine = macdValues.length >= signal ? calculateEMA(macdValues.slice(-signal), signal) : 0
+  const histogram = macdLine - signalLine
+  
+  return { macd: macdLine, signal: signalLine, histogram }
 }
 
 function generatePriceHistory(currentPrice: number): number[] {
@@ -117,9 +129,9 @@ function generatePriceHistory(currentPrice: number): number[] {
   return history
 }
 
-function checkMacdCross(prevMacd: number, currMacd: number): 'bullish' | 'bearish' | null {
-  if (prevMacd <= 0 && currMacd > 0) return 'bullish'
-  if (prevMacd >= 0 && currMacd < 0) return 'bearish'
+function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, currSignal: number): 'bullish' | 'bearish' | null {
+  if (prevMacd <= prevSignal && currMacd > currSignal) return 'bullish'
+  if (prevMacd >= prevSignal && currMacd < currSignal) return 'bearish'
   return null
 }
 
@@ -141,9 +153,9 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   macdHistory[symbol].push(macdData)
   if (macdHistory[symbol].length > 5) macdHistory[symbol].shift()
   
-  const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2].macd : 0
-  const currMacd = macdData.macd
-  const macdCross = checkMacdCross(prevMacd, currMacd)
+  const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2] : macdData
+  const currMacd = macdData
+  const macdCross = checkMacdCross(prevMacd.macd, prevMacd.signal, currMacd.macd, currMacd.signal)
   
   let allBuyConditions = false
   let allSellConditions = false
@@ -151,16 +163,16 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   let reasons: string[] = []
   
   if (isScalping) {
-    const buyScalping = rsi < 60 && (macdCross === 'bullish' || currMacd > -0.2)
-    const sellScalping = rsi > 40 && (macdCross === 'bearish' || currMacd < 0.2)
+    const buyScalping = rsi < 55 && (macdCross === 'bullish' || currMacd.macd > 0)
+    const sellScalping = rsi > 45 && (macdCross === 'bearish' || currMacd.macd < 0)
     if (buyScalping) {
       allBuyConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (<60)`, `MACD бычий`)
+      reasons.push(`RSI:${Math.round(rsi)} (<55)`, `MACD бычий`)
     } else if (sellScalping) {
       allSellConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (>40)`, `MACD медвежий`)
+      reasons.push(`RSI:${Math.round(rsi)} (>45)`, `MACD медвежий`)
     }
   } else {
     const buySwing = rsi < 45 && macdCross === 'bullish' && currentPrice > ema20
@@ -182,8 +194,8 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
       reasons,
       timestamp: new Date(),
       indicators: {
-        rsi: Math.round(rsi), macd: currMacd, macdSignal: 0,
-        macdHistogram: 0, ema20, ema50
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50
       }
     }
   }
@@ -194,8 +206,8 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
       reasons,
       timestamp: new Date(),
       indicators: {
-        rsi: Math.round(rsi), macd: currMacd, macdSignal: 0,
-        macdHistogram: 0, ema20, ema50
+        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
+        macdHistogram: currMacd.histogram, ema20, ema50
       }
     }
   }
@@ -229,7 +241,7 @@ function App() {
   const [apiSecret, setApiSecret] = useState('')
   const [maxRiskPercent, setMaxRiskPercent] = useState(() => {
     const saved = localStorage.getItem('max_risk_percent')
-    return saved ? parseFloat(saved) : 10
+    return saved ? parseFloat(saved) : 5
   })
   const STOP_LOSS_PERCENT = scalpingMode ? 0.5 : 2
 
@@ -347,25 +359,29 @@ function App() {
     }
   }, [scalpingMode])
 
-  // Закрытие позиций по обратному сигналу (с проверкой)
-  useEffect(() => {
-    if (!apiConfigured) return
-    for (const signal of signals) {
-      const cleanSymbol = signal.symbol.replace('/USDT', '')
-      const existingPosition = positions.find(p => p.symbol === cleanSymbol)
-      if (existingPosition) {
-        bybitTestnet.closeByReverseSignal(cleanSymbol, signal.action === 'buy' ? 'Buy' : 'Sell')
-      }
-    }
-  }, [signals, apiConfigured, positions])
+  // ЗАЩИТА ОТ ПОВТОРНЫХ СДЕЛОК (не чаще 1 раза в 5 минут)
+  const canTrade = (symbol: string): boolean => {
+    const lastTrade = lastTradeTime[symbol]
+    if (!lastTrade) return true
+    const minutesPassed = (Date.now() - lastTrade) / 1000 / 60
+    return minutesPassed >= 5
+  }
 
   useEffect(() => {
     if (autoTradeEnabled && apiConfigured && signals.length > 0) {
       const executeTrades = async () => {
         for (const signal of signals) {
           const cleanSymbol = signal.symbol.replace('/USDT', '')
+          
+          // Проверка: уже есть открытая позиция
           const existingPosition = positions.find(p => p.symbol === cleanSymbol)
           if (existingPosition) continue
+          
+          // Проверка: не слишком часто
+          if (!canTrade(cleanSymbol)) {
+            console.log(`⏱️ Пропуск ${signal.symbol}: прошло менее 5 минут`)
+            continue
+          }
           
           const maxPositionAmount = balance * (maxRiskPercent / 100)
           if (maxPositionAmount < 10) continue
@@ -381,6 +397,7 @@ function App() {
               price: signal.price
             })
             console.log(`✅ Ордер: ${side} ${signal.symbol}`)
+            lastTradeTime[cleanSymbol] = Date.now()
           } catch (error: any) {
             console.error('❌ Ошибка:', error.message)
           }
@@ -461,7 +478,7 @@ function App() {
                     <button onClick={resetAccount} className="bg-yellow-600/50 px-4 py-2 rounded-lg">🔄 Сбросить счет</button>
                     {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 px-4 py-2 rounded-lg">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p></div>}
+                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">Не чаще 1 сделки в 5 минут</p></div>}
                 </div>
               )}
             </div>
@@ -469,7 +486,7 @@ function App() {
             <div className="bg-black/60 rounded-2xl p-6 border border-red-500/30">
               <h3 className="text-lg font-bold text-red-400 mb-4">💰 НАСТРОЙКИ РИСКА</h3>
               <label className="block text-gray-400 text-sm mb-2">Максимальный процент на сделку: {maxRiskPercent}%</label>
-              <input type="range" min="1" max="100" step="1" value={maxRiskPercent} onChange={(e) => {
+              <input type="range" min="1" max="20" step="1" value={maxRiskPercent} onChange={(e) => {
                 const val = parseFloat(e.target.value)
                 setMaxRiskPercent(val)
                 localStorage.setItem('max_risk_percent', val.toString())
@@ -498,10 +515,6 @@ function App() {
                             <span className="font-bold text-white">{pos.symbol}/USDT</span>
                           </div>
                           <div className="text-yellow-400 font-mono">${pos.price?.toFixed(4)}</div>
-                        </div>
-                        <div className="flex justify-between mt-2 text-xs text-gray-500">
-                          <span>Размер: {pos.qty}</span>
-                          <span>{new Date(pos.openTime).toLocaleTimeString()}</span>
                         </div>
                       </div>
                     ))}
@@ -538,7 +551,7 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | {SYMBOLS.length} активов | WebSocket LIVE</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | {SYMBOLS.length} активов | Закрытие только по TP/SL</div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов</div>) : (signals.map((signal, idx) => {
