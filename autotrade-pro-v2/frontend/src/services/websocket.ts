@@ -1,98 +1,100 @@
-// websocket.ts - ИСПРАВЛЕННАЯ ВЕРСИЯ
+export interface PriceData {
+  symbol: string;
+  price: number;
+  change24h: number;
+  volume24h: number;
+  high24h: number;
+  low24h: number;
+  timestamp: number;
+}
 
-type PriceCallback = (symbol: string, price: number) => void
+class WebSocketManager {
+  private sockets: Map<string, WebSocket> = new Map();
+  private subscribers: Map<string, Set<(data: PriceData) => void>> = new Map();
+  private reconnectAttempts: Map<string, number> = new Map();
+  private baseUrl = 'wss://stream.binance.com:9443/ws';
 
-class BinanceWebSocket {
-  private ws: WebSocket | null = null
-  private callbacks: Map<string, PriceCallback[]> = new Map()
-  private prices: Map<string, number> = new Map()
-  private connected: boolean = false
-  private reconnectAttempts: number = 0
+  subscribe(symbol: string, callback: (data: PriceData) => void) {
+    // Форматируем символ для Binance (BTCUSDT вместо BTC/USDT)
+    const wsSymbol = symbol.replace('/', '').toLowerCase();
+    const streamName = `${wsSymbol}@ticker`;
+    const wsUrl = `${this.baseUrl}/${streamName}`;
 
-  connect() {
-    if (this.ws && this.connected) return
-
-    const symbols = [
-      'btcusdt', 'ethusdt', 'solusdt', 'bnbusdt', 'xrpusdt',
-      'dogeusdt', 'adausdt', 'avaxusdt', 'dotusdt', 'maticusdt',
-      'linkusdt', 'uniusdt', 'atomusdt', 'ltcusdt', 'nearusdt'
-    ]
-    
-    const streams = symbols.map(s => `${s}@ticker`).join('/')
-    const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`
-
-    this.ws = new WebSocket(wsUrl)
-    
-    this.ws.onopen = () => {
-      console.log('✅ Binance WebSocket подключен')
-      this.connected = true
-      this.reconnectAttempts = 0
+    if (!this.subscribers.has(symbol)) {
+      this.subscribers.set(symbol, new Set());
     }
+    this.subscribers.get(symbol)!.add(callback);
 
-    this.ws.onmessage = (event) => {
+    if (!this.sockets.has(symbol)) {
+      this.connect(symbol, wsUrl);
+    }
+  }
+
+  private connect(symbol: string, wsUrl: string) {
+    const ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+      console.log(`WebSocket подключен для ${symbol}`);
+      this.reconnectAttempts.set(symbol, 0);
+    };
+
+    ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data)
-        const ticker = data.data
+        const data = JSON.parse(event.data);
+        const priceData: PriceData = {
+          symbol: symbol,
+          price: parseFloat(data.c),
+          change24h: parseFloat(data.P),
+          volume24h: parseFloat(data.v),
+          high24h: parseFloat(data.h),
+          low24h: parseFloat(data.l),
+          timestamp: Date.now()
+        };
         
-        if (ticker && ticker.s && ticker.c) {
-          const symbol = ticker.s.toUpperCase()
-          const price = parseFloat(ticker.c)
-          
-          this.prices.set(symbol, price)
-          
-          const callbacks = this.callbacks.get(symbol)
-          if (callbacks) {
-            callbacks.forEach(cb => cb(symbol, price))
-          }
-        }
-      } catch (e) {
-        // тихо игнорируем ошибки парсинга
+        this.subscribers.get(symbol)?.forEach(callback => callback(priceData));
+      } catch (error) {
+        console.error(`Ошибка обработки данных для ${symbol}:`, error);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error(`WebSocket ошибка для ${symbol}:`, error);
+    };
+
+    ws.onclose = () => {
+      console.log(`WebSocket закрыт для ${symbol}, переподключение...`);
+      const attempts = this.reconnectAttempts.get(symbol) || 0;
+      if (attempts < 5) {
+        setTimeout(() => {
+          this.reconnectAttempts.set(symbol, attempts + 1);
+          this.connect(symbol, wsUrl);
+        }, 5000 * Math.pow(2, attempts));
+      }
+    };
+
+    this.sockets.set(symbol, ws);
+  }
+
+  unsubscribe(symbol: string, callback?: (data: PriceData) => void) {
+    if (callback) {
+      this.subscribers.get(symbol)?.delete(callback);
+    }
+    
+    if (!callback || this.subscribers.get(symbol)?.size === 0) {
+      const ws = this.sockets.get(symbol);
+      if (ws) {
+        ws.close();
+        this.sockets.delete(symbol);
+        this.subscribers.delete(symbol);
       }
     }
-
-    this.ws.onerror = (error) => {
-      console.error('WebSocket ошибка:', error)
-    }
-
-    this.ws.onclose = () => {
-      console.log('WebSocket отключен, переподключение...')
-      this.connected = false
-      setTimeout(() => this.connect(), 5000)
-    }
-  }
-
-  subscribe(symbol: string, callback: PriceCallback) {
-    const upperSymbol = symbol.toUpperCase()
-    if (!this.callbacks.has(upperSymbol)) {
-      this.callbacks.set(upperSymbol, [])
-    }
-    this.callbacks.get(upperSymbol)!.push(callback)
-    
-    if (this.prices.has(upperSymbol)) {
-      callback(upperSymbol, this.prices.get(upperSymbol)!)
-    }
-  }
-
-  unsubscribe(symbol: string, callback: PriceCallback) {
-    const upperSymbol = symbol.toUpperCase()
-    const callbacks = this.callbacks.get(upperSymbol)
-    if (callbacks) {
-      const index = callbacks.indexOf(callback)
-      if (index !== -1) callbacks.splice(index, 1)
-    }
-  }
-
-  getPrice(symbol: string): number | null {
-    return this.prices.get(symbol.toUpperCase()) || null
   }
 
   disconnect() {
-    if (this.ws) {
-      this.ws.close()
-      this.ws = null
-      this.connected = false
-    }
+    this.sockets.forEach(ws => ws.close());
+    this.sockets.clear();
+    this.subscribers.clear();
   }
 }
 
-export const binanceWS = new BinanceWebSocket()
+export const createWebSocketManager = () => new WebSocketManager();
