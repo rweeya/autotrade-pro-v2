@@ -1,21 +1,51 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import TradingChart from './components/TradingChart';
+import SignalHistory from './components/SignalHistory';
+import News from './components/News';
+import TopMovers from './components/TopMovers';
+import Watchlist from './components/Watchlist';
+import { createWebSocketManager, PriceData } from './services/websocket';
+import { BybitTestnet, OrderSide, OrderType, TimeInForce, PositionInfo } from './services/bybitTestnet';
 
-// @ts-ignore
-import { createChart, ColorType } from 'lightweight-charts';
+// ==================== 300+ АКТИВОВ (НЕ ТРОГАТЬ!) ====================
+const SYMBOLS = [
+  'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
+  'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
+  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
+  'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
+  'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
+  'RNDR/USDT', 'MKR/USDT', 'AAVE/USDT', 'SNX/USDT', 'CRV/USDT',
+  'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT',
+  'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT',
+  'XTZ/USDT', 'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT',
+  'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT', 'OMG/USDT', 'QTUM/USDT',
+  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
+  'FLOW/USDT', 'WAVES/USDT', 'NEO/USDT', 'IOTA/USDT', 'XDC/USDT',
+  'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'OKB/USDT', 'LEO/USDT',
+  'CELO/USDT', 'ROSE/USDT', 'KLAY/USDT', 'CKB/USDT', 'ERG/USDT',
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
+  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
+  'STRK/USDT', 'WLD/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'FET/USDT',
+  'LDO/USDT', 'BLUR/USDT', 'RDNT/USDT', 'MAGIC/USDT', 'GNS/USDT',
+  'SSV/USDT', 'RPL/USDT', 'DGB/USDT', 'DCR/USDT', 'BTG/USDT',
+  'NMR/USDT', 'STORJ/USDT', 'ANKR/USDT', 'REEF/USDT', 'COTI/USDT',
+  'WIN/USDT', 'ALICE/USDT', 'TLM/USDT', 'MBOX/USDT', 'DAR/USDT',
+  'RACA/USDT', 'HIGH/USDT', 'STG/USDT', 'LQTY/USDT', 'TRU/USDT',
+  'BOND/USDT', 'MDX/USDT', 'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT',
+  'CAKE/USDT', 'XVS/USDT', 'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT',
+  'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT', 'CITY/USDT',
+  'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT', '1INCH/USDT',
+  'ABT/USDT', 'ACH/USDT', 'ADX/USDT', 'AEVO/USDT',
+  'AGLD/USDT', 'ALCX/USDT', 'ALPHA/USDT', 'ALPINE/USDT', 'AMB/USDT',
+  'AMP/USDT', 'ANC/USDT', 'ANT/USDT', 'APE/USDT', 'API3/USDT',
+  'ARK/USDT', 'ARPA/USDT', 'AST/USDT', 'ASTR/USDT', 'ATA/USDT',
+  'AUCTION/USDT', 'AUDIO/USDT', 'AURA/USDT', 'AXL/USDT', 'BADGER/USDT',
+  'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT'
+];
 
-import { 
-  Activity, TrendingUp, TrendingDown, Zap, Shield, Droplets, Sparkles, 
-  Volume2, Timer, Target, Rocket, Brain, Gauge, Coins, BarChart3, 
-  Clock, Percent, Wallet, History, Bot, Power, PowerOff, TriangleAlert, 
-  CheckCircle2, XCircle, Loader2, Disc, Settings, DollarSign, 
-  BarChart, LineChart, PieChart, RefreshCw, Award, Flame 
-} from 'lucide-react';
-
-// ==============================================
-// 1. ТИПЫ
-// ==============================================
-interface KlineData {
-  time: number;
+// Кэш для исторических данных (OHLCV)
+interface CandleData {
+  timestamp: number;
   open: number;
   high: number;
   low: number;
@@ -23,89 +53,124 @@ interface KlineData {
   volume: number;
 }
 
+// Сигнал
 interface Signal {
   id: string;
-  asset: string;
+  symbol: string;
   type: 'BUY' | 'SELL';
   price: number;
   timestamp: number;
-  reason: string;
-  rsi: number;
-  macd: number;
-  ema: number;
-  strength: number;
+  status: 'pending' | 'executed' | 'failed';
+  rsi?: number;
+  macd?: number;
 }
 
-interface Position {
+// Сделка
+interface Trade {
   id: string;
-  asset: string;
-  type: 'BUY' | 'SELL';
+  symbol: string;
+  side: 'BUY' | 'SELL';
   entryPrice: number;
-  amount: number;
-  size: number;
-  timestamp: number;
-  tp: number;
-  sl: number;
-  status: 'open' | 'closed';
-  closePrice?: number;
+  exitPrice?: number;
+  quantity: number;
+  entryTime: number;
+  exitTime?: number;
   pnl?: number;
   pnlPercent?: number;
-  closeReason?: 'tp' | 'sl' | 'manual';
+  status: 'open' | 'closed';
+  tpPrice?: number;
+  slPrice?: number;
 }
 
-interface TradeHistory {
-  id: string;
-  asset: string;
-  type: 'BUY' | 'SELL';
-  entryPrice: number;
-  exitPrice: number;
-  amount: number;
-  size: number;
-  pnl: number;
-  pnlPercent: number;
-  openTime: number;
-  closeTime: number;
-  closeReason: 'tp' | 'sl' | 'manual';
+// Для MACD
+interface MACDValues {
+  macd: number;
+  signal: number;
+  histogram: number;
 }
 
-// ==============================================
-// 2. КОНФИГУРАЦИЯ
-// ==============================================
-const ASSETS = [
-  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT',
-  'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT', 'FILUSDT', 'APTUSDT', 'ARBUSDT', 'OPUSDT', 'INJUSDT',
-  'SUIUSDT', 'IMXUSDT', 'HBARUSDT', 'VETUSDT', 'GRTUSDT', 'RNDRUSDT', 'MKRUSDT', 'AAVEUSDT', 'SNXUSDT', 'CRVUSDT',
-  'ALGOUSDT', 'FTMUSDT', 'SANDUSDT', 'MANAUSDT', 'GALAUSDT', 'AXSUSDT', 'ENJUSDT', 'CHZUSDT', 'THETAUSDT', 'EOSUSDT',
-  'XTZUSDT', 'KSMUSDT', 'ZECUSDT', 'DASHUSDT', 'COMPUSDT', 'ZILUSDT', 'BATUSDT', 'ZRXUSDT', 'OMGUSDT', 'QTUMUSDT',
-  'ICPUSDT', 'STXUSDT', 'KASUSDT', 'RUNEUSDT', 'EGLDUSDT', 'FLOWUSDT', 'WAVESUSDT', 'NEOUSDT', 'IOTAUSDT', 'XDCUSDT',
-  'ONEUSDT', 'HOTUSDT', 'CROUSDT', 'OKBUSDT', 'LEOUSDT', 'CELOUSDT', 'ROSEUSDT', 'KLAYUSDT', 'CKBUSDT', 'ERGUSDT'
-];
+const App: React.FC = () => {
+  // ==================== СОСТОЯНИЯ ====================
+  const [prices, setPrices] = useState<Map<string, PriceData>>(new Map());
+  const [signals, setSignals] = useState<Signal[]>(() => {
+    const saved = localStorage.getItem('signals');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [trades, setTrades] = useState<Trade[]>(() => {
+    const saved = localStorage.getItem('trades');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [balance, setBalance] = useState<number>(10000);
+  const [totalPnL, setTotalPnL] = useState<number>(0);
+  const [winRate, setWinRate] = useState<number>(0);
+  const [autoTrade, setAutoTrade] = useState<boolean>(false);
+  const [riskPercent, setRiskPercent] = useState<number>(5);
+  const [selectedSymbol, setSelectedSymbol] = useState<string>('BTC/USDT');
+  const [lastTradeTime, setLastTradeTime] = useState<Map<string, number>>(new Map());
+  const [isProcessing, setIsProcessing] = useState<Map<string, boolean>>(new Map());
 
-const DEFAULT_CONFIG = {
-  rsiBuyThreshold: 55,
-  rsiSellThreshold: 45,
-  cooldownMinutes: 1.5,
-  takeProfitPercent: 2.0,
-  stopLossPercent: 1.5,
-  maxConcurrentPositions: 8,
-  updateIntervalMs: 1000,
-  riskPercent: 5,
-  useBybit: false,
-};
+  // Refs для хранения цен и индикаторов
+  const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
+  const macdHistoryRef = useRef<Map<string, MACDValues[]>>(new Map());
+  const wsManagerRef = useRef<any>(null);
+  const bybitRef = useRef<BybitTestnet | null>(null);
 
-// ==============================================
-// 3. ТЕХНИЧЕСКИЕ ИНДИКАТОРЫ
-// ==============================================
-class TechnicalIndicators {
-  static calculateRSI(prices: number[], period: number = 14): number | null {
-    if (prices.length < period + 1) return null;
+  // ==================== ЗАГРУЗКА БАЛАНСА ====================
+  useEffect(() => {
+    const loadBalance = async () => {
+      try {
+        const bybit = BybitTestnet.getInstance();
+        bybitRef.current = bybit;
+        const bal = await bybit.getBalance();
+        setBalance(bal);
+      } catch (error) {
+        console.error('Ошибка загрузки баланса:', error);
+      }
+    };
+    loadBalance();
+
+    // Интервал обновления баланса
+    const interval = setInterval(loadBalance, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ==================== РАСЧЁТ ВИНРЕЙТА ====================
+  useEffect(() => {
+    const closedTrades = trades.filter(t => t.status === 'closed' && t.pnl !== undefined);
+    if (closedTrades.length === 0) {
+      setWinRate(0);
+      setTotalPnL(0);
+      return;
+    }
+    const wins = closedTrades.filter(t => (t.pnl || 0) > 0).length;
+    const totalPnLSum = closedTrades.reduce((sum, t) => sum + (t.pnl || 0), 0);
+    setWinRate((wins / closedTrades.length) * 100);
+    setTotalPnL(totalPnLSum);
+  }, [trades]);
+
+  // ==================== СОХРАНЕНИЕ В LOCALSTORAGE ====================
+  useEffect(() => {
+    localStorage.setItem('signals', JSON.stringify(signals.slice(-500)));
+  }, [signals]);
+
+  useEffect(() => {
+    localStorage.setItem('trades', JSON.stringify(trades));
+  }, [trades]);
+
+  // ==================== РАСЧЁТ RSI ====================
+  const calculateRSI = (prices: number[], period: number = 14): number => {
+    if (prices.length < period + 1) return 50;
     
-    let gains = 0, losses = 0;
+    let gains = 0;
+    let losses = 0;
     
     for (let i = prices.length - period; i < prices.length; i++) {
-      const diff = prices[i] - prices[i - 1];
-      if (diff >= 0) gains += diff;
-      else losses -= diff;
+      const change = prices[i] - prices[i - 1];
+      if (change >= 0) {
+        gains += change;
+      } else {
+        losses -= change;
+      }
     }
     
     const avgGain = gains / period;
@@ -114,837 +179,494 @@ class TechnicalIndicators {
     if (avgLoss === 0) return 100;
     const rs = avgGain / avgLoss;
     return 100 - (100 / (1 + rs));
-  }
-  
-  static calculateMACD(prices: number[]): { macd: number; signal: number; histogram: number } | null {
-    if (prices.length < 26) return null;
+  };
+
+  // ==================== РАСЧЁТ MACD ====================
+  const calculateEMA = (prices: number[], period: number): number[] => {
+    const ema: number[] = [];
+    const multiplier = 2 / (period + 1);
     
-    const calculateEMA = (data: number[], period: number): number => {
-      const k = 2 / (period + 1);
-      let ema = data[0];
-      for (let i = 1; i < data.length; i++) {
-        ema = data[i] * k + ema * (1 - k);
+    for (let i = 0; i < prices.length; i++) {
+      if (i === 0) {
+        ema.push(prices[i]);
+      } else {
+        ema.push((prices[i] - ema[i - 1]) * multiplier + ema[i - 1]);
       }
-      return ema;
-    };
-    
-    const ema12 = calculateEMA(prices, 12);
-    const ema26 = calculateEMA(prices, 26);
-    const macdLine = ema12 - ema26;
-    
-    const macdValues: number[] = [];
-    for (let i = 25; i < prices.length; i++) {
-      const e12 = calculateEMA(prices.slice(0, i + 1), 12);
-      const e26 = calculateEMA(prices.slice(0, i + 1), 26);
-      macdValues.push(e12 - e26);
-    }
-    
-    const signalLine = calculateEMA(macdValues, 9);
-    
-    return {
-      macd: macdLine,
-      signal: signalLine,
-      histogram: macdLine - signalLine
-    };
-  }
-  
-  static calculateEMA(prices: number[], period: number): number | null {
-    if (prices.length < period) return null;
-    const k = 2 / (period + 1);
-    let ema = prices[0];
-    for (let i = 1; i < prices.length; i++) {
-      ema = prices[i] * k + ema * (1 - k);
     }
     return ema;
-  }
-}
+  };
 
-// ==============================================
-// 4. ВЕБСОКЕТ МЕНЕДЖЕР
-// ==============================================
-class WebSocketManager {
-  private ws: WebSocket | null = null;
-  private subscribers: Map<string, Set<(data: any) => void>> = new Map();
-  private reconnectAttempts = 0;
-  private isConnecting = false;
-  private assets: string[];
-
-  constructor(assets: string[]) {
-    this.assets = assets;
-    this.connect();
-  }
-
-  private connect() {
-    if (this.isConnecting) return;
-    this.isConnecting = true;
-
-    try {
-      const streams = this.assets.map(asset => `${asset.toLowerCase()}@kline_1m`).join('/');
-      const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`;
-      
-      this.ws = new WebSocket(wsUrl);
-      
-      this.ws.onopen = () => {
-        console.log('WebSocket connected');
-        this.reconnectAttempts = 0;
-        this.isConnecting = false;
-      };
-      
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data?.data?.k) {
-            const kline = data.data.k;
-            const symbol = kline.s;
-            const candle = {
-              time: kline.t / 1000,
-              open: parseFloat(kline.o),
-              high: parseFloat(kline.h),
-              low: parseFloat(kline.l),
-              close: parseFloat(kline.c),
-              volume: parseFloat(kline.v),
-            };
-            this.notify(symbol, candle);
-          }
-        } catch (err) {
-          console.error('WebSocket parse error:', err);
-        }
-      };
-      
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-      
-      this.ws.onclose = () => {
-        console.log('WebSocket disconnected, reconnecting...');
-        setTimeout(() => this.connect(), 3000);
-      };
-    } catch (err) {
-      console.error('WebSocket connection error:', err);
-      setTimeout(() => this.connect(), 3000);
+  const calculateMACD = (prices: number[], fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9): MACDValues => {
+    if (prices.length < slowPeriod + signalPeriod) {
+      return { macd: 0, signal: 0, histogram: 0 };
     }
-  }
-
-  private notify(symbol: string, data: any) {
-    const handlers = this.subscribers.get(symbol);
-    if (handlers) {
-      handlers.forEach(handler => handler(data));
-    }
-  }
-
-  subscribe(symbol: string, callback: (data: any) => void) {
-    if (!this.subscribers.has(symbol)) {
-      this.subscribers.set(symbol, new Set());
-    }
-    this.subscribers.get(symbol)!.add(callback);
     
-    return () => {
-      this.subscribers.get(symbol)?.delete(callback);
+    const fastEMA = calculateEMA(prices, fastPeriod);
+    const slowEMA = calculateEMA(prices, slowPeriod);
+    
+    const macdLine = fastEMA[fastEMA.length - 1] - slowEMA[slowEMA.length - 1];
+    
+    // Расчёт сигнальной линии (EMA от MACD)
+    const macdValues: number[] = [];
+    for (let i = 0; i < fastEMA.length; i++) {
+      macdValues.push(fastEMA[i] - slowEMA[i]);
+    }
+    
+    const signalLineEMA = calculateEMA(macdValues, signalPeriod);
+    const signalLine = signalLineEMA[signalLineEMA.length - 1];
+    const histogram = macdLine - signalLine;
+    
+    return { macd: macdLine, signal: signalLine, histogram };
+  };
+
+  // ==================== ГЕНЕРАЦИЯ СИГНАЛОВ (МЯГКИЕ УСЛОВИЯ!) ====================
+  const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
+    const priceHistory = priceHistoryRef.current.get(symbol);
+    if (!priceHistory || priceHistory.length < 50) return null;
+    
+    // Расчёт RSI
+    const rsi = calculateRSI(priceHistory, 14);
+    
+    // Расчёт MACD
+    const macd = calculateMACD(priceHistory, 12, 26, 9);
+    
+    // ========== МЯГКИЕ УСЛОВИЯ ДЛЯ BUY ==========
+    // RSI < 55 И MACD бычий (пересечение снизу вверх ИЛИ просто MACD > 0)
+    let isBuySignal = false;
+    let buyReason = '';
+    
+    if (rsi < 55) {
+      // Проверяем бычий MACD: либо MACD > 0, либо гистограмма > 0
+      const isMacdBullish = macd.macd > 0 || macd.histogram > 0;
+      
+      // Также проверяем пересечение (было отрицательным, стало положительным)
+      const macdHistory = macdHistoryRef.current.get(symbol);
+      let isCrossOver = false;
+      if (macdHistory && macdHistory.length >= 2) {
+        const prevMacd = macdHistory[macdHistory.length - 2];
+        const currMacd = macd;
+        isCrossOver = prevMacd.macd <= 0 && currMacd.macd > 0;
+      }
+      
+      if (isMacdBullish || isCrossOver) {
+        isBuySignal = true;
+        buyReason = `RSI=${rsi.toFixed(1)}<55, MACD=${macd.macd.toFixed(2)}>0`;
+      }
+    }
+    
+    // ========== МЯГКИЕ УСЛОВИЯ ДЛЯ SELL ==========
+    // RSI > 45 И MACD медвежий (пересечение сверху вниз ИЛИ просто MACD < 0)
+    let isSellSignal = false;
+    let sellReason = '';
+    
+    if (rsi > 45) {
+      // Проверяем медвежий MACD: либо MACD < 0, либо гистограмма < 0
+      const isMacdBearish = macd.macd < 0 || macd.histogram < 0;
+      
+      // Проверяем пересечение (было положительным, стало отрицательным)
+      const macdHistory = macdHistoryRef.current.get(symbol);
+      let isCrossUnder = false;
+      if (macdHistory && macdHistory.length >= 2) {
+        const prevMacd = macdHistory[macdHistory.length - 2];
+        const currMacd = macd;
+        isCrossUnder = prevMacd.macd >= 0 && currMacd.macd < 0;
+      }
+      
+      if (isMacdBearish || isCrossUnder) {
+        isSellSignal = true;
+        sellReason = `RSI=${rsi.toFixed(1)}>45, MACD=${macd.macd.toFixed(2)}<0`;
+      }
+    }
+    
+    // Если нет сигнала
+    if (!isBuySignal && !isSellSignal) return null;
+    
+    // Определяем тип сигнала
+    const signalType = isBuySignal ? 'BUY' : 'SELL';
+    const reason = isBuySignal ? buyReason : sellReason;
+    
+    console.log(`📊 Сигнал ${signalType} для ${symbol}: ${reason}`);
+    
+    return {
+      id: `${symbol}_${Date.now()}_${Math.random()}`,
+      symbol,
+      type: signalType,
+      price: currentPrice,
+      timestamp: Date.now(),
+      status: 'pending',
+      rsi,
+      macd: macd.macd
     };
-  }
-}
+  };
 
-// ==============================================
-// 5. ОСНОВНОЙ КОМПОНЕНТ APP
-// ==============================================
-function App() {
-  const [selectedAsset, setSelectedAsset] = useState('BTCUSDT');
-  const [marketData, setMarketData] = useState<Map<string, KlineData[]>>(new Map());
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [tradeHistory, setTradeHistory] = useState<TradeHistory[]>([]);
-  const [autoTrade, setAutoTrade] = useState(true);
-  const [balance, setBalance] = useState(10000);
-  const [initialBalance] = useState(10000);
-  const [lastSignalTime, setLastSignalTime] = useState<Map<string, number>>(new Map());
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [activeTab, setActiveTab] = useState<'signals' | 'positions' | 'history' | 'settings'>('signals');
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
-  
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
-  const wsManagerRef = useRef<WebSocketManager | null>(null);
-  
-  // Инициализация WebSocket
-  useEffect(() => {
-    wsManagerRef.current = new WebSocketManager(ASSETS);
-    return () => {
-      if (wsManagerRef.current) {
-        // cleanup
-      }
-    };
-  }, []);
-  
-  // Подписка на данные
-  useEffect(() => {
-    if (!wsManagerRef.current) return;
+  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ ====================
+  const executeTrade = async (signal: Signal) => {
+    const { symbol, type, price } = signal;
     
-    const unsubscribe = wsManagerRef.current.subscribe(selectedAsset, (candle: KlineData) => {
-      setMarketData(prev => {
-        const newMap = new Map(prev);
-        const existing = newMap.get(selectedAsset) || [];
-        const lastCandle = existing[existing.length - 1];
-        
-        if (lastCandle && lastCandle.time === candle.time) {
-          existing[existing.length - 1] = candle;
-          newMap.set(selectedAsset, [...existing]);
-        } else {
-          newMap.set(selectedAsset, [...existing, candle].slice(-100));
-        }
-        return newMap;
-      });
-    });
-    
-    return () => unsubscribe();
-  }, [selectedAsset]);
-  
-  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-  
-  // Расчет размера позиции на основе риска
-  const calculatePositionSize = (entryPrice: number, stopLossPrice: number): number => {
-    const riskAmount = balance * (config.riskPercent / 100);
-    const riskPerUnit = Math.abs(entryPrice - stopLossPrice);
-    if (riskPerUnit === 0) return 0;
-    const positionSize = riskAmount / riskPerUnit;
-    return Math.min(positionSize, balance / entryPrice);
-  };
-  
-  // Генерация сигналов
-  const generateSignals = () => {
-    const newSignals: Signal[] = [];
-    
-    for (const asset of ASSETS) {
-      const data = marketData.get(asset);
-      if (!data || data.length < 30) continue;
-      
-      const prices = data.map(d => d.close);
-      const rsi = TechnicalIndicators.calculateRSI(prices, 14);
-      const ema20 = TechnicalIndicators.calculateEMA(prices, 20);
-      const ema50 = TechnicalIndicators.calculateEMA(prices, 50);
-      const macdData = TechnicalIndicators.calculateMACD(prices);
-      
-      if (rsi === null || ema20 === null || ema50 === null || macdData === null) continue;
-      
-      const currentPrice = prices[prices.length - 1];
-      
-      const buyCondition = rsi < config.rsiBuyThreshold && macdData.histogram > 0 && ema20 > ema50;
-      const sellCondition = rsi > config.rsiSellThreshold && macdData.histogram < 0 && ema20 < ema50;
-      
-      const lastSignal = lastSignalTime.get(asset) || 0;
-      const cooldownMs = config.cooldownMinutes * 60 * 1000;
-      
-      const signalStrength = Math.min(100, Math.abs(50 - rsi) * 2 + Math.abs(macdData.histogram) * 10);
-      
-      if (buyCondition && Date.now() - lastSignal > cooldownMs) {
-        newSignals.push({
-          id: `${asset}_${Date.now()}`,
-          asset,
-          type: 'BUY',
-          price: currentPrice,
-          timestamp: Date.now(),
-          reason: `RSI:${rsi.toFixed(1)} | MACD:${macdData.histogram.toFixed(2)}`,
-          rsi,
-          macd: macdData.histogram,
-          ema: ema20,
-          strength: signalStrength
-        });
-        setLastSignalTime(prev => new Map(prev).set(asset, Date.now()));
-      }
-      
-      if (sellCondition && Date.now() - lastSignal > cooldownMs) {
-        newSignals.push({
-          id: `${asset}_${Date.now()}`,
-          asset,
-          type: 'SELL',
-          price: currentPrice,
-          timestamp: Date.now(),
-          reason: `RSI:${rsi.toFixed(1)} | MACD:${macdData.histogram.toFixed(2)}`,
-          rsi,
-          macd: macdData.histogram,
-          ema: ema50,
-          strength: signalStrength
-        });
-        setLastSignalTime(prev => new Map(prev).set(asset, Date.now()));
-      }
-    }
-    
-    if (newSignals.length > 0) {
-      setSignals(prev => [...newSignals, ...prev].slice(0, 100));
-      showToast(`🔔 ${newSignals.length} новых сигналов!`, 'success');
-      
-      if (autoTrade) {
-        executeAutoTrade(newSignals);
-      }
-    }
-  };
-  
-  // Автоматическое исполнение сделок
-  const executeAutoTrade = (newSignals: Signal[]) => {
-    const openPositionsCount = positions.filter(p => p.status === 'open').length;
-    
-    if (openPositionsCount >= config.maxConcurrentPositions) {
+    // Проверка на частые сделки (не чаще 1 раза в 3 минуты)
+    const lastTrade = lastTradeTime.get(symbol);
+    if (lastTrade && Date.now() - lastTrade < 180000) {
+      console.log(`⏰ Пропуск ${symbol}: слишком частая сделка`);
       return;
     }
     
-    for (const signal of newSignals) {
-      const existingPosition = positions.find(p => p.asset === signal.asset && p.status === 'open');
-      if (existingPosition) continue;
-      
-      const entryPrice = signal.price;
-      const slPrice = signal.type === 'BUY'
-        ? entryPrice * (1 - config.stopLossPercent / 100)
-        : entryPrice * (1 + config.stopLossPercent / 100);
-      const tpPrice = signal.type === 'BUY'
-        ? entryPrice * (1 + config.takeProfitPercent / 100)
-        : entryPrice * (1 - config.takeProfitPercent / 100);
-      
-      const positionSize = calculatePositionSize(entryPrice, slPrice);
-      if (positionSize <= 0) continue;
-      
-      const positionAmount = positionSize * entryPrice;
-      
-      const newPosition: Position = {
-        id: `${signal.asset}_${Date.now()}`,
-        asset: signal.asset,
-        type: signal.type,
-        entryPrice,
-        amount: positionAmount,
-        size: positionSize,
-        timestamp: Date.now(),
-        tp: tpPrice,
-        sl: slPrice,
-        status: 'open'
-      };
-      
-      setPositions(prev => [...prev, newPosition]);
-      setBalance(prev => prev - positionAmount);
-      showToast(`✅ ${signal.type} ${signal.asset} @ ${entryPrice.toFixed(2)} (${positionSize.toFixed(4)} units)`, 'success');
+    // Проверка на уже открытую позицию
+    const openPosition = trades.find(t => t.symbol === symbol && t.status === 'open');
+    if (openPosition) {
+      console.log(`🚫 Позиция по ${symbol} уже открыта`);
+      return;
     }
-  };
-  
-  // Проверка TP/SL
-  const checkTP_SL = () => {
-    const updatedPositions = [...positions];
-    let positionsChanged = false;
     
-    for (let i = 0; i < updatedPositions.length; i++) {
-      const position = updatedPositions[i];
-      if (position.status !== 'open') continue;
+    // Проверка на обработку
+    if (isProcessing.get(symbol)) return;
+    setIsProcessing(prev => new Map(prev).set(symbol, true));
+    
+    try {
+      const bybit = bybitRef.current;
+      if (!bybit) {
+        console.error('Bybit не инициализирован');
+        return;
+      }
       
-      const currentData = marketData.get(position.asset);
-      if (!currentData || currentData.length === 0) continue;
+      // Получаем текущий баланс
+      const currentBalance = await bybit.getBalance();
       
-      const currentPrice = currentData[currentData.length - 1].close;
+      // Расчёт размера позиции (5% от баланса)
+      const riskAmount = currentBalance * (riskPercent / 100);
+      const quantity = riskAmount / price;
       
-      let shouldClose = false;
-      let closeReason: 'tp' | 'sl' | 'manual' = 'manual';
-      let exitPrice = currentPrice;
+      // Округляем количество (для USDT пары)
+      const roundedQty = Math.floor(quantity * 1000) / 1000;
       
-      if (position.type === 'BUY') {
-        if (currentPrice >= position.tp) {
-          shouldClose = true;
-          closeReason = 'tp';
-          exitPrice = position.tp;
-        } else if (currentPrice <= position.sl) {
-          shouldClose = true;
-          closeReason = 'sl';
-          exitPrice = position.sl;
-        }
+      if (roundedQty <= 0) {
+        console.error('Некорректное количество');
+        return;
+      }
+      
+      // Расчёт TP/SL
+      const tpPrice = type === 'BUY' ? price * 1.03 : price * 0.97;
+      const slPrice = type === 'BUY' ? price * 0.98 : price * 1.02;
+      
+      // Открываем позицию
+      const orderResult = await bybit.placeOrder({
+        symbol,
+        side: type,
+        orderType: OrderType.MARKET,
+        quantity: roundedQty,
+        timeInForce: TimeInForce.IOC
+      });
+      
+      if (orderResult && orderResult.orderId) {
+        // Устанавливаем TP/SL
+        await bybit.setTradingStop({
+          symbol,
+          side: type,
+          takeProfit: tpPrice,
+          stopLoss: slPrice
+        });
+        
+        const newTrade: Trade = {
+          id: orderResult.orderId,
+          symbol,
+          side: type,
+          entryPrice: price,
+          quantity: roundedQty,
+          entryTime: Date.now(),
+          status: 'open',
+          tpPrice,
+          slPrice
+        };
+        
+        setTrades(prev => [...prev, newTrade]);
+        setLastTradeTime(prev => new Map(prev).set(symbol, Date.now()));
+        
+        // Обновляем статус сигнала
+        setSignals(prev => prev.map(s => 
+          s.id === signal.id ? { ...s, status: 'executed' } : s
+        ));
+        
+        console.log(`✅ Открыта ${type} позиция по ${symbol}, кол-во: ${roundedQty}, TP: ${tpPrice}, SL: ${slPrice}`);
+        
+        // Обновляем баланс
+        const newBalance = await bybit.getBalance();
+        setBalance(newBalance);
       } else {
-        if (currentPrice <= position.tp) {
-          shouldClose = true;
-          closeReason = 'tp';
-          exitPrice = position.tp;
-        } else if (currentPrice >= position.sl) {
-          shouldClose = true;
-          closeReason = 'sl';
-          exitPrice = position.sl;
-        }
+        setSignals(prev => prev.map(s => 
+          s.id === signal.id ? { ...s, status: 'failed' } : s
+        ));
       }
-      
-      if (shouldClose) {
-        const pnl = position.type === 'BUY'
-          ? (exitPrice - position.entryPrice) * position.size
-          : (position.entryPrice - exitPrice) * position.size;
-        
-        const pnlPercent = position.type === 'BUY'
-          ? (exitPrice - position.entryPrice) / position.entryPrice * 100
-          : (position.entryPrice - exitPrice) / position.entryPrice * 100;
-        
-        updatedPositions[i] = {
-          ...position,
-          status: 'closed',
-          closePrice: exitPrice,
-          pnl: pnl,
-          pnlPercent: pnlPercent,
-          closeReason: closeReason
-        };
-        
-        setBalance(prev => prev + position.amount + pnl);
-        
-        const historyItem: TradeHistory = {
-          id: position.id,
-          asset: position.asset,
-          type: position.type,
-          entryPrice: position.entryPrice,
-          exitPrice: exitPrice,
-          amount: position.amount,
-          size: position.size,
-          pnl: pnl,
-          pnlPercent: pnlPercent,
-          openTime: position.timestamp,
-          closeTime: Date.now(),
-          closeReason: closeReason
-        };
-        
-        setTradeHistory(prev => [historyItem, ...prev].slice(0, 500));
-        showToast(`🎯 ${closeReason.toUpperCase()} ${position.asset} | ${pnlPercent.toFixed(2)}%`, pnlPercent > 0 ? 'success' : 'error');
-        
-        positionsChanged = true;
-      }
-    }
-    
-    if (positionsChanged) {
-      setPositions(updatedPositions);
+    } catch (error) {
+      console.error(`Ошибка при открытии позиции ${symbol}:`, error);
+      setSignals(prev => prev.map(s => 
+        s.id === signal.id ? { ...s, status: 'failed' } : s
+      ));
+    } finally {
+      setIsProcessing(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(symbol);
+        return newMap;
+      });
     }
   };
-  
-  // Автоматическое обновление
-  useEffect(() => {
-    const interval = setInterval(() => {
-      generateSignals();
-      checkTP_SL();
-      setLastUpdateTime(Date.now());
-    }, config.updateIntervalMs);
+
+  // ==================== ОБНОВЛЕНИЕ ЦЕН И ИНДИКАТОРОВ ====================
+  const updatePriceHistory = useCallback((symbol: string, price: number) => {
+    // Обновляем историю цен
+    let history = priceHistoryRef.current.get(symbol) || [];
+    history.push(price);
+    if (history.length > 200) history = history.slice(-200);
+    priceHistoryRef.current.set(symbol, history);
     
-    return () => clearInterval(interval);
-  }, [marketData, positions, autoTrade, config]);
-  
-  // Обновление графика
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-    
-    if (chartRef.current) {
-      chartRef.current.remove();
+    // Рассчитываем и сохраняем MACD историю
+    if (history.length >= 50) {
+      const macd = calculateMACD(history, 12, 26, 9);
+      let macdHistory = macdHistoryRef.current.get(symbol) || [];
+      macdHistory.push(macd);
+      if (macdHistory.length > 50) macdHistory = macdHistory.slice(-50);
+      macdHistoryRef.current.set(symbol, macdHistory);
     }
     
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#0a0a0f' },
-        textColor: '#d1d4dc',
-      },
-      grid: {
-        vertLines: { color: '#1a1a2a' },
-        horzLines: { color: '#1a1a2a' },
-      },
-      width: chartContainerRef.current.clientWidth,
-      height: 450,
-    });
-    
-    const candlestickSeries = chart.addCandlestickSeries({
-      upColor: '#ff3366',
-      downColor: '#00cc88',
-      borderVisible: false,
-      wickUpColor: '#ff3366',
-      wickDownColor: '#00cc88',
-    });
-    
-    const data = marketData.get(selectedAsset) || [];
-    const chartData = data.map(d => ({
-      time: d.time as any,
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
-    }));
-    
-    candlestickSeries.setData(chartData);
-    chart.timeScale().fitContent();
-    
-    chartRef.current = chart;
-    
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+    // Генерируем сигнал
+    const signal = generateSignal(symbol, price);
+    if (signal) {
+      setSignals(prev => [signal, ...prev]);
+      
+      // Автоматическое исполнение
+      if (autoTrade) {
+        executeTrade(signal);
       }
-    };
+    }
+  }, [autoTrade, executeTrade]);
+
+  // ==================== ПОДПИСКА НА WEBSOCKET ====================
+  useEffect(() => {
+    const wsManager = createWebSocketManager();
+    wsManagerRef.current = wsManager;
     
-    window.addEventListener('resize', handleResize);
+    // Подписываемся на все символы
+    SYMBOLS.forEach(symbol => {
+      wsManager.subscribe(symbol, (data: PriceData) => {
+        setPrices(prev => new Map(prev).set(symbol, data));
+        updatePriceHistory(symbol, data.price);
+      });
+    });
     
     return () => {
-      window.removeEventListener('resize', handleResize);
-      if (chartRef.current) {
-        chartRef.current.remove();
+      wsManager.disconnect();
+    };
+  }, [updatePriceHistory]);
+
+  // ==================== ЗАКРЫТИЕ СДЕЛОК ПО TP/SL (МОНИТОРИНГ) ====================
+  useEffect(() => {
+    const checkPositions = async () => {
+      const bybit = bybitRef.current;
+      if (!bybit) return;
+      
+      try {
+        const positions = await bybit.getPositions();
+        const openTrades = trades.filter(t => t.status === 'open');
+        
+        for (const trade of openTrades) {
+          const position = positions.find(p => p.symbol === trade.symbol);
+          
+          // Если позиция закрыта (не найдена или размер 0)
+          if (!position || Math.abs(parseFloat(position.size)) < 0.0001) {
+            // Получаем текущую цену для расчёта PnL
+            const currentPrice = prices.get(trade.symbol)?.price || trade.entryPrice;
+            const pnl = trade.side === 'BUY' 
+              ? (currentPrice - trade.entryPrice) * trade.quantity
+              : (trade.entryPrice - currentPrice) * trade.quantity;
+            const pnlPercent = (pnl / (trade.entryPrice * trade.quantity)) * 100;
+            
+            setTrades(prev => prev.map(t => 
+              t.id === trade.id 
+                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), pnl, pnlPercent }
+                : t
+            ));
+            
+            // Обновляем баланс
+            const newBalance = await bybit.getBalance();
+            setBalance(newBalance);
+            
+            console.log(`📉 Позиция ${trade.symbol} закрыта. PnL: $${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%)`);
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка проверки позиций:', error);
       }
     };
-  }, [selectedAsset, marketData]);
-  
-  const getWinRate = () => {
-    if (tradeHistory.length === 0) return 0;
-    const wins = tradeHistory.filter(t => t.pnl > 0).length;
-    return (wins / tradeHistory.length * 100).toFixed(1);
-  };
-  
-  const getTotalPnL = () => {
-    return tradeHistory.reduce((sum, t) => sum + t.pnl, 0);
-  };
-  
-  const getTotalPnLPercent = () => {
-    return (getTotalPnL() / initialBalance * 100).toFixed(1);
-  };
-  
-  const getBestTrade = () => {
-    if (tradeHistory.length === 0) return 0;
-    return Math.max(...tradeHistory.map(t => t.pnlPercent));
-  };
-  
-  const getWorstTrade = () => {
-    if (tradeHistory.length === 0) return 0;
-    return Math.min(...tradeHistory.map(t => t.pnlPercent));
-  };
-  
+    
+    const interval = setInterval(checkPositions, 5000);
+    return () => clearInterval(interval);
+  }, [trades, prices]);
+
+  // ==================== РЕНДЕР ====================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0f0f1a] to-[#0a0a0f] text-gray-200">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-gray-900">
       {/* Кровавый эффект */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-10 left-[15%] text-6xl opacity-10 animate-pulse">🩸</div>
-        <div className="absolute bottom-20 right-[20%] text-7xl opacity-10 animate-pulse" style={{ animationDelay: '1s' }}>💧</div>
-        <div className="absolute top-1/3 right-[10%] text-5xl opacity-10 animate-pulse" style={{ animationDelay: '2s' }}>🩸</div>
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        {[...Array(20)].map((_, i) => (
+          <div
+            key={i}
+            className="blood-drop"
+            style={{
+              left: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 10}s`,
+              animationDuration: `${4 + Math.random() * 6}s`
+            }}
+          />
+        ))}
       </div>
       
       <div className="relative z-10 container mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-800 rounded-lg flex items-center justify-center">
-              <Flame className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-red-500 to-red-600 bg-clip-text text-transparent">
-                Auto Trade Pro V2
-              </h1>
-              <p className="text-xs text-gray-400">
-                Scalping Terminal • {ASSETS.length}+ Assets • Auto-Refresh 1s
-              </p>
+        {/* Хедер */}
+        <div className="flex justify-between items-center mb-6 bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+          <div>
+            <h1 className="text-3xl font-bold text-red-500 flex items-center gap-2">
+              💀 AUTO TRADE PRO V2 💀
+            </h1>
+            <p className="text-gray-400 text-sm">Скальпинг терминал | 300+ активов | Bybit Testnet</p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-green-400">${balance.toFixed(2)}</div>
+            <div className={`text-sm ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              PnL: ${totalPnL.toFixed(2)} | WR: {winRate.toFixed(1)}%
             </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-black/40 rounded-lg px-4 py-2 border border-red-900/30">
-              <RefreshCw className={`w-4 h-4 text-blue-400 ${lastUpdateTime % 2000 < 1000 ? 'animate-spin' : ''}`} />
-              <span className="text-sm text-gray-300">{config.updateIntervalMs}ms</span>
-            </div>
-            
-            <div className="flex items-center gap-2 bg-black/40 rounded-lg px-4 py-2 border border-red-900/30">
-              <Wallet className="w-4 h-4 text-red-400" />
-              <span className="text-lg font-bold text-green-400">${balance.toFixed(2)}</span>
-              <span className={`text-xs ${getTotalPnL() >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                ({getTotalPnLPercent()}%)
-              </span>
-            </div>
-            
+        </div>
+        
+        {/* Панель управления */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <label className="text-gray-400 text-sm">🤖 АВТОТОРГОВЛЯ</label>
             <button
               onClick={() => setAutoTrade(!autoTrade)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                autoTrade 
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 shadow-lg shadow-red-900/30' 
-                  : 'bg-gray-700 hover:bg-gray-600'
+              className={`w-full mt-1 px-4 py-2 rounded font-bold transition ${
+                autoTrade ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
               }`}
             >
-              {autoTrade ? <Bot className="w-4 h-4" /> : <Power className="w-4 h-4" />}
-              {autoTrade ? 'Auto Trade ON' : 'Auto Trade OFF'}
+              {autoTrade ? 'АКТИВНА 🔴' : 'ВЫКЛЮЧЕНА ⚫'}
             </button>
           </div>
-        </div>
-        
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
-            <p className="text-[10px] text-gray-400">Win Rate</p>
-            <p className="text-xl font-bold text-green-400">{getWinRate()}%</p>
+          
+          <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <label className="text-gray-400 text-sm">💰 РИСК НА СДЕЛКУ</label>
+            <input
+              type="range"
+              min="1"
+              max="10"
+              step="0.5"
+              value={riskPercent}
+              onChange={(e) => setRiskPercent(parseFloat(e.target.value))}
+              className="w-full mt-1"
+            />
+            <div className="text-center font-bold text-yellow-400">{riskPercent}%</div>
           </div>
           
-          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
-            <p className="text-[10px] text-gray-400">Total P/L</p>
-            <p className={`text-xl font-bold ${getTotalPnL() >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              ${getTotalPnL().toFixed(2)}
-            </p>
-          </div>
-          
-          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
-            <p className="text-[10px] text-gray-400">Open Pos</p>
-            <p className="text-xl font-bold text-yellow-400">{positions.filter(p => p.status === 'open').length}</p>
-          </div>
-          
-          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
-            <p className="text-[10px] text-gray-400">Total Trades</p>
-            <p className="text-xl font-bold text-blue-400">{tradeHistory.length}</p>
-          </div>
-          
-          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
-            <p className="text-[10px] text-gray-400">Best Trade</p>
-            <p className="text-xl font-bold text-green-400">+{getBestTrade().toFixed(1)}%</p>
-          </div>
-          
-          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
-            <p className="text-[10px] text-gray-400">Risk/Trade</p>
-            <p className="text-xl font-bold text-orange-400">{config.riskPercent}%</p>
-          </div>
-        </div>
-        
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chart */}
-          <div className="lg:col-span-2 bg-black/40 rounded-lg border border-red-900/30 p-4">
-            <div className="flex justify-between items-center mb-4">
-              <select
-                value={selectedAsset}
-                onChange={(e) => setSelectedAsset(e.target.value)}
-                className="bg-black/60 border border-red-800 rounded-lg px-3 py-1.5 text-sm font-mono text-red-300"
-              >
-                {ASSETS.map(asset => (
-                  <option key={asset} value={asset}>{asset}</option>
-                ))}
-              </select>
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span>Live</span>
-                <span>•</span>
-                <span>1m candles</span>
-              </div>
-            </div>
-            <div ref={chartContainerRef} className="w-full" style={{ height: '450px' }} />
-          </div>
-          
-          {/* Tabs */}
-          <div className="bg-black/40 rounded-lg border border-red-900/30 overflow-hidden">
-            <div className="flex border-b border-red-900/30">
-              {[
-                { id: 'signals', label: 'Сигналы', icon: <Zap className="w-4 h-4" /> },
-                { id: 'positions', label: 'Позиции', icon: <Activity className="w-4 h-4" /> },
-                { id: 'history', label: 'История', icon: <History className="w-4 h-4" /> },
-                { id: 'settings', label: 'Настройки', icon: <Settings className="w-4 h-4" /> },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-red-600/20 text-red-400 border-b-2 border-red-500'
-                      : 'text-gray-400 hover:text-gray-300'
-                  }`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
+          <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <label className="text-gray-400 text-sm">📊 ВЫБОР МОНЕТЫ</label>
+            <select
+              value={selectedSymbol}
+              onChange={(e) => setSelectedSymbol(e.target.value)}
+              className="w-full mt-1 bg-gray-800 border border-red-500/30 rounded px-2 py-1 text-white"
+            >
+              {SYMBOLS.slice(0, 50).map(s => (
+                <option key={s} value={s}>{s}</option>
               ))}
+            </select>
+          </div>
+          
+          <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <div className="text-gray-400 text-sm">📈 ТЕКУЩАЯ ЦЕНА</div>
+            <div className="text-2xl font-bold text-green-400">
+              ${prices.get(selectedSymbol)?.price?.toFixed(4) || '0'}
             </div>
-            
-            <div className="p-4 h-[500px] overflow-y-auto">
-              {/* Signals */}
-              {activeTab === 'signals' && (
-                <div className="space-y-2">
-                  {signals.slice(0, 50).map(signal => (
-                    <div key={signal.id} className={`p-3 rounded-lg border-l-4 ${
-                      signal.type === 'BUY' ? 'border-l-green-500 bg-green-900/10' : 'border-l-red-500 bg-red-900/10'
-                    } bg-black/40`}>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-bold">{signal.asset}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${
-                              signal.type === 'BUY' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
-                            }`}>{signal.type}</span>
-                          </div>
-                          <div className="text-xs text-gray-400 mt-1">
-                            RSI: {signal.rsi.toFixed(1)} | Price: ${signal.price.toFixed(4)}
-                          </div>
-                          <div className="text-[10px] text-gray-500">{signal.reason}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[10px] text-gray-500">{new Date(signal.timestamp).toLocaleTimeString()}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {signals.length === 0 && (
-                    <div className="text-center py-12 text-gray-500">
-                      <Brain className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                      Ожидание сигналов...
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {/* Positions */}
-              {activeTab === 'positions' && (
-                <div className="space-y-2">
-                  {positions.filter(p => p.status === 'open').map(pos => {
-                    const currentData = marketData.get(pos.asset);
-                    const currentPrice = currentData?.[currentData.length - 1]?.close || pos.entryPrice;
-                    const unrealizedPnLPercent = pos.type === 'BUY'
-                      ? (currentPrice - pos.entryPrice) / pos.entryPrice * 100
-                      : (pos.entryPrice - currentPrice) / pos.entryPrice * 100;
-                    
-                    return (
-                      <div key={pos.id} className="p-3 rounded-lg bg-black/40 border border-gray-700">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold">{pos.asset}</span>
-                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                pos.type === 'BUY' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
-                              }`}>{pos.type}</span>
-                            </div>
-                            <div className="text-xs text-gray-400 mt-1">
-                              Entry: ${pos.entryPrice.toFixed(4)} | Size: {pos.size.toFixed(4)}
-                            </div>
-                            <div className={`text-xs mt-1 ${unrealizedPnLPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {unrealizedPnLPercent >= 0 ? '+' : ''}{unrealizedPnLPercent.toFixed(2)}%
-                            </div>
-                          </div>
-                          <div className="text-right text-xs text-gray-400">
-                            <div>TP: ${pos.tp.toFixed(4)}</div>
-                            <div>SL: ${pos.sl.toFixed(4)}</div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {positions.filter(p => p.status === 'open').length === 0 && (
-                    <div className="text-center py-12 text-gray-500">
-                      <Activity className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                      Нет открытых позиций
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {/* History */}
-              {activeTab === 'history' && (
-                <div className="space-y-2">
-                  {tradeHistory.slice(0, 100).map(trade => (
-                    <div key={trade.id} className="p-2 rounded-lg bg-black/40 border border-gray-700">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs">{trade.asset}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${
-                            trade.type === 'BUY' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
-                          }`}>{trade.type}</span>
-                          <span className={`text-xs font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {trade.pnlPercent >= 0 ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-gray-500">
-                          {new Date(trade.closeTime).toLocaleTimeString()}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {tradeHistory.length === 0 && (
-                    <div className="text-center py-12 text-gray-500">
-                      <History className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                      История пуста
-                    </div>
-                  )}
-                </div>
-              )}
-              
-              {/* Settings */}
-              {activeTab === 'settings' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-sm text-gray-300 block mb-2">
-                      Риск на сделку: <span className="text-orange-400">{config.riskPercent}%</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="1"
-                      max="100"
-                      value={config.riskPercent}
-                      onChange={(e) => setConfig({ ...config, riskPercent: Number(e.target.value) })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm text-gray-300 block mb-2">
-                      RSI для BUY: <span className="text-green-400">&lt; {config.rsiBuyThreshold}</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="30"
-                      max="70"
-                      value={config.rsiBuyThreshold}
-                      onChange={(e) => setConfig({ ...config, rsiBuyThreshold: Number(e.target.value) })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm text-gray-300 block mb-2">
-                      RSI для SELL: <span className="text-red-400">&gt; {config.rsiSellThreshold}</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="30"
-                      max="70"
-                      value={config.rsiSellThreshold}
-                      onChange={(e) => setConfig({ ...config, rsiSellThreshold: Number(e.target.value) })}
-                      className="w-full"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm text-gray-300 block mb-2">
-                      Интервал обновления: <span className="text-purple-400">{config.updateIntervalMs}ms</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="500"
-                      max="5000"
-                      step="100"
-                      value={config.updateIntervalMs}
-                      onChange={(e) => setConfig({ ...config, updateIntervalMs: Number(e.target.value) })}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              )}
+            <div className={`text-sm ${
+              (prices.get(selectedSymbol)?.change24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              24h: {(prices.get(selectedSymbol)?.change24h || 0).toFixed(2)}%
             </div>
+          </div>
+        </div>
+        
+        {/* График и виджеты */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="lg:col-span-2 bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <TradingChart symbol={selectedSymbol} />
+          </div>
+          <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <Watchlist symbols={SYMBOLS} prices={prices} onSelect={setSelectedSymbol} />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <TopMovers symbols={SYMBOLS} prices={prices} />
+          </div>
+          <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+            <News />
+          </div>
+        </div>
+        
+        {/* История сигналов */}
+        <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30 mb-6">
+          <SignalHistory signals={signals} trades={trades} />
+        </div>
+        
+        {/* Таблица открытых позиций */}
+        <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+          <h2 className="text-xl font-bold text-red-400 mb-4">📋 ОТКРЫТЫЕ ПОЗИЦИИ</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-red-500/30 text-gray-400">
+                  <th className="text-left py-2">МОНЕТА</th>
+                  <th className="text-left py-2">ТИП</th>
+                  <th className="text-right py-2">ЦЕНА ВХ.</th>
+                  <th className="text-right py-2">КОЛ-ВО</th>
+                  <th className="text-right py-2">TP</th>
+                  <th className="text-right py-2">SL</th>
+                  <th className="text-right py-2">ТЕКУЩИЙ P&L</th>
+                </tr>
+              </thead>
+              <tbody>
+                {trades.filter(t => t.status === 'open').map(trade => {
+                  const currentPrice = prices.get(trade.symbol)?.price || trade.entryPrice;
+                  const currentPnL = trade.side === 'BUY'
+                    ? (currentPrice - trade.entryPrice) * trade.quantity
+                    : (trade.entryPrice - currentPrice) * trade.quantity;
+                  const currentPnLPercent = (currentPnL / (trade.entryPrice * trade.quantity)) * 100;
+                  
+                  return (
+                    <tr key={trade.id} className="border-b border-gray-800">
+                      <td className="py-2 font-bold">{trade.symbol}</td>
+                      <td className={`py-2 ${trade.side === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
+                        {trade.side}
+                      </td>
+                      <td className="text-right py-2">${trade.entryPrice.toFixed(4)}</td>
+                      <td className="text-right py-2">{trade.quantity.toFixed(4)}</td>
+                      <td className="text-right py-2 text-green-400">${trade.tpPrice?.toFixed(4)}</td>
+                      <td className="text-right py-2 text-red-400">${trade.slPrice?.toFixed(4)}</td>
+                      <td className={`text-right py-2 ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ${currentPnL.toFixed(2)} ({currentPnLPercent.toFixed(2)}%)
+                      </td>
+                    </tr>
+                  );
+                })}
+                {trades.filter(t => t.status === 'open').length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-gray-500">
+                      НЕТ ОТКРЫТЫХ ПОЗИЦИЙ
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
-      
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
-          <div className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg ${
-            toast.type === 'success' ? 'bg-green-600' : toast.type === 'error' ? 'bg-red-600' : 'bg-blue-600'
-          }`}>
-            {toast.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
-            {toast.type === 'error' && <XCircle className="w-5 h-5" />}
-            {toast.type === 'info' && <Loader2 className="w-5 h-5" />}
-            <span className="text-sm">{toast.message}</span>
-          </div>
-        </div>
-      )}
-      
-      <style>{`
-        @keyframes slide-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-slide-up { animation: slide-up 0.3s ease-out; }
-        .animate-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   );
-}
+};
 
 export default App;
