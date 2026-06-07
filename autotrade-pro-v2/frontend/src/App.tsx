@@ -7,19 +7,10 @@ import Watchlist from './components/Watchlist';
 import { createWebSocketManager, PriceData } from './services/websocket';
 import { BybitTestnet, OrderSide, OrderType, TimeInForce } from './services/bybitTestnet';
 
-// ТОЛЬКО РЕАЛЬНЫЕ СИМВОЛЫ НА BINANCE (проверенные)
+// ТОЛЬКО ТОП-10 ГАРАНТИРОВАННО РАБОТАЮЩИХ СИМВОЛОВ
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
-  'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
-  'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
-  'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT',
-  'SUI/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT',
-  'AAVE/USDT', 'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT',
-  'GALA/USDT', 'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'EOS/USDT',
-  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT',
-  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
-  'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT',
-  'WLD/USDT', 'FET/USDT', 'LDO/USDT', 'BLUR/USDT', 'CAKE/USDT'
+  'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT'
 ];
 
 interface Signal {
@@ -51,28 +42,21 @@ interface Trade {
   status: 'open' | 'closed';
 }
 
-interface MACDValues {
-  macd: number;
-  signal: number;
-  histogram: number;
-}
-
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [balance, setBalance] = useState(10000);
-  const [apiConfigured, setApiConfigured] = useState(false);
   const [autoTradeEnabled, setAutoTradeEnabled] = useState(false);
   const [maxRiskPercent, setMaxRiskPercent] = useState(5);
   const [positions, setPositions] = useState<Trade[]>([]);
   const [tradeHistory, setTradeHistory] = useState<Trade[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
+  const [wsConnected, setWsConnected] = useState<Map<string, boolean>>(new Map());
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsManagerRef = useRef<any>(null);
-  const bybitRef = useRef<BybitTestnet | null>(null);
 
   const STOP_LOSS_PERCENT = 2;
   const TAKE_PROFIT_PERCENT = 3;
@@ -87,21 +71,17 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // Имитация баланса (без API)
   useEffect(() => {
-    const loadBalance = async () => {
-      try {
-        const bybit = BybitTestnet.getInstance();
-        bybitRef.current = bybit;
-        const bal = await bybit.getBalance();
-        setBalance(bal);
-      } catch (error) {
-        console.error('Ошибка загрузки баланса:', error);
-      }
-    };
-    loadBalance();
-    const interval = setInterval(loadBalance, 30000);
-    return () => clearInterval(interval);
+    const savedBalance = localStorage.getItem('balance_v2');
+    if (savedBalance) {
+      setBalance(parseFloat(savedBalance));
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('balance_v2', balance.toString());
+  }, [balance]);
 
   useEffect(() => {
     const saved = localStorage.getItem('trades_v2');
@@ -135,7 +115,7 @@ const App: React.FC = () => {
   };
 
   const openBybit = (symbol: string) => {
-    window.open(`https://testnet.bybit.com/trade/${symbol.replace('/', '')}`, '_blank');
+    window.open(`https://www.binance.com/ru/trade/${symbol.replace('/', '_')}`, '_blank');
   };
 
   const calculateRSI = (prices: number[], period: number = 14): number => {
@@ -174,45 +154,25 @@ const App: React.FC = () => {
     return ema;
   };
 
-  const calculateMACD = (prices: number[]): MACDValues => {
-    if (prices.length < 26) return { macd: 0, signal: 0, histogram: 0 };
-    
-    const calculateEMAArray = (data: number[], period: number): number[] => {
-      const ema: number[] = [];
-      const multiplier = 2 / (period + 1);
-      
-      for (let i = 0; i < data.length; i++) {
-        if (i === 0) {
-          ema.push(data[i]);
-        } else {
-          ema.push((data[i] - ema[i - 1]) * multiplier + ema[i - 1]);
-        }
-      }
-      return ema;
-    };
-    
-    const fastEMA = calculateEMAArray(prices, 12);
-    const slowEMA = calculateEMAArray(prices, 26);
-    
-    const macdLine = fastEMA[fastEMA.length - 1] - slowEMA[slowEMA.length - 1];
-    const histogram = macdLine - (fastEMA[fastEMA.length - 2] - slowEMA[slowEMA.length - 2]);
-    
-    return { macd: macdLine, signal: 0, histogram };
-  };
-
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const priceHistory = priceHistoryRef.current.get(symbol);
     if (!priceHistory || priceHistory.length < 50) return null;
     
     const rsi = calculateRSI(priceHistory, 14);
-    const macd = calculateMACD(priceHistory);
     const ema20 = calculateEMA(priceHistory, 20);
     const ema50 = calculateEMA(priceHistory, 50);
     
+    // Простой MACD
+    let macd = 0;
+    if (priceHistory.length >= 26) {
+      const ema12 = calculateEMA(priceHistory, 12);
+      const ema26 = calculateEMA(priceHistory, 26);
+      macd = ema12 - ema26;
+    }
+    
     // ЖЁСТКИЕ УСЛОВИЯ
-    // BUY: RSI < 30 + MACD бычий + EMA20 > EMA50
-    if (rsi < 30 && macd.macd > 0 && ema20 > ema50) {
-      const reasons = [`RSI ${rsi.toFixed(1)} < 30`, `MACD бычий`, `EMA20(${ema20.toFixed(0)}) > EMA50(${ema50.toFixed(0)})`];
+    if (rsi < 30 && macd > 0 && ema20 > ema50) {
+      const reasons = [`RSI ${rsi.toFixed(1)} < 30`, `MACD бычий (${macd.toFixed(2)})`, `EMA20(${ema20.toFixed(0)}) > EMA50(${ema50.toFixed(0)})`];
       console.log(`🔴 BUY ${symbol} | ${reasons.join(', ')}`);
       return {
         id: `${symbol}_${Date.now()}`,
@@ -221,14 +181,13 @@ const App: React.FC = () => {
         price: currentPrice,
         timestamp: Date.now(),
         strength: rsi < 20 ? 3 : 2,
-        indicators: { rsi, macd: macd.macd, ema20, ema50 },
+        indicators: { rsi, macd, ema20, ema50 },
         reasons
       };
     }
     
-    // SELL: RSI > 70 + MACD медвежий + EMA20 < EMA50
-    if (rsi > 70 && macd.macd < 0 && ema20 < ema50) {
-      const reasons = [`RSI ${rsi.toFixed(1)} > 70`, `MACD медвежий`, `EMA20(${ema20.toFixed(0)}) < EMA50(${ema50.toFixed(0)})`];
+    if (rsi > 70 && macd < 0 && ema20 < ema50) {
+      const reasons = [`RSI ${rsi.toFixed(1)} > 70`, `MACD медвежий (${macd.toFixed(2)})`, `EMA20(${ema20.toFixed(0)}) < EMA50(${ema50.toFixed(0)})`];
       console.log(`🔵 SELL ${symbol} | ${reasons.join(', ')}`);
       return {
         id: `${symbol}_${Date.now()}`,
@@ -237,7 +196,7 @@ const App: React.FC = () => {
         price: currentPrice,
         timestamp: Date.now(),
         strength: rsi > 80 ? 3 : 2,
-        indicators: { rsi, macd: macd.macd, ema20, ema50 },
+        indicators: { rsi, macd, ema20, ema50 },
         reasons
       };
     }
@@ -247,51 +206,33 @@ const App: React.FC = () => {
 
   const executeTrade = async (signal: Signal) => {
     if (!autoTradeEnabled) return;
-    if (!bybitRef.current) return;
     
     const existingPosition = positions.find(p => p.symbol === signal.symbol);
     if (existingPosition) return;
     
-    try {
-      const bybit = bybitRef.current;
-      const currentBalance = await bybit.getBalance();
-      const riskAmount = currentBalance * (maxRiskPercent / 100);
-      const quantity = riskAmount / signal.price;
-      const roundedQty = Math.floor(quantity * 1000) / 1000;
-      
-      if (roundedQty <= 0) return;
-      
-      const tpPrice = signal.action === 'buy' ? signal.price * 1.03 : signal.price * 0.97;
-      const slPrice = signal.action === 'buy' ? signal.price * 0.98 : signal.price * 1.02;
-      const orderSide = signal.action === 'buy' ? OrderSide.BUY : OrderSide.SELL;
-      
-      const orderResult = await bybit.placeOrder({
-        symbol: signal.symbol,
-        side: orderSide,
-        orderType: OrderType.MARKET,
-        quantity: roundedQty,
-        timeInForce: TimeInForce.IOC
-      });
-      
-      if (orderResult && orderResult.orderId) {
-        const newTrade: Trade = {
-          id: orderResult.orderId,
-          symbol: signal.symbol,
-          side: signal.action === 'buy' ? 'Buy' : 'Sell',
-          price: signal.price,
-          quantity: roundedQty,
-          timestamp: Date.now(),
-          tpPrice,
-          slPrice,
-          status: 'open'
-        };
-        
-        setPositions(prev => [...prev, newTrade]);
-        console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol}`);
-      }
-    } catch (error) {
-      console.error('Ошибка открытия позиции:', error);
-    }
+    const riskAmount = balance * (maxRiskPercent / 100);
+    const quantity = riskAmount / signal.price;
+    const roundedQty = Math.floor(quantity * 1000) / 1000;
+    
+    if (roundedQty <= 0) return;
+    
+    const tpPrice = signal.action === 'buy' ? signal.price * 1.03 : signal.price * 0.97;
+    const slPrice = signal.action === 'buy' ? signal.price * 0.98 : signal.price * 1.02;
+    
+    const newTrade: Trade = {
+      id: `${signal.symbol}_${Date.now()}`,
+      symbol: signal.symbol,
+      side: signal.action === 'buy' ? 'Buy' : 'Sell',
+      price: signal.price,
+      quantity: roundedQty,
+      timestamp: Date.now(),
+      tpPrice,
+      slPrice,
+      status: 'open'
+    };
+    
+    setPositions(prev => [...prev, newTrade]);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Кол-во: ${roundedQty} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
   };
 
   const updatePriceHistory = useCallback((symbol: string, price: number) => {
@@ -316,39 +257,46 @@ const App: React.FC = () => {
       if (openPosition.side === 'Buy') {
         if (price >= (openPosition.tpPrice || 0)) {
           const profit = (price - openPosition.price) * openPosition.quantity;
+          const newBalance = balance + profit;
+          setBalance(newBalance);
           setPositions(prev => prev.filter(p => p.id !== openPosition.id));
           setTradeHistory(prev => [{ ...openPosition, status: 'closed', profit }, ...prev]);
-          console.log(`🎯 TP ${symbol} +$${profit.toFixed(2)}`);
+          console.log(`🎯 TP ${symbol} +$${profit.toFixed(2)} | Новый баланс: $${newBalance.toFixed(2)}`);
         } else if (price <= (openPosition.slPrice || 0)) {
           const profit = (price - openPosition.price) * openPosition.quantity;
+          const newBalance = balance + profit;
+          setBalance(newBalance);
           setPositions(prev => prev.filter(p => p.id !== openPosition.id));
           setTradeHistory(prev => [{ ...openPosition, status: 'closed', profit }, ...prev]);
-          console.log(`🛑 SL ${symbol} $${profit.toFixed(2)}`);
+          console.log(`🛑 SL ${symbol} $${profit.toFixed(2)} | Новый баланс: $${newBalance.toFixed(2)}`);
         }
       } else {
         if (price <= (openPosition.tpPrice || 0)) {
           const profit = (openPosition.price - price) * openPosition.quantity;
+          const newBalance = balance + profit;
+          setBalance(newBalance);
           setPositions(prev => prev.filter(p => p.id !== openPosition.id));
           setTradeHistory(prev => [{ ...openPosition, status: 'closed', profit }, ...prev]);
-          console.log(`🎯 TP ${symbol} +$${profit.toFixed(2)}`);
+          console.log(`🎯 TP ${symbol} +$${profit.toFixed(2)} | Новый баланс: $${newBalance.toFixed(2)}`);
         } else if (price >= (openPosition.slPrice || 0)) {
           const profit = (openPosition.price - price) * openPosition.quantity;
+          const newBalance = balance + profit;
+          setBalance(newBalance);
           setPositions(prev => prev.filter(p => p.id !== openPosition.id));
           setTradeHistory(prev => [{ ...openPosition, status: 'closed', profit }, ...prev]);
-          console.log(`🛑 SL ${symbol} $${profit.toFixed(2)}`);
+          console.log(`🛑 SL ${symbol} $${profit.toFixed(2)} | Новый баланс: $${newBalance.toFixed(2)}`);
         }
       }
     }
-  }, [autoTradeEnabled, positions, maxRiskPercent]);
+  }, [autoTradeEnabled, positions, balance, maxRiskPercent]);
 
   useEffect(() => {
     const wsManager = createWebSocketManager();
     wsManagerRef.current = wsManager;
     
-    // Подписываемся только на первые 50 символов для стабильности
-    const activeSymbols = SYMBOLS.slice(0, 50);
-    activeSymbols.forEach(symbol => {
+    SYMBOLS.forEach(symbol => {
       wsManager.subscribe(symbol, (data: PriceData) => {
+        setWsConnected(prev => new Map(prev).set(symbol, true));
         updatePriceHistory(symbol, data.price);
       });
     });
@@ -358,12 +306,16 @@ const App: React.FC = () => {
     };
   }, [updatePriceHistory]);
 
+  const totalProfit = tradeHistory.reduce((sum, t) => sum + (t.profit || 0), 0);
+  const winRate = tradeHistory.filter(t => (t.profit || 0) > 0).length / (tradeHistory.length || 1) * 100;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/20 to-black">
       <header className="border-b border-red-500/30 bg-black/80 backdrop-blur-lg sticky top-0 z-50">
         <div className="container mx-auto px-6 py-3 flex justify-between items-center flex-wrap gap-4">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">💀 AUTO TRADE PRO | {SYMBOLS.length} активов</h1>
+          <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">💀 AUTO TRADE PRO V2 | {SYMBOLS.length} активов</h1>
           <div className="flex gap-4 items-center">
+            <div className="text-sm text-gray-400 font-mono">Баланс: ${balance.toLocaleString()}</div>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
         </div>
@@ -371,10 +323,22 @@ const App: React.FC = () => {
 
       <div className="container mx-auto px-6 py-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-black/60 rounded-2xl p-5 border border-red-500/30"><div className="text-3xl font-bold text-red-400">{signals.length}</div><div className="text-gray-400 text-sm">Сигналов</div></div>
-          <div className="bg-black/60 rounded-2xl p-5 border border-green-500/30"><div className="text-3xl font-bold text-green-500">{buys}</div><div className="text-gray-400 text-sm">BUY</div></div>
-          <div className="bg-black/60 rounded-2xl p-5 border border-red-500/30"><div className="text-3xl font-bold text-red-500">{sells}</div><div className="text-gray-400 text-sm">SELL</div></div>
-          <div className="bg-black/60 rounded-2xl p-5 border border-yellow-500/30"><div className="text-3xl font-bold text-yellow-500">🔥</div><div className="text-gray-400 text-sm">RSI 30/70 + EMA</div></div>
+          <div className="bg-black/60 rounded-2xl p-5 border border-red-500/30">
+            <div className="text-3xl font-bold text-red-400">{signals.length}</div>
+            <div className="text-gray-400 text-sm">Сигналов</div>
+          </div>
+          <div className="bg-black/60 rounded-2xl p-5 border border-green-500/30">
+            <div className="text-3xl font-bold text-green-500">{buys}</div>
+            <div className="text-gray-400 text-sm">BUY</div>
+          </div>
+          <div className="bg-black/60 rounded-2xl p-5 border border-red-500/30">
+            <div className="text-3xl font-bold text-red-500">{sells}</div>
+            <div className="text-gray-400 text-sm">SELL</div>
+          </div>
+          <div className="bg-black/60 rounded-2xl p-5 border border-yellow-500/30">
+            <div className="text-2xl font-bold text-yellow-500">{winRate.toFixed(0)}% WR</div>
+            <div className="text-gray-400 text-sm">Винрейт</div>
+          </div>
         </div>
 
         <div className="flex gap-1 mb-6 border-b border-red-500/30 overflow-x-auto pb-0">
@@ -437,21 +401,31 @@ const App: React.FC = () => {
                 <div className="text-gray-500 text-center py-4">Нет открытых позиций</div>
               ) : (
                 <div className="space-y-2">
-                  {positions.map((pos, idx) => (
-                    <div key={idx} className="bg-gradient-to-r from-red-900/20 to-black rounded-lg p-3 border-l-4 border-yellow-500">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xl">{pos.side === 'Buy' ? '🟢' : '🔴'}</span>
-                          <span className="font-bold text-white">{pos.symbol}</span>
+                  {positions.map((pos, idx) => {
+                    const currentPrice = prices.get(pos.symbol) || pos.price;
+                    const currentPnL = pos.side === 'Buy' 
+                      ? (currentPrice - pos.price) * pos.quantity
+                      : (pos.price - currentPrice) * pos.quantity;
+                    const currentPnLPercent = (currentPnL / (pos.price * pos.quantity)) * 100;
+                    return (
+                      <div key={idx} className="bg-gradient-to-r from-red-900/20 to-black rounded-lg p-3 border-l-4 border-yellow-500">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{pos.side === 'Buy' ? '🟢' : '🔴'}</span>
+                            <span className="font-bold text-white">{pos.symbol}</span>
+                          </div>
+                          <div className="text-yellow-400 font-mono">${pos.price.toFixed(4)}</div>
                         </div>
-                        <div className="text-yellow-400 font-mono">${pos.price.toFixed(4)}</div>
+                        <div className="flex justify-between mt-2 text-xs">
+                          <span className="text-green-400">TP: ${pos.tpPrice?.toFixed(4)}</span>
+                          <span className="text-red-400">SL: ${pos.slPrice?.toFixed(4)}</span>
+                          <span className={currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}>
+                            PnL: ${currentPnL.toFixed(2)} ({currentPnLPercent.toFixed(1)}%)
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex justify-between mt-2 text-xs">
-                        <span className="text-green-400">TP: ${pos.tpPrice?.toFixed(4)}</span>
-                        <span className="text-red-400">SL: ${pos.slPrice?.toFixed(4)}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -469,6 +443,14 @@ const App: React.FC = () => {
                     <span className="text-gray-500 text-xs">{new Date(trade.timestamp).toLocaleTimeString()}</span>
                   </div>
                 ))}
+                {tradeHistory.length > 0 && (
+                  <div className="pt-3 mt-2 border-t border-red-500/30 text-right">
+                    <span className="text-gray-400">Общий PnL: </span>
+                    <span className={totalProfit >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                      {totalProfit >= 0 ? '+' : ''}{totalProfit.toFixed(2)} USD
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
