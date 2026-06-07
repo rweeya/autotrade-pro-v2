@@ -32,22 +32,22 @@ export interface PositionInfo {
   unrealisedPnl: string;
 }
 
-export class bybitTestnet {
-  private static instance: bybitTestnet;
-  private apiKey = 'BBTh4UU9lErjxZhyu4'; // Замените на ваш ключ
-  private apiSecret = 'irjQnuh8droR2sCfRhW0sXzkBqlAHeqWKpMK'; // Замените на ваш секрет
+export class BybitTestnet {
+  private static instance: BybitTestnet;
+  private apiKey = 'BBTh4UU9lErjxZhyu4';
+  private apiSecret = 'irjQnuh8droR2sCfRhW0sXzkBqlAHeqWKpMK';
   private baseUrl = 'https://api-testnet.bybit.com';
 
-  static getInstance(): bybitTestnet {
-    if (!bybitTestnet.instance) {
-      bybitTestnet.instance = new bybitTestnet();
+  static getInstance(): BybitTestnet {
+    if (!BybitTestnet.instance) {
+      BybitTestnet.instance = new BybitTestnet();
     }
-    return bybitTestnet.instance;
+    return BybitTestnet.instance;
   }
 
   async getBalance(): Promise<number> {
     try {
-      // Возвращаем тестовый баланс
+      // Временная имитация
       return 10000;
     } catch (error) {
       console.error('Ошибка получения баланса:', error);
@@ -57,7 +57,6 @@ export class bybitTestnet {
 
   async placeOrder(params: OrderParams): Promise<any> {
     console.log(`Размещение ордера: ${params.side} ${params.quantity} ${params.symbol}`);
-    // Имитация успешного ордера
     return {
       orderId: `order_${Date.now()}_${Math.random()}`,
       symbol: params.symbol,
@@ -78,7 +77,6 @@ export class bybitTestnet {
   }
 
   async getPositions(): Promise<PositionInfo[]> {
-    // Возвращаем пустой массив позиций
     return [];
   }
 }
