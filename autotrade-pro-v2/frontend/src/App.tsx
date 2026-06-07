@@ -52,7 +52,6 @@ interface Signal {
   status: 'pending' | 'executed' | 'failed';
   rsi?: number;
   macd?: number;
-  ema?: number;
 }
 
 interface Trade {
@@ -98,7 +97,6 @@ const App: React.FC = () => {
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const macdHistoryRef = useRef<Map<string, MACDValues[]>>(new Map());
-  const emaHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsManagerRef = useRef<any>(null);
   const bybitRef = useRef<BybitTestnet | null>(null);
 
@@ -211,7 +209,7 @@ const App: React.FC = () => {
     return { macd: macdLine, signal: signalLine, histogram };
   };
 
-  // ЖЁСТКИЕ УСЛОВИЯ: RSI < 30 для BUY, RSI > 70 для SELL + EMA подтверждение
+  // ЖЁСТКИЕ УСЛОВИЯ: RSI 30/70 + EMA подтверждение
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const priceHistory = priceHistoryRef.current.get(symbol);
     if (!priceHistory || priceHistory.length < 50) return null;
@@ -221,12 +219,10 @@ const App: React.FC = () => {
     const ema20 = calculateEMA(priceHistory, 20);
     const prevEma20 = priceHistory.length > 20 ? calculateEMA(priceHistory.slice(0, -1), 20) : ema20;
     
-    // Направление EMA (вверх или вниз)
     const emaTrendUp = ema20 > prevEma20;
     const emaTrendDown = ema20 < prevEma20;
     
-    // ========== ЖЁСТКИЕ УСЛОВИЯ ДЛЯ BUY ==========
-    // RSI < 30 (перепроданность) + MACD бычий + EMA смотрит вверх
+    // BUY: RSI < 30 + MACD бычий + EMA вверх
     let isBuySignal = false;
     if (rsi < 30) {
       const isMacdBullish = macd.macd > 0 || macd.histogram > 0;
@@ -237,15 +233,13 @@ const App: React.FC = () => {
         isCrossOver = prevMacd.macd <= 0 && macd.macd > 0;
       }
       
-      // EMA должна смотреть ВВЕРХ для BUY сигнала
       if ((isMacdBullish || isCrossOver) && emaTrendUp) {
         isBuySignal = true;
-        console.log(`🔴 ЖЁСТКИЙ BUY сигнал: ${symbol} | RSI=${rsi.toFixed(1)} | EMA trend=UP | MACD=${macd.macd.toFixed(2)}`);
+        console.log(`🔴 BUY ${symbol} | RSI=${rsi.toFixed(1)} | EMA↑`);
       }
     }
     
-    // ========== ЖЁСТКИЕ УСЛОВИЯ ДЛЯ SELL ==========
-    // RSI > 70 (перекупленность) + MACD медвежий + EMA смотрит вниз
+    // SELL: RSI > 70 + MACD медвежий + EMA вниз
     let isSellSignal = false;
     if (rsi > 70) {
       const isMacdBearish = macd.macd < 0 || macd.histogram < 0;
@@ -256,27 +250,23 @@ const App: React.FC = () => {
         isCrossUnder = prevMacd.macd >= 0 && macd.macd < 0;
       }
       
-      // EMA должна смотреть ВНИЗ для SELL сигнала
       if ((isMacdBearish || isCrossUnder) && emaTrendDown) {
         isSellSignal = true;
-        console.log(`🔵 ЖЁСТКИЙ SELL сигнал: ${symbol} | RSI=${rsi.toFixed(1)} | EMA trend=DOWN | MACD=${macd.macd.toFixed(2)}`);
+        console.log(`🔵 SELL ${symbol} | RSI=${rsi.toFixed(1)} | EMA↓`);
       }
     }
     
     if (!isBuySignal && !isSellSignal) return null;
     
-    const signalType = isBuySignal ? 'BUY' : 'SELL';
-    
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
       symbol,
-      type: signalType,
+      type: isBuySignal ? 'BUY' : 'SELL',
       price: currentPrice,
       timestamp: Date.now(),
       status: 'pending',
       rsi,
-      macd: macd.macd,
-      ema: ema20
+      macd: macd.macd
     };
   };
 
@@ -346,7 +336,7 @@ const App: React.FC = () => {
         setLastTradeTime(prev => new Map(prev).set(symbol, Date.now()));
         setSignals(prev => prev.map(s => s.id === signal.id ? { ...s, status: 'executed' } : s));
         
-        console.log(`✅ Открыта ${type} позиция по ${symbol}, кол-во: ${roundedQty}`);
+        console.log(`✅ Открыта ${type} позиция по ${symbol}`);
         const newBalance = await bybit.getBalance();
         setBalance(newBalance);
       }
@@ -374,13 +364,6 @@ const App: React.FC = () => {
       macdHistory.push(macd);
       if (macdHistory.length > 50) macdHistory = macdHistory.slice(-50);
       macdHistoryRef.current.set(symbol, macdHistory);
-      
-      // Сохраняем EMA историю
-      const ema = calculateEMA(history, 20);
-      let emaHistory = emaHistoryRef.current.get(symbol) || [];
-      emaHistory.push(ema);
-      if (emaHistory.length > 50) emaHistory = emaHistory.slice(-50);
-      emaHistoryRef.current.set(symbol, emaHistory);
     }
     
     const signal = generateSignal(symbol, price);
@@ -447,6 +430,7 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [trades, prices]);
 
+  // ==================== ОРИГИНАЛЬНЫЙ ИНТЕРФЕЙС ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-gray-900">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -530,13 +514,13 @@ const App: React.FC = () => {
             <TradingChart symbol={selectedSymbol} />
           </div>
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
-            <Watchlist />
+            <Watchlist symbols={SYMBOLS} prices={prices} onSelect={setSelectedSymbol} />
           </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
-            <TopMovers />
+            <TopMovers symbols={SYMBOLS} prices={prices} />
           </div>
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
             <News />
@@ -544,7 +528,7 @@ const App: React.FC = () => {
         </div>
         
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30 mb-6">
-          <SignalHistory />
+          <SignalHistory signals={signals} trades={trades} />
         </div>
         
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
@@ -556,6 +540,7 @@ const App: React.FC = () => {
                   <th className="text-left py-2">МОНЕТА</th>
                   <th className="text-left py-2">ТИП</th>
                   <th className="text-right py-2">ЦЕНА ВХ.</th>
+                  <th className="text-right py-2">КОЛ-ВО</th>
                   <th className="text-right py-2">TP</th>
                   <th className="text-right py-2">SL</th>
                   <th className="text-right py-2">ТЕКУЩИЙ P&L</th>
@@ -576,6 +561,7 @@ const App: React.FC = () => {
                         {trade.side}
                       </td>
                       <td className="text-right py-2">${trade.entryPrice.toFixed(4)}</td>
+                      <td className="text-right py-2">{trade.quantity.toFixed(4)}</td>
                       <td className="text-right py-2 text-green-400">${trade.tpPrice?.toFixed(4)}</td>
                       <td className="text-right py-2 text-red-400">${trade.slPrice?.toFixed(4)}</td>
                       <td className={`text-right py-2 ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -586,8 +572,8 @@ const App: React.FC = () => {
                 })}
                 {trades.filter(t => t.status === 'open').length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-500">
-                      💀 НЕТ ОТКРЫТЫХ ПОЗИЦИЙ 💀
+                    <td colSpan={7} className="text-center py-8 text-gray-500">
+                      НЕТ ОТКРЫТЫХ ПОЗИЦИЙ
                     </td>
                   </tr>
                 )}
