@@ -34,8 +34,8 @@ export interface PositionInfo {
 
 export class bybitTestnet {
   private static instance: bybitTestnet;
-  private apiKey = 'YOUR_API_KEY'; // Замените на ваш ключ
-  private apiSecret = 'YOUR_API_SECRET'; // Замените на ваш секрет
+  private apiKey = 'BBTh4UU9lErjxZhyu4'; // Замените на ваш ключ
+  private apiSecret = 'irjQnuh8droR2sCfRhW0sXzkBqlAHeqWKpMK'; // Замените на ваш секрет
   private baseUrl = 'https://api-testnet.bybit.com';
 
   static getInstance(): bybitTestnet {
