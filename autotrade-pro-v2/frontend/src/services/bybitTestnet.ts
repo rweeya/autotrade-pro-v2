@@ -32,6 +32,7 @@ interface Position {
   openTime: number
 }
 
+// ПРАВИЛЬНЫЕ НАСТРОЙКИ TP/SL
 const TAKE_PROFIT_PERCENT = 3
 const STOP_LOSS_PERCENT = 2
 const MAX_HOLD_TIME_MINUTES = 60
@@ -69,22 +70,38 @@ class BybitTestnetTrading {
     for (const position of this.positions) {
       const currentPrice = currentPrices[position.symbol]
       if (!currentPrice) continue
-      const profitPercent = position.side === 'Buy' 
-        ? ((currentPrice - position.entryPrice) / position.entryPrice) * 100
-        : ((position.entryPrice - currentPrice) / position.entryPrice) * 100
-      const holdTimeMinutes = (Date.now() - position.openTime) / 1000 / 60
+      
+      let profitPercent = 0
       let shouldClose = false
       let closeReason = ''
-      if (profitPercent >= TAKE_PROFIT_PERCENT) {
-        shouldClose = true
-        closeReason = `Take profit (${profitPercent.toFixed(1)}%)`
-      } else if (profitPercent <= -STOP_LOSS_PERCENT) {
-        shouldClose = true
-        closeReason = `Stop loss (${profitPercent.toFixed(1)}%)`
-      } else if (holdTimeMinutes >= MAX_HOLD_TIME_MINUTES) {
+      
+      if (position.side === 'Buy') {
+        profitPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100
+        if (profitPercent >= TAKE_PROFIT_PERCENT) {
+          shouldClose = true
+          closeReason = `Take profit (${profitPercent.toFixed(1)}%)`
+        } else if (profitPercent <= -STOP_LOSS_PERCENT) {
+          shouldClose = true
+          closeReason = `Stop loss (${profitPercent.toFixed(1)}%)`
+        }
+      } else {
+        // ДЛЯ SELL: TP при падении цены, SL при росте
+        profitPercent = ((position.entryPrice - currentPrice) / position.entryPrice) * 100
+        if (profitPercent >= TAKE_PROFIT_PERCENT) {
+          shouldClose = true
+          closeReason = `Take profit (${profitPercent.toFixed(1)}%)`
+        } else if (profitPercent <= -STOP_LOSS_PERCENT) {
+          shouldClose = true
+          closeReason = `Stop loss (${profitPercent.toFixed(1)}%)`
+        }
+      }
+      
+      const holdTimeMinutes = (Date.now() - position.openTime) / 1000 / 60
+      if (holdTimeMinutes >= MAX_HOLD_TIME_MINUTES) {
         shouldClose = true
         closeReason = `Time expired (${Math.floor(holdTimeMinutes)} min)`
       }
+      
       if (shouldClose) {
         await this.closePosition(position.symbol, currentPrice, closeReason)
       }
@@ -187,8 +204,15 @@ class BybitTestnetTrading {
       const positionIndex = this.positions.findIndex(p => p.symbol === params.symbol)
       if (positionIndex !== -1) {
         const position = this.positions[positionIndex]
-        const profit = (params.price! - position.entryPrice) * params.qty
-        const profitPercent = (profit / position.cost) * 100
+        let profit = 0
+        let profitPercent = 0
+        if (position.side === 'Buy') {
+          profit = (params.price! - position.entryPrice) * params.qty
+          profitPercent = (profit / position.cost) * 100
+        } else {
+          profit = (position.entryPrice - params.price!) * params.qty
+          profitPercent = (profit / position.cost) * 100
+        }
         this.balance = this.balance + position.cost + profit
         this.positions.splice(positionIndex, 1)
         order.profit = profit
