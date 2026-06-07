@@ -163,7 +163,6 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   let reasons: string[] = []
   
   if (isScalping) {
-    // НОВЫЕ ЖЁСТКИЕ УСЛОВИЯ ДЛЯ СКАЛЬПИНГА: RSI < 50 / > 50
     const buyScalping = rsi < 50 && (macdCross === 'bullish' || currMacd.macd > 0)
     const sellScalping = rsi > 50 && (macdCross === 'bearish' || currMacd.macd < 0)
     if (buyScalping) {
@@ -476,7 +475,7 @@ function App() {
                     <button onClick={resetAccount} className="bg-yellow-600/50 px-4 py-2 rounded-lg">🔄 Сбросить счет</button>
                     {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 px-4 py-2 rounded-lg">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">RSI<50 для BUY, RSI>50 для SELL</p></div>}
+                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">RSI&lt;50 для BUY, RSI&gt;50 для SELL</p></div>}
                 </div>
               )}
             </div>
@@ -549,7 +548,7 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<50 / >50)' : '📈 СВИНГ (RSI<45 / >55)'} | {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI&lt;50 / &gt;50)' : '📈 СВИНГ (RSI&lt;45 / &gt;55)'} | {SYMBOLS.length} активов</div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов</div>) : (signals.map((signal, idx) => {
