@@ -16,9 +16,8 @@ interface Signal {
   timestamp: Date
   indicators: {
     rsi: number
-    macd: number
-    macdSignal: number
-    macdHistogram: number
+    cci: number
+    adx: number
     ema20: number
     ema50: number
   }
@@ -62,7 +61,7 @@ const SYMBOLS = [
 
 let realPrices: Record<string, number> = {}
 let priceHistory: Record<string, number[]> = {}
-let macdHistory: Record<string, { macd: number; signal: number; histogram: number }[]> = {}
+let adxHistory: Record<string, number[]> = {}
 let lastTradeTime: Record<string, number> = {}
 
 const formatTime = (date: Date): string => {
@@ -97,25 +96,40 @@ function calculateEMA(prices: number[], period: number): number {
   return ema
 }
 
-function calculateMACD(prices: number[], fast = 8, slow = 17, signal = 5): { macd: number; signal: number; histogram: number } {
-  if (prices.length < slow + signal) {
-    return { macd: 0, signal: 0, histogram: 0 }
+function calculateCCI(prices: number[], highs: number[], lows: number[], period: number = 20): number {
+  if (prices.length < period) return 0
+  const tp = prices.map((p, i) => (p + highs[i] + lows[i]) / 3)
+  const sma = tp.slice(-period).reduce((a, b) => a + b, 0) / period
+  const meanDev = tp.slice(-period).reduce((sum, val) => sum + Math.abs(val - sma), 0) / period
+  if (meanDev === 0) return 0
+  return (tp[tp.length - 1] - sma) / (0.015 * meanDev)
+}
+
+function calculateADX(prices: number[], period: number = 14): number {
+  if (prices.length < period + 1) return 25
+  let plusDM = 0, minusDM = 0, tr = 0
+  for (let i = prices.length - period; i < prices.length; i++) {
+    const high = prices[i] * 1.01
+    const low = prices[i] * 0.99
+    const prevHigh = prices[i - 1] * 1.01
+    const prevLow = prices[i - 1] * 0.99
+    const prevClose = prices[i - 1]
+    
+    const highLow = high - low
+    const highClose = Math.abs(high - prevClose)
+    const lowClose = Math.abs(low - prevClose)
+    tr += Math.max(highLow, highClose, lowClose)
+    
+    const upMove = high - prevHigh
+    const downMove = prevLow - low
+    if (upMove > downMove && upMove > 0) plusDM += upMove
+    if (downMove > upMove && downMove > 0) minusDM += downMove
   }
-  const emaFast = calculateEMA(prices, fast)
-  const emaSlow = calculateEMA(prices, slow)
-  const macdLine = emaFast - emaSlow
-  
-  const macdValues = prices.map((_, i) => {
-    if (i < slow) return 0
-    const f = calculateEMA(prices.slice(0, i + 1), fast)
-    const s = calculateEMA(prices.slice(0, i + 1), slow)
-    return f - s
-  }).filter(v => v !== 0)
-  
-  const signalLine = macdValues.length >= signal ? calculateEMA(macdValues.slice(-signal), signal) : 0
-  const histogram = macdLine - signalLine
-  
-  return { macd: macdLine, signal: signalLine, histogram }
+  const atr = tr / period
+  const plusDI = (plusDM / period) / atr * 100
+  const minusDI = (minusDM / period) / atr * 100
+  const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100
+  return isNaN(dx) ? 25 : dx
 }
 
 function generatePriceHistory(currentPrice: number): number[] {
@@ -129,13 +143,7 @@ function generatePriceHistory(currentPrice: number): number[] {
   return history
 }
 
-function checkMacdCross(prevMacd: number, prevSignal: number, currMacd: number, currSignal: number): 'bullish' | 'bearish' | null {
-  if (prevMacd <= prevSignal && currMacd > currSignal) return 'bullish'
-  if (prevMacd >= prevSignal && currMacd < currSignal) return 'bearish'
-  return null
-}
-
-function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boolean): Signal | null {
+function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: number, currentLow: number, isScalping: boolean): Signal | null {
   if (!priceHistory[symbol]) {
     priceHistory[symbol] = generatePriceHistory(currentPrice)
   }
@@ -143,19 +151,14 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   if (priceHistory[symbol].length > 50) priceHistory[symbol].shift()
   
   const prices = priceHistory[symbol]
+  const highs = prices.map(p => p * 1.01)
+  const lows = prices.map(p => p * 0.99)
+  
   const rsi = calculateRSI(prices, 10)
   const ema20 = calculateEMA(prices, 20)
   const ema50 = calculateEMA(prices, 50)
-  
-  const macdData = calculateMACD(prices)
-  
-  if (!macdHistory[symbol]) macdHistory[symbol] = []
-  macdHistory[symbol].push(macdData)
-  if (macdHistory[symbol].length > 5) macdHistory[symbol].shift()
-  
-  const prevMacd = macdHistory[symbol].length >= 2 ? macdHistory[symbol][macdHistory[symbol].length - 2] : macdData
-  const currMacd = macdData
-  const macdCross = checkMacdCross(prevMacd.macd, prevMacd.signal, currMacd.macd, currMacd.signal)
+  const cci = calculateCCI(prices, highs, lows, 20)
+  const adx = calculateADX(prices, 14)
   
   let allBuyConditions = false
   let allSellConditions = false
@@ -163,29 +166,28 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   let reasons: string[] = []
   
   if (isScalping) {
-    // ИНВЕРТИРОВАНО: RSI < 35 → SELL, RSI > 65 → BUY
-    const buyScalping = rsi > 65 && (macdCross === 'bullish' || currMacd.macd > 0)
-    const sellScalping = rsi < 35 && (macdCross === 'bearish' || currMacd.macd < 0)
+    const buyScalping = rsi > 65 && cci > 100 && adx > 25 && currentPrice > ema20
+    const sellScalping = rsi < 35 && cci < -100 && adx > 25 && currentPrice < ema20
     if (buyScalping) {
       allBuyConditions = true
-      strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `MACD бычий`)
+      strength = 4
+      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `CCI:${Math.round(cci)} (>100)`, `ADX:${Math.round(adx)} (>25)`, `Цена выше EMA20`)
     } else if (sellScalping) {
       allSellConditions = true
-      strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `MACD медвежий`)
+      strength = 4
+      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `CCI:${Math.round(cci)} (<-100)`, `ADX:${Math.round(adx)} (>25)`, `Цена ниже EMA20`)
     }
   } else {
-    const buySwing = rsi > 65 && macdCross === 'bullish' && currentPrice > ema20
-    const sellSwing = rsi < 35 && macdCross === 'bearish' && currentPrice < ema20
+    const buySwing = rsi > 65 && cci > 100 && adx > 25 && currentPrice > ema20
+    const sellSwing = rsi < 35 && cci < -100 && adx > 25 && currentPrice < ema20
     if (buySwing) {
       allBuyConditions = true
-      strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `MACD бычий`, `Цена выше EMA20`)
+      strength = 4
+      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `CCI:${Math.round(cci)} (>100)`, `ADX:${Math.round(adx)} (>25)`, `Цена выше EMA20`)
     } else if (sellSwing) {
       allSellConditions = true
-      strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `MACD медвежий`, `Цена ниже EMA20`)
+      strength = 4
+      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `CCI:${Math.round(cci)} (<-100)`, `ADX:${Math.round(adx)} (>25)`, `Цена ниже EMA20`)
     }
   }
   
@@ -195,8 +197,10 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
       reasons,
       timestamp: new Date(),
       indicators: {
-        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
-        macdHistogram: currMacd.histogram, ema20, ema50
+        rsi: Math.round(rsi),
+        cci: Math.round(cci),
+        adx: Math.round(adx),
+        ema20, ema50
       }
     }
   }
@@ -207,8 +211,10 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
       reasons,
       timestamp: new Date(),
       indicators: {
-        rsi: Math.round(rsi), macd: currMacd.macd, macdSignal: currMacd.signal,
-        macdHistogram: currMacd.histogram, ema20, ema50
+        rsi: Math.round(rsi),
+        cci: Math.round(cci),
+        adx: Math.round(adx),
+        ema20, ema50
       }
     }
   }
@@ -313,7 +319,9 @@ function App() {
     for (const symbol of SYMBOLS) {
       const price = realPrices[symbol]
       if (price) {
-        const signal = analyzeIndicators(symbol, price, scalpingMode)
+        const high = price * 1.01
+        const low = price * 0.99
+        const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
         if (signal) newSignals.push(signal)
       }
     }
@@ -417,7 +425,7 @@ function App() {
           <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">💀 AUTO TRADE PRO | {SYMBOLS.length} активов</h1>
           <div className="flex gap-4 items-center">
             <button onClick={toggleScalpingMode} className={`px-3 py-1 rounded-lg text-xs font-bold ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}>
-              {scalpingMode ? '⚡ СКАЛЬПИНГ (ИНВЕРТ)' : '📈 СВИНГ (ИНВЕРТ)'}
+              {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI+CCI+ADX)' : '📈 СВИНГ (RSI+CCI+ADX)'}
             </button>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
@@ -476,7 +484,7 @@ function App() {
                     <button onClick={resetAccount} className="bg-yellow-600/50 px-4 py-2 rounded-lg">🔄 Сбросить счет</button>
                     {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 px-4 py-2 rounded-lg">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">ИНВЕРТИРОВАНО: RSI&gt;65 = BUY, RSI&lt;35 = SELL</p></div>}
+                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">4 индикатора: RSI+CCI+ADX+EMA</p></div>}
                 </div>
               )}
             </div>
@@ -549,11 +557,11 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (ИНВЕРТ: RSI&gt;65 = BUY, RSI&lt;35 = SELL)' : '📈 СВИНГ (ИНВЕРТ)'} | {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | RSI+CCI+ADX+EMA | {SYMBOLS.length} активов</div>
             </div>
             <div className="divide-y divide-red-900/20">
-              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов</div>) : (signals.map((signal, idx) => {
-                const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength)
+              {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов (нужно 4/4 индикаторов)</div>) : (signals.map((signal, idx) => {
+                const stars = '★'.repeat(signal.strength) + '☆'.repeat(4 - signal.strength)
                 return (
                   <div key={idx} className="p-4 hover:bg-red-900/10 cursor-pointer transition" onClick={() => openBybit(signal.symbol)}>
                     <div className="flex justify-between items-center">
@@ -561,13 +569,13 @@ function App() {
                       <span className={`px-3 py-1 rounded-lg text-sm font-bold ${signal.action === 'buy' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
                         {signal.action === 'buy' ? '🔥 BUY' : '💀 SELL'}
                       </span>
-                      <span className="text-yellow-400 text-sm">⚡ {stars}</span>
+                      <span className="text-yellow-400 text-sm">⚡ {stars} (4/4)</span>
                     </div>
                     <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi > 65 ? 'text-green-400' : signal.indicators.rsi < 35 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="font-mono text-white">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(4)}</div></div>
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)}/${signal.indicators.ema50.toFixed(0)}</div></div>
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="font-mono text-white">${signal.price.toLocaleString()}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">CCI</div><div className={`font-bold ${signal.indicators.cci > 100 ? 'text-green-400' : signal.indicators.cci < -100 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.cci}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">ADX</div><div className={`font-bold ${signal.indicators.adx > 25 ? 'text-green-400' : 'text-white'}`}>{signal.indicators.adx}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена/EMA</div><div className={`font-bold ${signal.price > signal.indicators.ema20 ? 'text-green-400' : 'text-red-400'}`}>${signal.price > signal.indicators.ema20 ? '↑' : '↓'}</div></div>
                     </div>
                     <div className="mt-2 text-xs text-red-400">🎯 {signal.reasons.join(' • ')}</div>
                   </div>
