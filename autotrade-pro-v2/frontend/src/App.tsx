@@ -202,7 +202,7 @@ const App: React.FC = () => {
     return { macd: macdLine, signal: signalLine, histogram };
   };
 
-  // Генерация сигналов (мягкие условия)
+  // Генерация сигналов (ВАРИАНТ 3: RSI 65/35)
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const priceHistory = priceHistoryRef.current.get(symbol);
     if (!priceHistory || priceHistory.length < 50) return null;
@@ -210,9 +210,9 @@ const App: React.FC = () => {
     const rsi = calculateRSI(priceHistory, 14);
     const macd = calculateMACD(priceHistory, 12, 26, 9);
     
-    // Мягкие условия для BUY
+    // ========== МЯГКИЕ УСЛОВИЯ ДЛЯ BUY (RSI < 65) ==========
     let isBuySignal = false;
-    if (rsi < 55) {
+    if (rsi < 65) {  // Широкое условие - золотая середина
       const isMacdBullish = macd.macd > 0 || macd.histogram > 0;
       const macdHistory = macdHistoryRef.current.get(symbol);
       let isCrossOver = false;
@@ -225,9 +225,9 @@ const App: React.FC = () => {
       }
     }
     
-    // Мягкие условия для SELL
+    // ========== МЯГКИЕ УСЛОВИЯ ДЛЯ SELL (RSI > 35) ==========
     let isSellSignal = false;
-    if (rsi > 45) {
+    if (rsi > 35) {  // Широкое условие - золотая середина
       const isMacdBearish = macd.macd < 0 || macd.histogram < 0;
       const macdHistory = macdHistoryRef.current.get(symbol);
       let isCrossUnder = false;
@@ -243,7 +243,7 @@ const App: React.FC = () => {
     if (!isBuySignal && !isSellSignal) return null;
     
     const signalType = isBuySignal ? 'BUY' : 'SELL';
-    console.log(`📊 Сигнал ${signalType} для ${symbol}: RSI=${rsi.toFixed(1)}, MACD=${macd.macd.toFixed(2)}`);
+    console.log(`📊 СИГНАЛ ${signalType} | ${symbol} | RSI=${rsi.toFixed(1)} | MACD=${macd.macd.toFixed(2)} | Цена=$${currentPrice.toFixed(4)}`);
     
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
@@ -263,7 +263,7 @@ const App: React.FC = () => {
     
     const lastTrade = lastTradeTime.get(symbol);
     if (lastTrade && Date.now() - lastTrade < 180000) {
-      console.log(`⏰ Пропуск ${symbol}: слишком частая сделка`);
+      console.log(`⏰ Пропуск ${symbol}: слишком частая сделка (3 мин)`);
       return;
     }
     
@@ -290,7 +290,6 @@ const App: React.FC = () => {
       const tpPrice = type === 'BUY' ? price * 1.03 : price * 0.97;
       const slPrice = type === 'BUY' ? price * 0.98 : price * 1.02;
       
-      // Исправлено: используем OrderSide.BUY или OrderSide.SELL
       const orderSide = type === 'BUY' ? OrderSide.BUY : OrderSide.SELL;
       
       const orderResult = await bybit.placeOrder({
@@ -325,12 +324,12 @@ const App: React.FC = () => {
         setLastTradeTime(prev => new Map(prev).set(symbol, Date.now()));
         setSignals(prev => prev.map(s => s.id === signal.id ? { ...s, status: 'executed' } : s));
         
-        console.log(`✅ Открыта ${type} позиция по ${symbol}`);
+        console.log(`✅✅✅ ИСПОЛНЕНО: ${type} ${symbol} | Кол-во: ${roundedQty} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
         const newBalance = await bybit.getBalance();
         setBalance(newBalance);
       }
     } catch (error) {
-      console.error(error);
+      console.error(`❌ Ошибка при открытии позиции ${symbol}:`, error);
       setSignals(prev => prev.map(s => s.id === signal.id ? { ...s, status: 'failed' } : s));
     } finally {
       setIsProcessing(prev => {
@@ -410,7 +409,7 @@ const App: React.FC = () => {
             
             const newBalance = await bybit.getBalance();
             setBalance(newBalance);
-            console.log(`📉 Позиция ${trade.symbol} закрыта. PnL: $${pnl.toFixed(2)}`);
+            console.log(`📉 ПОЗИЦИЯ ЗАКРЫТА: ${trade.symbol} | PnL: $${pnl.toFixed(2)} (${pnlPercent.toFixed(2)}%) | Баланс: $${newBalance.toFixed(2)}`);
           }
         }
       } catch (error) {
@@ -424,6 +423,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-gray-900">
+      {/* Кровавые капли */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         {[...Array(20)].map((_, i) => (
           <div
@@ -439,10 +439,13 @@ const App: React.FC = () => {
       </div>
       
       <div className="relative z-10 container mx-auto px-4 py-6">
+        {/* Хедер */}
         <div className="flex justify-between items-center mb-6 bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
           <div>
-            <h1 className="text-3xl font-bold text-red-500">💀 AUTO TRADE PRO V2 💀</h1>
-            <p className="text-gray-400 text-sm">Скальпинг терминал | 300+ активов | Bybit Testnet</p>
+            <h1 className="text-3xl font-bold text-red-500 flex items-center gap-2">
+              💀 AUTO TRADE PRO V2 💀
+            </h1>
+            <p className="text-gray-400 text-sm">Скальпинг терминал | 300+ активов | RSI 65/35 | MACD мягкий</p>
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-green-400">${balance.toFixed(2)}</div>
@@ -452,6 +455,7 @@ const App: React.FC = () => {
           </div>
         </div>
         
+        {/* Панель управления */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
             <label className="text-gray-400 text-sm">🤖 АВТОТОРГОВЛЯ</label>
@@ -497,15 +501,20 @@ const App: React.FC = () => {
             <div className="text-2xl font-bold text-green-400">
               ${prices.get(selectedSymbol)?.price?.toFixed(4) || '0'}
             </div>
+            <div className={`text-sm ${
+              (prices.get(selectedSymbol)?.change24h || 0) >= 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              24h: {(prices.get(selectedSymbol)?.change24h || 0).toFixed(2)}%
+            </div>
           </div>
         </div>
         
+        {/* График и виджеты */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
             <TradingChart symbol={selectedSymbol} />
           </div>
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
-            {/* Временно убраны пропсы, которые не принимаются */}
             <Watchlist />
           </div>
         </div>
@@ -519,10 +528,12 @@ const App: React.FC = () => {
           </div>
         </div>
         
+        {/* История сигналов */}
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30 mb-6">
           <SignalHistory />
         </div>
         
+        {/* Открытые позиции */}
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
           <h2 className="text-xl font-bold text-red-400 mb-4">📋 ОТКРЫТЫЕ ПОЗИЦИИ</h2>
           <div className="overflow-x-auto">
@@ -532,8 +543,9 @@ const App: React.FC = () => {
                   <th className="text-left py-2">МОНЕТА</th>
                   <th className="text-left py-2">ТИП</th>
                   <th className="text-right py-2">ЦЕНА ВХ.</th>
-                  <th className="text-right py-2">TP</th>
-                  <th className="text-right py-2">SL</th>
+                  <th className="text-right py-2">КОЛ-ВО</th>
+                  <th className="text-right py-2">TP (3%)</th>
+                  <th className="text-right py-2">SL (2%)</th>
                   <th className="text-right py-2">ТЕКУЩИЙ P&L</th>
                 </tr>
               </thead>
@@ -552,23 +564,47 @@ const App: React.FC = () => {
                         {trade.side}
                       </td>
                       <td className="text-right py-2">${trade.entryPrice.toFixed(4)}</td>
+                      <td className="text-right py-2">{trade.quantity.toFixed(4)}</td>
                       <td className="text-right py-2 text-green-400">${trade.tpPrice?.toFixed(4)}</td>
                       <td className="text-right py-2 text-red-400">${trade.slPrice?.toFixed(4)}</td>
-                      <td className={`text-right py-2 ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <td className={`text-right py-2 font-bold ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         ${currentPnL.toFixed(2)} ({currentPnLPercent.toFixed(2)}%)
-                       </td>
+                      </td>
                     </tr>
                   );
                 })}
                 {trades.filter(t => t.status === 'open').length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-500">
-                      НЕТ ОТКРЫТЫХ ПОЗИЦИЙ
+                    <td colSpan={7} className="text-center py-8 text-gray-500">
+                      💀 НЕТ ОТКРЫТЫХ ПОЗИЦИЙ 💀
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+        
+        {/* Статистика сигналов */}
+        <div className="mt-6 bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
+          <h2 className="text-xl font-bold text-red-400 mb-4">📊 СТАТИСТИКА СИГНАЛОВ</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <div className="text-gray-400 text-sm">ВСЕГО СИГНАЛОВ</div>
+              <div className="text-2xl font-bold text-white">{signals.length}</div>
+            </div>
+            <div>
+              <div className="text-gray-400 text-sm">BUY СИГНАЛОВ</div>
+              <div className="text-2xl font-bold text-green-400">{signals.filter(s => s.type === 'BUY').length}</div>
+            </div>
+            <div>
+              <div className="text-gray-400 text-sm">SELL СИГНАЛОВ</div>
+              <div className="text-2xl font-bold text-red-400">{signals.filter(s => s.type === 'SELL').length}</div>
+            </div>
+            <div>
+              <div className="text-gray-400 text-sm">ИСПОЛНЕНО</div>
+              <div className="text-2xl font-bold text-blue-400">{signals.filter(s => s.status === 'executed').length}</div>
+            </div>
           </div>
         </div>
       </div>
