@@ -163,28 +163,30 @@ function analyzeIndicators(symbol: string, currentPrice: number, isScalping: boo
   let reasons: string[] = []
   
   if (isScalping) {
-    const buyScalping = rsi < 50 && (macdCross === 'bullish' || currMacd.macd > 0)
-    const sellScalping = rsi > 50 && (macdCross === 'bearish' || currMacd.macd < 0)
+    // НОВЫЕ ЖЁСТКИЕ УСЛОВИЯ: RSI < 35 / > 65
+    const buyScalping = rsi < 35 && (macdCross === 'bullish' || currMacd.macd > 0)
+    const sellScalping = rsi > 65 && (macdCross === 'bearish' || currMacd.macd < 0)
     if (buyScalping) {
       allBuyConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (<50)`, `MACD бычий`)
+      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `MACD бычий`)
     } else if (sellScalping) {
       allSellConditions = true
       strength = 2
-      reasons.push(`RSI:${Math.round(rsi)} (>50)`, `MACD медвежий`)
+      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `MACD медвежий`)
     }
   } else {
-    const buySwing = rsi < 45 && macdCross === 'bullish' && currentPrice > ema20
-    const sellSwing = rsi > 55 && macdCross === 'bearish' && currentPrice < ema20
+    // Свинг тоже ужесточаем
+    const buySwing = rsi < 35 && macdCross === 'bullish' && currentPrice > ema20
+    const sellSwing = rsi > 65 && macdCross === 'bearish' && currentPrice < ema20
     if (buySwing) {
       allBuyConditions = true
       strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (<45)`, `MACD бычий`, `Цена выше EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `MACD бычий`, `Цена выше EMA20`)
     } else if (sellSwing) {
       allSellConditions = true
       strength = 3
-      reasons.push(`RSI:${Math.round(rsi)} (>55)`, `MACD медвежий`, `Цена ниже EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `MACD медвежий`, `Цена ниже EMA20`)
     }
   }
   
@@ -416,7 +418,7 @@ function App() {
           <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">💀 AUTO TRADE PRO | {SYMBOLS.length} активов</h1>
           <div className="flex gap-4 items-center">
             <button onClick={toggleScalpingMode} className={`px-3 py-1 rounded-lg text-xs font-bold ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}>
-              {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<50)' : '📈 СВИНГ (RSI<45)'}
+              {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI<35)' : '📈 СВИНГ (RSI<35)'}
             </button>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
@@ -475,7 +477,7 @@ function App() {
                     <button onClick={resetAccount} className="bg-yellow-600/50 px-4 py-2 rounded-lg">🔄 Сбросить счет</button>
                     {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 px-4 py-2 rounded-lg">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">RSI&lt;50 для BUY, RSI&gt;50 для SELL</p></div>}
+                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">RSI&lt;35 для BUY, RSI&gt;65 для SELL</p></div>}
                 </div>
               )}
             </div>
@@ -548,7 +550,7 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI&lt;50 / &gt;50)' : '📈 СВИНГ (RSI&lt;45 / &gt;55)'} | {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (RSI&lt;35 / &gt;65)' : '📈 СВИНГ (RSI&lt;35 / &gt;65)'} | {SYMBOLS.length} активов</div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов</div>) : (signals.map((signal, idx) => {
@@ -563,7 +565,7 @@ function App() {
                       <span className="text-yellow-400 text-sm">⚡ {stars}</span>
                     </div>
                     <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
-                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < 50 ? 'text-green-400' : signal.indicators.rsi > 50 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
+                      <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.indicators.rsi < 35 ? 'text-green-400' : signal.indicators.rsi > 65 ? 'text-red-400' : 'text-white'}`}>{signal.indicators.rsi}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">MACD</div><div className="font-mono text-white">{signal.indicators.macd > 0 ? '+' : ''}{signal.indicators.macd.toFixed(4)}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">EMA20/50</div><div className="text-white text-xs">${signal.indicators.ema20.toFixed(0)}/${signal.indicators.ema50.toFixed(0)}</div></div>
                       <div className="bg-black/40 rounded-lg p-2 text-center"><div className="text-gray-500">Цена</div><div className="font-mono text-white">${signal.price.toLocaleString()}</div></div>
