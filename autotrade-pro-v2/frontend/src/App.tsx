@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createChart, ColorType, IChartApi, CandlestickData, Time } from 'lightweight-charts';
+
+// @ts-ignore
+import { createChart, ColorType } from 'lightweight-charts';
+
 import { 
   Activity, TrendingUp, TrendingDown, Zap, Shield, Droplets, Sparkles, 
   Volume2, Timer, Target, Rocket, Brain, Gauge, Coins, BarChart3, 
@@ -65,12 +68,6 @@ interface TradeHistory {
   closeReason: 'tp' | 'sl' | 'manual';
 }
 
-interface ActiveTab {
-  id: 'signals' | 'positions' | 'history' | 'settings';
-  label: string;
-  icon: React.ReactNode;
-}
-
 // ==============================================
 // 2. КОНФИГУРАЦИЯ
 // ==============================================
@@ -81,13 +78,7 @@ const ASSETS = [
   'ALGOUSDT', 'FTMUSDT', 'SANDUSDT', 'MANAUSDT', 'GALAUSDT', 'AXSUSDT', 'ENJUSDT', 'CHZUSDT', 'THETAUSDT', 'EOSUSDT',
   'XTZUSDT', 'KSMUSDT', 'ZECUSDT', 'DASHUSDT', 'COMPUSDT', 'ZILUSDT', 'BATUSDT', 'ZRXUSDT', 'OMGUSDT', 'QTUMUSDT',
   'ICPUSDT', 'STXUSDT', 'KASUSDT', 'RUNEUSDT', 'EGLDUSDT', 'FLOWUSDT', 'WAVESUSDT', 'NEOUSDT', 'IOTAUSDT', 'XDCUSDT',
-  'ONEUSDT', 'HOTUSDT', 'CROUSDT', 'OKBUSDT', 'LEOUSDT', 'CELOUSDT', 'ROSEUSDT', 'KLAYUSDT', 'CKBUSDT', 'ERGUSDT',
-  'PEPEUSDT', 'WIFUSDT', 'BONKUSDT', 'FLOKIUSDT', 'SHIBUSDT', 'SEIUSDT', 'TIAUSDT', 'PYTHUSDT', 'JUPUSDT', 'ONDOUSDT',
-  'STRKUSDT', 'WLDUSDT', 'AGIXUSDT', 'OCEANUSDT', 'FETUSDT', 'LDOUSDT', 'BLURUSDT', 'RDNTUSDT', 'MAGICUSDT', 'GNSUSDT',
-  'SSVUSDT', 'RPLUSDT', 'DGBUSDT', 'DCRUSDT', 'BTGUSDT', 'NMRUSDT', 'STORJUSDT', 'ANKRUSDT', 'REEFUSDT', 'COTIUSDT',
-  'WINUSDT', 'ALICEUSDT', 'TLMUSDT', 'MBOXUSDT', 'DARUSDT', 'RACAUSDT', 'HIGHUSDT', 'STGUSDT', 'LQTYUSDT', 'TRUUSDT',
-  'BONDUSDT', 'MDXUSDT', 'FORTHUSDT', 'BAKEUSDT', 'BURGERUSDT', 'CAKEUSDT', 'XVSUSDT', 'ALPACAUSDT', 'BETAUSDT', 'LAZIOUSDT',
-  'SANTOSUSDT', 'PORTOUSDT', 'ACMUSDT', 'BARUSDT', 'CITYUSDT', 'PSGUSDT', 'JUVUSDT', 'ATMUSDT', 'INTERUSDT', '1INCHUSDT'
+  'ONEUSDT', 'HOTUSDT', 'CROUSDT', 'OKBUSDT', 'LEOUSDT', 'CELOUSDT', 'ROSEUSDT', 'KLAYUSDT', 'CKBUSDT', 'ERGUSDT'
 ];
 
 const DEFAULT_CONFIG = {
@@ -99,242 +90,11 @@ const DEFAULT_CONFIG = {
   maxConcurrentPositions: 8,
   updateIntervalMs: 1000,
   riskPercent: 5,
-  useBybit: true,
+  useBybit: false,
 };
 
-// Bybit API Key (ваши ключи)
-const BYBIT_API_KEY = 'BBTh4UU9lErjxZhyu4';
-const BYBIT_API_SECRET = 'irjQnuh8droR2sCfRhW0sXzkBqlAHeqWKpMK';
-
 // ==============================================
-// 3. BYBIT TESTNET API
-// ==============================================
-class BybitTestnetAPI {
-  private apiKey: string;
-  private apiSecret: string;
-  private baseUrl: string = 'https://api-testnet.bybit.com';
-  private recvWindow: string = '5000';
-
-  constructor(apiKey: string, apiSecret: string) {
-    this.apiKey = apiKey;
-    this.apiSecret = apiSecret;
-  }
-
-  private async generateSignature(params: Record<string, any>, timestamp: string): Promise<string> {
-    const queryString = Object.keys(params)
-      .sort()
-      .map(key => `${key}=${params[key]}`)
-      .join('&');
-    
-    const signaturePayload = `${timestamp}${this.apiKey}${this.recvWindow}${queryString}`;
-    
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(this.apiSecret);
-    const messageData = encoder.encode(signaturePayload);
-    
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
-    return Array.from(new Uint8Array(signature))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-
-  private async request(endpoint: string, method: 'GET' | 'POST', params: Record<string, any> = {}): Promise<any> {
-    const timestamp = Date.now().toString();
-    const signature = await this.generateSignature(params, timestamp);
-    
-    const queryString = Object.keys(params)
-      .sort()
-      .map(key => `${key}=${params[key]}`)
-      .join('&');
-    
-    const url = `${this.baseUrl}${endpoint}?${queryString}&timestamp=${timestamp}&api_key=${this.apiKey}&recv_window=${this.recvWindow}&sign=${signature}`;
-    
-    const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' } });
-    const data = await response.json();
-    
-    if (data.retCode !== 0) {
-      throw new Error(`Bybit API Error: ${data.retMsg}`);
-    }
-    
-    return data.result;
-  }
-
-  async getBalance(): Promise<number> {
-    try {
-      const result = await this.request('/v5/account/wallet-balance', 'GET', {
-        accountType: 'UNIFIED',
-        coin: 'USDT',
-      });
-      const usdtAsset = result.list?.[0]?.coin?.find((c: any) => c.coin === 'USDT');
-      return parseFloat(usdtAsset?.availableToWithdraw || '0');
-    } catch (error) {
-      return 0;
-    }
-  }
-
-  async placeOrder(symbol: string, side: 'Buy' | 'Sell', quantity: number): Promise<any> {
-    const orderParams = {
-      category: 'linear',
-      symbol: symbol,
-      side: side,
-      orderType: 'Market',
-      qty: quantity.toString(),
-      timeInForce: 'IOC',
-    };
-    return await this.request('/v5/order/create', 'POST', orderParams);
-  }
-
-  async getTicker(symbol: string): Promise<number> {
-    const result = await this.request('/v5/market/tickers', 'GET', {
-      category: 'linear',
-      symbol: symbol,
-    });
-    return parseFloat(result.list?.[0]?.lastPrice || '0');
-  }
-
-  async setTPSL(symbol: string, side: 'Buy' | 'Sell', takeProfit: number, stopLoss: number): Promise<void> {
-    const params: any = {
-      category: 'linear',
-      symbol: symbol,
-      side: side,
-      positionIdx: 0,
-      takeProfit: takeProfit.toString(),
-      stopLoss: stopLoss.toString(),
-    };
-    await this.request('/v5/position/set-trading-stop', 'POST', params);
-  }
-
-  async closePosition(symbol: string): Promise<void> {
-    const positions = await this.getPositions();
-    const position = positions.find(p => p.symbol === symbol);
-    if (!position) return;
-    
-    const closeSide = position.side === 'Buy' ? 'Sell' : 'Buy';
-    const orderParams = {
-      category: 'linear',
-      symbol: symbol,
-      side: closeSide,
-      orderType: 'Market',
-      qty: position.size,
-      timeInForce: 'IOC',
-      reduceOnly: true,
-    };
-    await this.request('/v5/order/create', 'POST', orderParams);
-  }
-
-  async getPositions(): Promise<any[]> {
-    const result = await this.request('/v5/position/list', 'GET', {
-      category: 'linear',
-      settleCoin: 'USDT',
-    });
-    return result.list?.filter((p: any) => parseFloat(p.size) > 0) || [];
-  }
-
-  async testConnection(): Promise<boolean> {
-    try {
-      await this.getBalance();
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
-
-// ==============================================
-// 4. ВЕБСОКЕТ МЕНЕДЖЕР
-// ==============================================
-class WebSocketManager {
-  private ws: WebSocket | null = null;
-  private subscribers: Map<string, Set<(data: any) => void>> = new Map();
-  private reconnectAttempts = 0;
-  private isConnecting = false;
-  private assets: string[];
-
-  constructor(assets: string[]) {
-    this.assets = assets;
-    this.connect();
-  }
-
-  private connect() {
-    if (this.isConnecting) return;
-    this.isConnecting = true;
-
-    try {
-      const streams = this.assets.map(asset => `${asset.toLowerCase()}@kline_1m`).join('/');
-      const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`;
-      
-      this.ws = new WebSocket(wsUrl);
-      
-      this.ws.onopen = () => {
-        console.log('✅ WebSocket connected');
-        this.reconnectAttempts = 0;
-        this.isConnecting = false;
-      };
-      
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data?.data?.k) {
-            const kline = data.data.k;
-            const symbol = kline.s;
-            const candle = {
-              time: kline.t / 1000,
-              open: parseFloat(kline.o),
-              high: parseFloat(kline.h),
-              low: parseFloat(kline.l),
-              close: parseFloat(kline.c),
-              volume: parseFloat(kline.v),
-            };
-            this.notify(symbol, candle);
-          }
-        } catch (err) {
-          console.error('WebSocket parse error:', err);
-        }
-      };
-      
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-      
-      this.ws.onclose = () => {
-        console.log('WebSocket disconnected, reconnecting...');
-        setTimeout(() => this.connect(), 3000);
-      };
-    } catch (err) {
-      console.error('WebSocket connection error:', err);
-      setTimeout(() => this.connect(), 3000);
-    }
-  }
-
-  private notify(symbol: string, data: any) {
-    const handlers = this.subscribers.get(symbol);
-    if (handlers) {
-      handlers.forEach(handler => handler(data));
-    }
-  }
-
-  subscribe(symbol: string, callback: (data: any) => void) {
-    if (!this.subscribers.has(symbol)) {
-      this.subscribers.set(symbol, new Set());
-    }
-    this.subscribers.get(symbol)!.add(callback);
-    
-    return () => {
-      this.subscribers.get(symbol)?.delete(callback);
-    };
-  }
-}
-
-// ==============================================
-// 5. ТЕХНИЧЕСКИЕ ИНДИКАТОРЫ
+// 3. ТЕХНИЧЕСКИЕ ИНДИКАТОРЫ
 // ==============================================
 class TechnicalIndicators {
   static calculateRSI(prices: number[], period: number = 14): number | null {
@@ -400,10 +160,94 @@ class TechnicalIndicators {
 }
 
 // ==============================================
-// 6. ОСНОВНОЙ КОМПОНЕНТ APP
+// 4. ВЕБСОКЕТ МЕНЕДЖЕР
+// ==============================================
+class WebSocketManager {
+  private ws: WebSocket | null = null;
+  private subscribers: Map<string, Set<(data: any) => void>> = new Map();
+  private reconnectAttempts = 0;
+  private isConnecting = false;
+  private assets: string[];
+
+  constructor(assets: string[]) {
+    this.assets = assets;
+    this.connect();
+  }
+
+  private connect() {
+    if (this.isConnecting) return;
+    this.isConnecting = true;
+
+    try {
+      const streams = this.assets.map(asset => `${asset.toLowerCase()}@kline_1m`).join('/');
+      const wsUrl = `wss://stream.binance.com:9443/stream?streams=${streams}`;
+      
+      this.ws = new WebSocket(wsUrl);
+      
+      this.ws.onopen = () => {
+        console.log('WebSocket connected');
+        this.reconnectAttempts = 0;
+        this.isConnecting = false;
+      };
+      
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data?.data?.k) {
+            const kline = data.data.k;
+            const symbol = kline.s;
+            const candle = {
+              time: kline.t / 1000,
+              open: parseFloat(kline.o),
+              high: parseFloat(kline.h),
+              low: parseFloat(kline.l),
+              close: parseFloat(kline.c),
+              volume: parseFloat(kline.v),
+            };
+            this.notify(symbol, candle);
+          }
+        } catch (err) {
+          console.error('WebSocket parse error:', err);
+        }
+      };
+      
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      this.ws.onclose = () => {
+        console.log('WebSocket disconnected, reconnecting...');
+        setTimeout(() => this.connect(), 3000);
+      };
+    } catch (err) {
+      console.error('WebSocket connection error:', err);
+      setTimeout(() => this.connect(), 3000);
+    }
+  }
+
+  private notify(symbol: string, data: any) {
+    const handlers = this.subscribers.get(symbol);
+    if (handlers) {
+      handlers.forEach(handler => handler(data));
+    }
+  }
+
+  subscribe(symbol: string, callback: (data: any) => void) {
+    if (!this.subscribers.has(symbol)) {
+      this.subscribers.set(symbol, new Set());
+    }
+    this.subscribers.get(symbol)!.add(callback);
+    
+    return () => {
+      this.subscribers.get(symbol)?.delete(callback);
+    };
+  }
+}
+
+// ==============================================
+// 5. ОСНОВНОЙ КОМПОНЕНТ APP
 // ==============================================
 function App() {
-  // Состояния
   const [selectedAsset, setSelectedAsset] = useState('BTCUSDT');
   const [marketData, setMarketData] = useState<Map<string, KlineData[]>>(new Map());
   const [signals, setSignals] = useState<Signal[]>([]);
@@ -414,41 +258,13 @@ function App() {
   const [initialBalance] = useState(10000);
   const [lastSignalTime, setLastSignalTime] = useState<Map<string, number>>(new Map());
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [bybitReady, setBybitReady] = useState(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab['id']>('signals');
+  const [activeTab, setActiveTab] = useState<'signals' | 'positions' | 'history' | 'settings'>('signals');
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [lastUpdateTime, setLastUpdateTime] = useState(Date.now());
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
+  const chartRef = useRef<any>(null);
   const wsManagerRef = useRef<WebSocketManager | null>(null);
-  const bybitRef = useRef<BybitTestnetAPI | null>(null);
-  
-  // Инициализация Bybit Testnet
-  useEffect(() => {
-    const initBybit = async () => {
-      try {
-        const bybit = new BybitTestnetAPI(BYBIT_API_KEY, BYBIT_API_SECRET);
-        bybitRef.current = bybit;
-        const connected = await bybit.testConnection();
-        
-        if (connected) {
-          setBybitReady(true);
-          const bal = await bybit.getBalance();
-          if (bal > 0) setBalance(bal);
-          console.log(`✅ Bybit Testnet connected! Balance: $${bal.toFixed(2)}`);
-          showToast('✅ Bybit Testnet connected!', 'success');
-        } else {
-          console.warn('⚠️ Bybit connection failed');
-          showToast('⚠️ Bybit connection failed', 'error');
-        }
-      } catch (error) {
-        console.error('Bybit init error:', error);
-      }
-    };
-    
-    initBybit();
-  }, []);
   
   // Инициализация WebSocket
   useEffect(() => {
@@ -492,8 +308,9 @@ function App() {
   const calculatePositionSize = (entryPrice: number, stopLossPrice: number): number => {
     const riskAmount = balance * (config.riskPercent / 100);
     const riskPerUnit = Math.abs(entryPrice - stopLossPrice);
+    if (riskPerUnit === 0) return 0;
     const positionSize = riskAmount / riskPerUnit;
-    return Math.min(positionSize, balance / entryPrice); // Не больше всего баланса
+    return Math.min(positionSize, balance / entryPrice);
   };
   
   // Генерация сигналов
@@ -510,19 +327,17 @@ function App() {
       const ema50 = TechnicalIndicators.calculateEMA(prices, 50);
       const macdData = TechnicalIndicators.calculateMACD(prices);
       
-      if (!rsi || !ema20 || !ema50 || !macdData) continue;
+      if (rsi === null || ema20 === null || ema50 === null || macdData === null) continue;
       
       const currentPrice = prices[prices.length - 1];
       
-      // Мягкие условия
       const buyCondition = rsi < config.rsiBuyThreshold && macdData.histogram > 0 && ema20 > ema50;
       const sellCondition = rsi > config.rsiSellThreshold && macdData.histogram < 0 && ema20 < ema50;
       
       const lastSignal = lastSignalTime.get(asset) || 0;
       const cooldownMs = config.cooldownMinutes * 60 * 1000;
       
-      const signalStrength = buyCondition || sellCondition ? 
-        Math.min(100, Math.abs(50 - rsi) * 2 + Math.abs(macdData.histogram) * 10) : 0;
+      const signalStrength = Math.min(100, Math.abs(50 - rsi) * 2 + Math.abs(macdData.histogram) * 10);
       
       if (buyCondition && Date.now() - lastSignal > cooldownMs) {
         newSignals.push({
@@ -531,7 +346,7 @@ function App() {
           type: 'BUY',
           price: currentPrice,
           timestamp: Date.now(),
-          reason: `RSI:${rsi.toFixed(1)} | MACD:${macdData.histogram.toFixed(2)} | EMA20>EMA50`,
+          reason: `RSI:${rsi.toFixed(1)} | MACD:${macdData.histogram.toFixed(2)}`,
           rsi,
           macd: macdData.histogram,
           ema: ema20,
@@ -547,7 +362,7 @@ function App() {
           type: 'SELL',
           price: currentPrice,
           timestamp: Date.now(),
-          reason: `RSI:${rsi.toFixed(1)} | MACD:${macdData.histogram.toFixed(2)} | EMA20<EMA50`,
+          reason: `RSI:${rsi.toFixed(1)} | MACD:${macdData.histogram.toFixed(2)}`,
           rsi,
           macd: macdData.histogram,
           ema: ema50,
@@ -568,7 +383,7 @@ function App() {
   };
   
   // Автоматическое исполнение сделок
-  const executeAutoTrade = async (newSignals: Signal[]) => {
+  const executeAutoTrade = (newSignals: Signal[]) => {
     const openPositionsCount = positions.filter(p => p.status === 'open').length;
     
     if (openPositionsCount >= config.maxConcurrentPositions) {
@@ -587,58 +402,32 @@ function App() {
         ? entryPrice * (1 + config.takeProfitPercent / 100)
         : entryPrice * (1 - config.takeProfitPercent / 100);
       
-      // Расчет размера позиции на основе риска
       const positionSize = calculatePositionSize(entryPrice, slPrice);
+      if (positionSize <= 0) continue;
+      
       const positionAmount = positionSize * entryPrice;
       
-      let orderFilled = false;
+      const newPosition: Position = {
+        id: `${signal.asset}_${Date.now()}`,
+        asset: signal.asset,
+        type: signal.type,
+        entryPrice,
+        amount: positionAmount,
+        size: positionSize,
+        timestamp: Date.now(),
+        tp: tpPrice,
+        sl: slPrice,
+        status: 'open'
+      };
       
-      // Реальная торговля через Bybit
-      if (bybitReady && bybitRef.current && config.useBybit) {
-        try {
-          await bybitRef.current.placeOrder(
-            signal.asset,
-            signal.type === 'BUY' ? 'Buy' : 'Sell',
-            positionSize
-          );
-          await bybitRef.current.setTPSL(
-            signal.asset,
-            signal.type === 'BUY' ? 'Buy' : 'Sell',
-            tpPrice,
-            slPrice
-          );
-          orderFilled = true;
-        } catch (error) {
-          console.error('Bybit order failed:', error);
-        }
-      } else {
-        // Локальная симуляция
-        orderFilled = true;
-      }
-      
-      if (orderFilled) {
-        const newPosition: Position = {
-          id: `${signal.asset}_${Date.now()}`,
-          asset: signal.asset,
-          type: signal.type,
-          entryPrice,
-          amount: positionAmount,
-          size: positionSize,
-          timestamp: Date.now(),
-          tp: tpPrice,
-          sl: slPrice,
-          status: 'open'
-        };
-        
-        setPositions(prev => [...prev, newPosition]);
-        setBalance(prev => prev - positionAmount);
-        showToast(`✅ ${signal.type} ${signal.asset} @ ${entryPrice.toFixed(2)} (${positionSize.toFixed(4)} units)`, 'success');
-      }
+      setPositions(prev => [...prev, newPosition]);
+      setBalance(prev => prev - positionAmount);
+      showToast(`✅ ${signal.type} ${signal.asset} @ ${entryPrice.toFixed(2)} (${positionSize.toFixed(4)} units)`, 'success');
     }
   };
   
   // Проверка TP/SL
-  const checkTP_SL = async () => {
+  const checkTP_SL = () => {
     const updatedPositions = [...positions];
     let positionsChanged = false;
     
@@ -678,10 +467,6 @@ function App() {
       }
       
       if (shouldClose) {
-        if (bybitReady && bybitRef.current && config.useBybit) {
-          await bybitRef.current.closePosition(position.asset);
-        }
-        
         const pnl = position.type === 'BUY'
           ? (exitPrice - position.entryPrice) * position.size
           : (position.entryPrice - exitPrice) * position.size;
@@ -717,7 +502,7 @@ function App() {
         };
         
         setTradeHistory(prev => [historyItem, ...prev].slice(0, 500));
-        showToast(`🎯 ${closeReason.toUpperCase()} ${position.asset} | P/L: ${pnlPercent.toFixed(2)}% ($${pnl.toFixed(2)})`, pnlPercent > 0 ? 'success' : 'error');
+        showToast(`🎯 ${closeReason.toUpperCase()} ${position.asset} | ${pnlPercent.toFixed(2)}%`, pnlPercent > 0 ? 'success' : 'error');
         
         positionsChanged = true;
       }
@@ -728,7 +513,7 @@ function App() {
     }
   };
   
-  // Автоматическое обновление каждую секунду
+  // Автоматическое обновление
   useEffect(() => {
     const interval = setInterval(() => {
       generateSignals();
@@ -757,7 +542,7 @@ function App() {
         horzLines: { color: '#1a1a2a' },
       },
       width: chartContainerRef.current.clientWidth,
-      height: 500,
+      height: 450,
     });
     
     const candlestickSeries = chart.addCandlestickSeries({
@@ -769,8 +554,8 @@ function App() {
     });
     
     const data = marketData.get(selectedAsset) || [];
-    const chartData: CandlestickData<Time>[] = data.map(d => ({
-      time: d.time as Time,
+    const chartData = data.map(d => ({
+      time: d.time as any,
       open: d.open,
       high: d.high,
       low: d.low,
@@ -798,7 +583,6 @@ function App() {
     };
   }, [selectedAsset, marketData]);
   
-  // Статистика
   const getWinRate = () => {
     if (tradeHistory.length === 0) return 0;
     const wins = tradeHistory.filter(t => t.pnl > 0).length;
@@ -823,51 +607,40 @@ function App() {
     return Math.min(...tradeHistory.map(t => t.pnlPercent));
   };
   
-  const tabs: ActiveTab[] = [
-    { id: 'signals', label: 'Сигналы', icon: <Zap className="w-4 h-4" /> },
-    { id: 'positions', label: 'Позиции', icon: <Activity className="w-4 h-4" /> },
-    { id: 'history', label: 'История', icon: <History className="w-4 h-4" /> },
-    { id: 'settings', label: 'Настройки', icon: <Settings className="w-4 h-4" /> },
-  ];
-  
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#0f0f1a] to-[#0a0a0f] text-gray-200">
       {/* Кровавый эффект */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute top-10 left-[15%] text-6xl opacity-10 animate-pulse drop-shadow-glow-red">🩸</div>
-        <div className="absolute bottom-20 right-[20%] text-7xl opacity-10 animate-pulse drop-shadow-glow-red" style={{ animationDelay: '1s' }}>💧</div>
-        <div className="absolute top-1/3 right-[10%] text-5xl opacity-10 animate-pulse drop-shadow-glow-red" style={{ animationDelay: '2s' }}>🩸</div>
-        <div className="absolute bottom-1/4 left-[25%] text-6xl opacity-10 animate-pulse drop-shadow-glow-red" style={{ animationDelay: '0.5s' }}>💧</div>
+        <div className="absolute top-10 left-[15%] text-6xl opacity-10 animate-pulse">🩸</div>
+        <div className="absolute bottom-20 right-[20%] text-7xl opacity-10 animate-pulse" style={{ animationDelay: '1s' }}>💧</div>
+        <div className="absolute top-1/3 right-[10%] text-5xl opacity-10 animate-pulse" style={{ animationDelay: '2s' }}>🩸</div>
       </div>
       
       <div className="relative z-10 container mx-auto px-4 py-6">
         {/* Header */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-800 rounded-lg flex items-center justify-center shadow-lg shadow-red-900/30">
+            <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-800 rounded-lg flex items-center justify-center">
               <Flame className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-red-500 via-red-400 to-red-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-red-500 to-red-600 bg-clip-text text-transparent">
                 Auto Trade Pro V2
               </h1>
               <p className="text-xs text-gray-400">
                 Scalping Terminal • {ASSETS.length}+ Assets • Auto-Refresh 1s
-                {bybitReady && <span className="text-green-400 ml-2">● Bybit Live</span>}
               </p>
             </div>
           </div>
           
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-lg px-4 py-2 border border-red-900/30">
+            <div className="flex items-center gap-2 bg-black/40 rounded-lg px-4 py-2 border border-red-900/30">
               <RefreshCw className={`w-4 h-4 text-blue-400 ${lastUpdateTime % 2000 < 1000 ? 'animate-spin' : ''}`} />
-              <span className="text-sm text-gray-300">Auto:</span>
-              <span className="text-sm font-mono text-green-400">{config.updateIntervalMs}ms</span>
+              <span className="text-sm text-gray-300">{config.updateIntervalMs}ms</span>
             </div>
             
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm rounded-lg px-4 py-2 border border-red-900/30">
+            <div className="flex items-center gap-2 bg-black/40 rounded-lg px-4 py-2 border border-red-900/30">
               <Wallet className="w-4 h-4 text-red-400" />
-              <span className="text-sm text-gray-300">Balance:</span>
               <span className="text-lg font-bold text-green-400">${balance.toFixed(2)}</span>
               <span className={`text-xs ${getTotalPnL() >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 ({getTotalPnLPercent()}%)
@@ -878,7 +651,7 @@ function App() {
               onClick={() => setAutoTrade(!autoTrade)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
                 autoTrade 
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 shadow-lg shadow-red-900/30' 
+                  ? 'bg-gradient-to-r from-red-600 to-red-700 shadow-lg shadow-red-900/30' 
                   : 'bg-gray-700 hover:bg-gray-600'
               }`}
             >
@@ -890,111 +663,79 @@ function App() {
         
         {/* Stats Cards */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-          <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-red-900/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">Win Rate</p>
-                <p className="text-xl font-bold text-green-400">{getWinRate()}%</p>
-              </div>
-              <Target className="w-6 h-6 text-red-500/50" />
-            </div>
+          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
+            <p className="text-[10px] text-gray-400">Win Rate</p>
+            <p className="text-xl font-bold text-green-400">{getWinRate()}%</p>
           </div>
           
-          <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-red-900/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">Total P/L</p>
-                <p className={`text-xl font-bold ${getTotalPnL() >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  ${getTotalPnL().toFixed(2)}
-                </p>
-              </div>
-              <TrendingUp className={`w-6 h-6 ${getTotalPnL() >= 0 ? 'text-green-500/50' : 'text-red-500/50'}`} />
-            </div>
+          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
+            <p className="text-[10px] text-gray-400">Total P/L</p>
+            <p className={`text-xl font-bold ${getTotalPnL() >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              ${getTotalPnL().toFixed(2)}
+            </p>
           </div>
           
-          <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-red-900/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">Open Pos</p>
-                <p className="text-xl font-bold text-yellow-400">{positions.filter(p => p.status === 'open').length}</p>
-              </div>
-              <Activity className="w-6 h-6 text-yellow-500/50" />
-            </div>
+          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
+            <p className="text-[10px] text-gray-400">Open Pos</p>
+            <p className="text-xl font-bold text-yellow-400">{positions.filter(p => p.status === 'open').length}</p>
           </div>
           
-          <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-red-900/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">Total Trades</p>
-                <p className="text-xl font-bold text-blue-400">{tradeHistory.length}</p>
-              </div>
-              <History className="w-6 h-6 text-blue-500/50" />
-            </div>
+          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
+            <p className="text-[10px] text-gray-400">Total Trades</p>
+            <p className="text-xl font-bold text-blue-400">{tradeHistory.length}</p>
           </div>
           
-          <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-red-900/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">Best Trade</p>
-                <p className="text-xl font-bold text-green-400">+{getBestTrade().toFixed(1)}%</p>
-              </div>
-              <Award className="w-6 h-6 text-yellow-500/50" />
-            </div>
+          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
+            <p className="text-[10px] text-gray-400">Best Trade</p>
+            <p className="text-xl font-bold text-green-400">+{getBestTrade().toFixed(1)}%</p>
           </div>
           
-          <div className="bg-black/40 backdrop-blur-sm rounded-lg p-3 border border-red-900/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] text-gray-400">Risk/Trade</p>
-                <p className="text-xl font-bold text-orange-400">{config.riskPercent}%</p>
-              </div>
-              <Gauge className="w-6 h-6 text-orange-500/50" />
-            </div>
+          <div className="bg-black/40 rounded-lg p-3 border border-red-900/30">
+            <p className="text-[10px] text-gray-400">Risk/Trade</p>
+            <p className="text-xl font-bold text-orange-400">{config.riskPercent}%</p>
           </div>
         </div>
         
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chart Section */}
-          <div className="lg:col-span-2 bg-black/40 backdrop-blur-sm rounded-lg border border-red-900/30 p-4">
+          {/* Chart */}
+          <div className="lg:col-span-2 bg-black/40 rounded-lg border border-red-900/30 p-4">
             <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <Coins className="w-5 h-5 text-red-400" />
-                <select
-                  value={selectedAsset}
-                  onChange={(e) => setSelectedAsset(e.target.value)}
-                  className="bg-black/60 border border-red-800 rounded-lg px-3 py-1.5 text-sm font-mono text-red-300 focus:outline-none focus:border-red-500"
-                >
-                  {ASSETS.map(asset => (
-                    <option key={asset} value={asset}>{asset}</option>
-                  ))}
-                </select>
-              </div>
+              <select
+                value={selectedAsset}
+                onChange={(e) => setSelectedAsset(e.target.value)}
+                className="bg-black/60 border border-red-800 rounded-lg px-3 py-1.5 text-sm font-mono text-red-300"
+              >
+                {ASSETS.map(asset => (
+                  <option key={asset} value={asset}>{asset}</option>
+                ))}
+              </select>
               <div className="flex items-center gap-2 text-xs text-gray-400">
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span>Live</span>
-                </div>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>Live</span>
                 <span>•</span>
                 <span>1m candles</span>
-                <span>•</span>
-                <span>Auto-refresh {config.updateIntervalMs}ms</span>
               </div>
             </div>
             <div ref={chartContainerRef} className="w-full" style={{ height: '450px' }} />
           </div>
           
-          {/* Tabs Panel */}
-          <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-red-900/30 overflow-hidden">
+          {/* Tabs */}
+          <div className="bg-black/40 rounded-lg border border-red-900/30 overflow-hidden">
             <div className="flex border-b border-red-900/30">
-              {tabs.map(tab => (
+              {[
+                { id: 'signals', label: 'Сигналы', icon: <Zap className="w-4 h-4" /> },
+                { id: 'positions', label: 'Позиции', icon: <Activity className="w-4 h-4" /> },
+                { id: 'history', label: 'История', icon: <History className="w-4 h-4" /> },
+                { id: 'settings', label: 'Настройки', icon: <Settings className="w-4 h-4" /> },
+              ].map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => setActiveTab(tab.id as any)}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-all ${
                     activeTab === tab.id
                       ? 'bg-red-600/20 text-red-400 border-b-2 border-red-500'
-                      : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
+                      : 'text-gray-400 hover:text-gray-300'
                   }`}
                 >
                   {tab.icon}
@@ -1004,46 +745,34 @@ function App() {
             </div>
             
             <div className="p-4 h-[500px] overflow-y-auto">
-              {/* Signals Tab */}
+              {/* Signals */}
               {activeTab === 'signals' && (
                 <div className="space-y-2">
                   {signals.slice(0, 50).map(signal => (
                     <div key={signal.id} className={`p-3 rounded-lg border-l-4 ${
-                      signal.type === 'BUY' 
-                        ? 'border-l-green-500 bg-green-900/10' 
-                        : 'border-l-red-500 bg-red-900/10'
+                      signal.type === 'BUY' ? 'border-l-green-500 bg-green-900/10' : 'border-l-red-500 bg-red-900/10'
                     } bg-black/40`}>
                       <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
+                        <div>
+                          <div className="flex items-center gap-2">
                             <span className="font-mono text-sm font-bold">{signal.asset}</span>
                             <span className={`text-xs px-1.5 py-0.5 rounded ${
                               signal.type === 'BUY' ? 'bg-green-600/30 text-green-300' : 'bg-red-600/30 text-red-300'
-                            }`}>
-                              {signal.type}
-                            </span>
-                            <div className="w-16 h-1 bg-gray-700 rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full ${signal.type === 'BUY' ? 'bg-green-500' : 'bg-red-500'}`}
-                                style={{ width: `${signal.strength}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-gray-500">{signal.strength.toFixed(0)}%</span>
+                            }`}>{signal.type}</span>
                           </div>
                           <div className="text-xs text-gray-400 mt-1">
-                            RSI: {signal.rsi.toFixed(1)} | MACD: {signal.macd.toFixed(3)} | EMA: {signal.ema.toFixed(2)}
+                            RSI: {signal.rsi.toFixed(1)} | Price: ${signal.price.toFixed(4)}
                           </div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">{signal.reason}</div>
+                          <div className="text-[10px] text-gray-500">{signal.reason}</div>
                         </div>
                         <div className="text-right">
-                          <div className="font-mono text-sm">${signal.price.toFixed(4)}</div>
                           <div className="text-[10px] text-gray-500">{new Date(signal.timestamp).toLocaleTimeString()}</div>
                         </div>
                       </div>
                     </div>
                   ))}
                   {signals.length === 0 && (
-                    <div className="text-center py-12 text-gray-500 text-sm">
+                    <div className="text-center py-12 text-gray-500">
                       <Brain className="w-12 h-12 mx-auto mb-2 opacity-30" />
                       Ожидание сигналов...
                     </div>
@@ -1051,15 +780,12 @@ function App() {
                 </div>
               )}
               
-              {/* Positions Tab */}
+              {/* Positions */}
               {activeTab === 'positions' && (
                 <div className="space-y-2">
                   {positions.filter(p => p.status === 'open').map(pos => {
                     const currentData = marketData.get(pos.asset);
                     const currentPrice = currentData?.[currentData.length - 1]?.close || pos.entryPrice;
-                    const unrealizedPnL = pos.type === 'BUY'
-                      ? (currentPrice - pos.entryPrice) * pos.size
-                      : (pos.entryPrice - currentPrice) * pos.size;
                     const unrealizedPnLPercent = pos.type === 'BUY'
                       ? (currentPrice - pos.entryPrice) / pos.entryPrice * 100
                       : (pos.entryPrice - currentPrice) / pos.entryPrice * 100;
@@ -1077,23 +803,20 @@ function App() {
                             <div className="text-xs text-gray-400 mt-1">
                               Entry: ${pos.entryPrice.toFixed(4)} | Size: {pos.size.toFixed(4)}
                             </div>
-                            <div className="text-xs mt-1">
-                              <span className="text-gray-400">Current: ${currentPrice.toFixed(4)}</span>
-                              <span className={`ml-2 ${unrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {unrealizedPnL >= 0 ? '+' : ''}{unrealizedPnLPercent.toFixed(2)}% (${unrealizedPnL.toFixed(2)})
-                              </span>
+                            <div className={`text-xs mt-1 ${unrealizedPnLPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {unrealizedPnLPercent >= 0 ? '+' : ''}{unrealizedPnLPercent.toFixed(2)}%
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-xs text-gray-400">TP: ${pos.tp.toFixed(4)}</div>
-                            <div className="text-xs text-gray-400">SL: ${pos.sl.toFixed(4)}</div>
+                          <div className="text-right text-xs text-gray-400">
+                            <div>TP: ${pos.tp.toFixed(4)}</div>
+                            <div>SL: ${pos.sl.toFixed(4)}</div>
                           </div>
                         </div>
                       </div>
                     );
                   })}
                   {positions.filter(p => p.status === 'open').length === 0 && (
-                    <div className="text-center py-12 text-gray-500 text-sm">
+                    <div className="text-center py-12 text-gray-500">
                       <Activity className="w-12 h-12 mx-auto mb-2 opacity-30" />
                       Нет открытых позиций
                     </div>
@@ -1101,7 +824,7 @@ function App() {
                 </div>
               )}
               
-              {/* History Tab */}
+              {/* History */}
               {activeTab === 'history' && (
                 <div className="space-y-2">
                   {tradeHistory.slice(0, 100).map(trade => (
@@ -1115,132 +838,70 @@ function App() {
                           <span className={`text-xs font-bold ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {trade.pnlPercent >= 0 ? '+' : ''}{trade.pnlPercent.toFixed(2)}%
                           </span>
-                          <span className={`text-xs ${trade.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            (${trade.pnl.toFixed(2)})
-                          </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/50">
-                            {trade.closeReason.toUpperCase()}
-                          </span>
-                          <div className="text-[10px] text-gray-500">
-                            {new Date(trade.closeTime).toLocaleTimeString()}
-                          </div>
+                        <div className="text-[10px] text-gray-500">
+                          {new Date(trade.closeTime).toLocaleTimeString()}
                         </div>
-                      </div>
-                      <div className="text-[10px] text-gray-500 mt-1">
-                        Entry: ${trade.entryPrice.toFixed(4)} → Exit: ${trade.exitPrice.toFixed(4)} | Size: {trade.size.toFixed(4)}
                       </div>
                     </div>
                   ))}
                   {tradeHistory.length === 0 && (
-                    <div className="text-center py-12 text-gray-500 text-sm">
+                    <div className="text-center py-12 text-gray-500">
                       <History className="w-12 h-12 mx-auto mb-2 opacity-30" />
-                      История сделок пуста
+                      История пуста
                     </div>
                   )}
                 </div>
               )}
               
-              {/* Settings Tab */}
+              {/* Settings */}
               {activeTab === 'settings' && (
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm text-gray-300 block mb-2">
-                      Риск на сделку (% от депозита)
-                      <span className="text-orange-400 ml-2">{config.riskPercent}%</span>
+                      Риск на сделку: <span className="text-orange-400">{config.riskPercent}%</span>
                     </label>
                     <input
                       type="range"
                       min="1"
                       max="100"
-                      step="1"
                       value={config.riskPercent}
                       onChange={(e) => setConfig({ ...config, riskPercent: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full"
                     />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>1% (Консервативный)</span>
-                      <span>50% (Средний)</span>
-                      <span>100% (Агрессивный)</span>
-                    </div>
                   </div>
                   
                   <div>
                     <label className="text-sm text-gray-300 block mb-2">
-                      RSI для BUY (ниже)
-                      <span className="text-green-400 ml-2">&lt; {config.rsiBuyThreshold}</span>
+                      RSI для BUY: <span className="text-green-400">&lt; {config.rsiBuyThreshold}</span>
                     </label>
                     <input
                       type="range"
                       min="30"
                       max="70"
-                      step="1"
                       value={config.rsiBuyThreshold}
                       onChange={(e) => setConfig({ ...config, rsiBuyThreshold: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full"
                     />
                   </div>
                   
                   <div>
                     <label className="text-sm text-gray-300 block mb-2">
-                      RSI для SELL (выше)
-                      <span className="text-red-400 ml-2">&gt; {config.rsiSellThreshold}</span>
+                      RSI для SELL: <span className="text-red-400">&gt; {config.rsiSellThreshold}</span>
                     </label>
                     <input
                       type="range"
                       min="30"
                       max="70"
-                      step="1"
                       value={config.rsiSellThreshold}
                       onChange={(e) => setConfig({ ...config, rsiSellThreshold: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full"
                     />
                   </div>
                   
                   <div>
                     <label className="text-sm text-gray-300 block mb-2">
-                      Кулдаун между сигналами (минуты)
-                      <span className="text-blue-400 ml-2">{config.cooldownMinutes} min</span>
-                    </label>
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="5"
-                      step="0.5"
-                      value={config.cooldownMinutes}
-                      onChange={(e) => setConfig({ ...config, cooldownMinutes: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm text-gray-300 block mb-2">Take Profit (%)</label>
-                      <input
-                        type="number"
-                        value={config.takeProfitPercent}
-                        onChange={(e) => setConfig({ ...config, takeProfitPercent: Number(e.target.value) })}
-                        className="w-full bg-black/60 border border-red-800 rounded-lg px-3 py-2 text-sm"
-                        step="0.5"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-300 block mb-2">Stop Loss (%)</label>
-                      <input
-                        type="number"
-                        value={config.stopLossPercent}
-                        onChange={(e) => setConfig({ ...config, stopLossPercent: Number(e.target.value) })}
-                        className="w-full bg-black/60 border border-red-800 rounded-lg px-3 py-2 text-sm"
-                        step="0.5"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm text-gray-300 block mb-2">
-                      Интервал обновления (мс)
-                      <span className="text-purple-400 ml-2">{config.updateIntervalMs}ms</span>
+                      Интервал обновления: <span className="text-purple-400">{config.updateIntervalMs}ms</span>
                     </label>
                     <input
                       type="range"
@@ -1249,18 +910,8 @@ function App() {
                       step="100"
                       value={config.updateIntervalMs}
                       onChange={(e) => setConfig({ ...config, updateIntervalMs: Number(e.target.value) })}
-                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      className="w-full"
                     />
-                  </div>
-                  
-                  <div className="flex items-center justify-between pt-4 border-t border-red-900/30">
-                    <span className="text-sm text-gray-300">Bybit Testnet</span>
-                    <button
-                      onClick={() => setConfig({ ...config, useBybit: !config.useBybit })}
-                      className={`px-3 py-1 rounded-lg text-sm ${config.useBybit ? 'bg-green-600/30 text-green-400' : 'bg-gray-700 text-gray-400'}`}
-                    >
-                      {config.useBybit ? 'Включен' : 'Выключен'}
-                    </button>
                   </div>
                 </div>
               )}
@@ -1269,13 +920,11 @@ function App() {
         </div>
       </div>
       
-      {/* Toast Notifications */}
+      {/* Toast */}
       {toast && (
         <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
           <div className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg ${
-            toast.type === 'success' ? 'bg-green-600 border-l-4 border-green-300' :
-            toast.type === 'error' ? 'bg-red-600 border-l-4 border-red-300' :
-            'bg-blue-600 border-l-4 border-blue-300'
+            toast.type === 'success' ? 'bg-green-600' : toast.type === 'error' ? 'bg-red-600' : 'bg-blue-600'
           }`}>
             {toast.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
             {toast.type === 'error' && <XCircle className="w-5 h-5" />}
@@ -1287,21 +936,12 @@ function App() {
       
       <style>{`
         @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-        .drop-shadow-glow-red {
-          filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.3));
-        }
+        .animate-slide-up { animation: slide-up 0.3s ease-out; }
+        .animate-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
