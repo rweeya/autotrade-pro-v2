@@ -23,7 +23,7 @@ interface Signal {
   }
 }
 
-// ========== АКТИВЫ (НЕ ТРОГАТЬ) ==========
+// ========== ВСЕ АКТИВЫ (НЕ ВЫРЕЗАТЬ) ==========
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
   'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT',
@@ -50,12 +50,22 @@ const SYMBOLS = [
   'BOND/USDT', 'MDX/USDT', 'FORTH/USDT', 'BAKE/USDT', 'BURGER/USDT',
   'CAKE/USDT', 'XVS/USDT', 'ALPACA/USDT', 'BETA/USDT', 'LAZIO/USDT',
   'SANTOS/USDT', 'PORTO/USDT', 'ACM/USDT', 'BAR/USDT', 'CITY/USDT',
-  'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT', '1INCH/USDT'
+  'PSG/USDT', 'JUV/USDT', 'ATM/USDT', 'INTER/USDT', '1INCH/USDT',
+  'AAVE/USDT', 'ABT/USDT', 'ACH/USDT', 'ADX/USDT', 'AEVO/USDT',
+  'AGLD/USDT', 'ALCX/USDT', 'ALPHA/USDT', 'ALPINE/USDT', 'AMB/USDT',
+  'AMP/USDT', 'ANC/USDT', 'ANT/USDT', 'APE/USDT', 'API3/USDT',
+  'ARK/USDT', 'ARPA/USDT', 'AST/USDT', 'ASTR/USDT', 'ATA/USDT',
+  'AUCTION/USDT', 'AUDIO/USDT', 'AURA/USDT', 'AXL/USDT', 'BADGER/USDT',
+  'BAL/USDT', 'BAND/USDT', 'BEL/USDT', 'BICO/USDT', 'BNX/USDT'
 ]
 
 let realPrices: Record<string, number> = {}
 let priceHistory: Record<string, number[]> = {}
 let lastTradeTime: Record<string, number> = {}
+
+// Хранилище активных сигналов с таймаутом (60 секунд)
+let activeSignals: Map<string, { signal: Signal; expiresAt: number }> = new Map()
+const SIGNAL_HOLD_TIME = 60000
 
 const formatTime = (date: Date): string => {
   return date.toLocaleString('ru-RU', {
@@ -155,39 +165,33 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   let allBuyConditions = false
   let allSellConditions = false
-  let strength = 0
   let reasons: string[] = []
   
   if (isScalping) {
-    // ИНВЕРТИРОВАННАЯ ЛОГИКА
-    const buyScalping = rsi < 35 && cci < -100 && adx > 25 && currentPrice < ema20
-    const sellScalping = rsi > 65 && cci > 100 && adx > 25 && currentPrice > ema20
+    const buyScalping = rsi > 65 && cci > 100 && adx > 25 && currentPrice > ema20
+    const sellScalping = rsi < 35 && cci < -100 && adx > 25 && currentPrice < ema20
     if (buyScalping) {
       allBuyConditions = true
-      strength = 4
-      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `CCI:${Math.round(cci)} (<-100)`, `ADX:${Math.round(adx)} (>25)`, `Цена ниже EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `CCI:${Math.round(cci)} (>100)`, `ADX:${Math.round(adx)} (>25)`, `Цена выше EMA20`)
     } else if (sellScalping) {
       allSellConditions = true
-      strength = 4
-      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `CCI:${Math.round(cci)} (>100)`, `ADX:${Math.round(adx)} (>25)`, `Цена выше EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `CCI:${Math.round(cci)} (<-100)`, `ADX:${Math.round(adx)} (>25)`, `Цена ниже EMA20`)
     }
   } else {
-    const buySwing = rsi < 35 && cci < -100 && adx > 25 && currentPrice < ema20
-    const sellSwing = rsi > 65 && cci > 100 && adx > 25 && currentPrice > ema20
+    const buySwing = rsi > 65 && cci > 100 && adx > 25 && currentPrice > ema20
+    const sellSwing = rsi < 35 && cci < -100 && adx > 25 && currentPrice < ema20
     if (buySwing) {
       allBuyConditions = true
-      strength = 4
-      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `CCI:${Math.round(cci)} (<-100)`, `ADX:${Math.round(adx)} (>25)`, `Цена ниже EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `CCI:${Math.round(cci)} (>100)`, `ADX:${Math.round(adx)} (>25)`, `Цена выше EMA20`)
     } else if (sellSwing) {
       allSellConditions = true
-      strength = 4
-      reasons.push(`RSI:${Math.round(rsi)} (>65)`, `CCI:${Math.round(cci)} (>100)`, `ADX:${Math.round(adx)} (>25)`, `Цена выше EMA20`)
+      reasons.push(`RSI:${Math.round(rsi)} (<35)`, `CCI:${Math.round(cci)} (<-100)`, `ADX:${Math.round(adx)} (>25)`, `Цена ниже EMA20`)
     }
   }
   
   if (allBuyConditions) {
     return {
-      symbol, action: 'buy', price: currentPrice, strength,
+      symbol, action: 'buy', price: currentPrice, strength: 4,
       reasons,
       timestamp: new Date(),
       indicators: {
@@ -201,7 +205,7 @@ function analyzeIndicators(symbol: string, currentPrice: number, currentHigh: nu
   
   if (allSellConditions) {
     return {
-      symbol, action: 'sell', price: currentPrice, strength,
+      symbol, action: 'sell', price: currentPrice, strength: 4,
       reasons,
       timestamp: new Date(),
       indicators: {
@@ -308,17 +312,34 @@ function App() {
     }
   }
 
+  // ОБНОВЛЕНИЕ СИГНАЛОВ С ТАЙМАУТОМ 60 СЕКУНД
   const updateSignals = () => {
-    const newSignals: Signal[] = []
+    const now = Date.now()
+    const newSignalsMap = new Map<string, Signal>()
+    
+    // Сохраняем активные сигналы
+    for (const [symbol, cached] of activeSignals.entries()) {
+      if (cached.expiresAt > now) {
+        newSignalsMap.set(symbol, cached.signal)
+      }
+    }
+    activeSignals.clear()
+    
+    // Генерируем новые
     for (const symbol of SYMBOLS) {
       const price = realPrices[symbol]
       if (price) {
         const high = price * 1.01
         const low = price * 0.99
         const signal = analyzeIndicators(symbol, price, high, low, scalpingMode)
-        if (signal) newSignals.push(signal)
+        if (signal) {
+          newSignalsMap.set(symbol, signal)
+          activeSignals.set(symbol, { signal, expiresAt: now + SIGNAL_HOLD_TIME })
+        }
       }
     }
+    
+    const newSignals = Array.from(newSignalsMap.values())
     newSignals.sort((a, b) => b.strength - a.strength)
     setSignals(newSignals)
   }
@@ -350,11 +371,7 @@ function App() {
     }
     
     binanceWS.connect()
-    const symbolsToSubscribe = [
-      'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT',
-      'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT',
-      'LINKUSDT', 'UNIUSDT', 'ATOMUSDT', 'LTCUSDT', 'NEARUSDT'
-    ]
+    const symbolsToSubscribe = SYMBOLS.map(s => s.replace('/USDT', ''))
     symbolsToSubscribe.forEach(sym => binanceWS.subscribe(sym, updatePrice))
     
     return () => {
@@ -419,7 +436,7 @@ function App() {
           <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">💀 AUTO TRADE PRO | {SYMBOLS.length} активов</h1>
           <div className="flex gap-4 items-center">
             <button onClick={toggleScalpingMode} className={`px-3 py-1 rounded-lg text-xs font-bold ${scalpingMode ? 'bg-yellow-600 text-black' : 'bg-gray-700 text-gray-300'}`}>
-              {scalpingMode ? '⚡ СКАЛЬПИНГ (ИНВЕРТ)' : '📈 СВИНГ (ИНВЕРТ)'}
+              {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'}
             </button>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
@@ -478,7 +495,7 @@ function App() {
                     <button onClick={resetAccount} className="bg-yellow-600/50 px-4 py-2 rounded-lg">🔄 Сбросить счет</button>
                     {positions.length > 0 && <button onClick={closeAllPositions} className="bg-red-700/80 px-4 py-2 rounded-lg">🔒 ЗАКРЫТЬ ВСЕ ({positions.length})</button>}
                   </div>
-                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">ИНВЕРТИРОВАНА: RSI&lt;35 = BUY, RSI&gt;65 = SELL</p></div>}
+                  {autoTradeEnabled && <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"><p className="text-green-400 font-bold">🟢 АВТОТОРГОВЛЯ АКТИВНА!</p><p className="text-gray-400 text-sm mt-1">Сигнал держится 60 секунд</p></div>}
                 </div>
               )}
             </div>
@@ -551,7 +568,7 @@ function App() {
         {activeTab === 'signals' && (
           <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-5 py-3 bg-red-950/30 border-b border-red-500/30">
-              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ (ИНВЕРТ)' : '📈 СВИНГ (ИНВЕРТ)'} | RSI+CCI+ADX+EMA | {SYMBOLS.length} активов</div>
+              <div className="text-sm font-semibold text-red-300">🎯 {scalpingMode ? '⚡ СКАЛЬПИНГ' : '📈 СВИНГ'} | RSI+CCI+ADX+EMA | {SYMBOLS.length} активов | Сигнал держится 60 секунд</div>
             </div>
             <div className="divide-y divide-red-900/20">
               {signals.length === 0 ? (<div className="text-center text-gray-500 py-16">⏳ Нет сигналов (нужно 4/4 индикаторов)</div>) : (signals.map((signal, idx) => {
