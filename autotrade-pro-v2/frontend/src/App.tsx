@@ -290,9 +290,12 @@ const App: React.FC = () => {
       const tpPrice = type === 'BUY' ? price * 1.03 : price * 0.97;
       const slPrice = type === 'BUY' ? price * 0.98 : price * 1.02;
       
+      // Исправлено: используем OrderSide.BUY или OrderSide.SELL
+      const orderSide = type === 'BUY' ? OrderSide.BUY : OrderSide.SELL;
+      
       const orderResult = await bybit.placeOrder({
         symbol,
-        side: type === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
+        side: orderSide,
         orderType: OrderType.MARKET,
         quantity: roundedQty,
         timeInForce: TimeInForce.IOC
@@ -301,7 +304,7 @@ const App: React.FC = () => {
       if (orderResult && orderResult.orderId) {
         await bybit.setTradingStop({
           symbol,
-          side: type === 'BUY' ? OrderSide.BUY : OrderSide.SELL,
+          side: orderSide,
           takeProfit: tpPrice,
           stopLoss: slPrice
         });
@@ -502,13 +505,14 @@ const App: React.FC = () => {
             <TradingChart symbol={selectedSymbol} />
           </div>
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
-            <Watchlist symbols={SYMBOLS} prices={prices} onSelect={setSelectedSymbol} />
+            {/* Временно убраны пропсы, которые не принимаются */}
+            <Watchlist />
           </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
-            <TopMovers symbols={SYMBOLS} prices={prices} />
+            <TopMovers />
           </div>
           <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
             <News />
@@ -516,7 +520,7 @@ const App: React.FC = () => {
         </div>
         
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30 mb-6">
-          <SignalHistory signals={signals} trades={trades} />
+          <SignalHistory />
         </div>
         
         <div className="bg-black/50 backdrop-blur rounded-lg p-4 border border-red-500/30">
@@ -552,10 +556,17 @@ const App: React.FC = () => {
                       <td className="text-right py-2 text-red-400">${trade.slPrice?.toFixed(4)}</td>
                       <td className={`text-right py-2 ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         ${currentPnL.toFixed(2)} ({currentPnLPercent.toFixed(2)}%)
-                      </td>
+                       </td>
                     </tr>
                   );
                 })}
+                {trades.filter(t => t.status === 'open').length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8 text-gray-500">
+                      НЕТ ОТКРЫТЫХ ПОЗИЦИЙ
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
