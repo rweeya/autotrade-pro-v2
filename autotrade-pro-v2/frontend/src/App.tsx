@@ -72,6 +72,9 @@ const App: React.FC = () => {
   });
   const [currentTime, setCurrentTime] = useState(new Date());
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
+  const [isBybitLoggedIn, setIsBybitLoggedIn] = useState<boolean | null>(null);
+  const [showLoginWarning, setShowLoginWarning] = useState(false);
+  const [pendingSymbol, setPendingSymbol] = useState<string | null>(null);
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsManagerRef = useRef<any>(null);
@@ -84,6 +87,40 @@ const App: React.FC = () => {
   const buys = signals.filter(s => s.action === 'buy').length;
   const sells = signals.filter(s => s.action === 'sell').length;
   const formattedCurrentTime = currentTime.toLocaleTimeString('ru-RU');
+
+  // Проверка авторизации в Bybit Testnet
+  const checkBybitAuth = useCallback(async () => {
+    try {
+      // Пытаемся открыть тестнет в скрытом режиме для проверки
+      const img = new Image();
+      img.src = 'https://testnet.bybit.com/favicon.ico';
+      img.onload = () => {
+        // Если favicon загрузился - сайт доступен
+        setIsBybitLoggedIn(true);
+        setShowLoginWarning(false);
+      };
+      img.onerror = () => {
+        // Если ошибка - возможно не залогинен
+        setIsBybitLoggedIn(false);
+      };
+      
+      // Таймаут на случай долгой загрузки
+      setTimeout(() => {
+        if (isBybitLoggedIn === null) {
+          setIsBybitLoggedIn(false);
+        }
+      }, 5000);
+    } catch (error) {
+      setIsBybitLoggedIn(false);
+    }
+  }, []);
+
+  // Проверка при загрузке и каждые 30 секунд
+  useEffect(() => {
+    checkBybitAuth();
+    const interval = setInterval(checkBybitAuth, 30000);
+    return () => clearInterval(interval);
+  }, [checkBybitAuth]);
 
   // Сохранение состояния
   useEffect(() => {
@@ -139,7 +176,6 @@ const App: React.FC = () => {
   };
 
   const closePosition = (trade: Trade, currentPrice: number) => {
-    // Расчет PnL
     let profit = 0;
     if (trade.side === 'buy') {
       profit = (currentPrice - trade.price) * trade.quantity;
@@ -147,11 +183,9 @@ const App: React.FC = () => {
       profit = (trade.price - currentPrice) * trade.quantity;
     }
     
-    // Обновляем баланс
     const newBalance = balance + profit;
     setBalance(newBalance);
     
-    // Перемещаем из открытых в историю
     const closedTrade = { 
       ...trade, 
       status: 'closed' as const, 
@@ -161,11 +195,34 @@ const App: React.FC = () => {
     setPositions(prev => prev.filter(p => p.id !== trade.id));
     setTradeHistory(prev => [closedTrade, ...prev]);
     
-    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} | Баланс: $${newBalance.toFixed(2)}`);
+    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
   };
 
+  // ОБНОВЛЕННАЯ ФУНКЦИЯ ОТКРЫТИЯ BYBIT (С ПРОВЕРКОЙ АВТОРИЗАЦИИ)
   const openBybit = (symbol: string) => {
+    if (!isBybitLoggedIn) {
+      setPendingSymbol(symbol);
+      setShowLoginWarning(true);
+      return;
+    }
     window.open(`https://testnet.bybit.com/trade/${symbol.replace('/', '')}`, '_blank');
+  };
+
+  const goToLogin = () => {
+    window.open('https://testnet.bybit.com', '_blank');
+    setShowLoginWarning(false);
+    // Проверяем авторизацию через 5 секунд после открытия
+    setTimeout(() => {
+      checkBybitAuth();
+      if (pendingSymbol) {
+        setTimeout(() => {
+          if (isBybitLoggedIn) {
+            window.open(`https://testnet.bybit.com/trade/${pendingSymbol.replace('/', '')}`, '_blank');
+            setPendingSymbol(null);
+          }
+        }, 2000);
+      }
+    }, 5000);
   };
 
   const calculateRSI = (prices: number[], period: number = 14): number => {
@@ -219,7 +276,6 @@ const App: React.FC = () => {
       macd = ema12 - ema26;
     }
     
-    // ЖЁСТКИЕ УСЛОВИЯ
     if (rsi < 30 && macd > 0 && ema20 > ema50) {
       const reasons = [`RSI ${rsi.toFixed(1)} < 30`, `MACD бычий (${macd.toFixed(2)})`, `EMA20(${ema20.toFixed(0)}) > EMA50(${ema50.toFixed(0)})`];
       console.log(`🔴 BUY ${symbol}`);
@@ -259,35 +315,27 @@ const App: React.FC = () => {
       return;
     }
     
-    // Проверка на частые сделки (не чаще 1 раза в 3 минуты на символ)
     const lastTradeTime = lastTradeTimeRef.current.get(signal.symbol);
     if (lastTradeTime && Date.now() - lastTradeTime < 180000) {
-      console.log(`⏰ Пропуск ${signal.symbol}: слишком частая сделка (3 мин)`);
+      console.log(`⏰ Пропуск ${signal.symbol}: слишком частая сделка`);
       return;
     }
     
-    // Проверка на уже открытую позицию
     const existingPosition = positions.find(p => p.symbol === signal.symbol);
     if (existingPosition) {
       console.log(`🚫 Позиция по ${signal.symbol} уже открыта`);
       return;
     }
     
-    // Расчет размера позиции
     const riskAmount = balance * (maxRiskPercent / 100);
     const quantity = riskAmount / signal.price;
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     
-    if (roundedQty <= 0) {
-      console.log('❌ Некорректное количество');
-      return;
-    }
+    if (roundedQty <= 0) return;
     
-    // Расчет TP/SL
     const tpPrice = signal.action === 'buy' ? signal.price * (1 + TAKE_PROFIT_PERCENT / 100) : signal.price * (1 - TAKE_PROFIT_PERCENT / 100);
     const slPrice = signal.action === 'buy' ? signal.price * (1 - STOP_LOSS_PERCENT / 100) : signal.price * (1 + STOP_LOSS_PERCENT / 100);
     
-    // Обновляем баланс (замораживаем средства)
     const newBalance = balance - riskAmount;
     setBalance(newBalance);
     
@@ -306,7 +354,7 @@ const App: React.FC = () => {
     setPositions(prev => [...prev, newTrade]);
     lastTradeTimeRef.current.set(signal.symbol, Date.now());
     
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Кол-во: ${roundedQty} | Цена: $${signal.price} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)} | Баланс: $${newBalance.toFixed(2)}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
   };
 
   const updatePriceHistory = useCallback((symbol: string, price: number) => {
@@ -317,7 +365,6 @@ const App: React.FC = () => {
     if (history.length > 200) history = history.slice(-200);
     priceHistoryRef.current.set(symbol, history);
     
-    // Генерация сигналов
     const signal = generateSignal(symbol, price);
     if (signal) {
       setSignals(prev => [signal, ...prev].slice(0, 100));
@@ -326,7 +373,6 @@ const App: React.FC = () => {
       }
     }
     
-    // ПРОВЕРКА TP/SL ДЛЯ ОТКРЫТЫХ ПОЗИЦИЙ
     const openPosition = positions.find(p => p.symbol === symbol);
     if (openPosition) {
       let shouldClose = false;
@@ -351,7 +397,7 @@ const App: React.FC = () => {
       }
       
       if (shouldClose) {
-        console.log(`🎯 ${closeReason} достигнут для ${symbol} по цене $${price}`);
+        console.log(`🎯 ${closeReason} для ${symbol} по цене $${price}`);
         closePosition(openPosition, price);
       }
     }
@@ -372,7 +418,6 @@ const App: React.FC = () => {
     };
   }, [updatePriceHistory]);
 
-  // Расчет статистики
   const totalProfit = tradeHistory.reduce((sum, t) => sum + (t.profit || 0), 0);
   const winRate = tradeHistory.length > 0 
     ? (tradeHistory.filter(t => (t.profit || 0) > 0).length / tradeHistory.length) * 100 
@@ -381,10 +426,51 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/20 to-black">
-      <header className="border-b border-red-500/30 bg-black/80 backdrop-blur-lg sticky top-0 z-50">
+      {/* МОДАЛЬНОЕ ОКНО ПРЕДУПРЕЖДЕНИЯ О ВХОДЕ */}
+      {showLoginWarning && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-gradient-to-br from-gray-900 to-red-900/50 rounded-2xl p-6 max-w-md mx-4 border border-red-500/50 shadow-2xl">
+            <div className="text-center">
+              <div className="text-6xl mb-4">⚠️</div>
+              <h3 className="text-xl font-bold text-red-400 mb-2">Требуется вход в Bybit Testnet</h3>
+              <p className="text-gray-300 mb-4">
+                Для открытия торговой пары необходимо войти в свой аккаунт Bybit Testnet.
+                <br />
+                <span className="text-yellow-400 text-sm">После входа нажми на сигнал снова</span>
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={goToLogin}
+                  className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold transition"
+                >
+                  🔐 Войти в Bybit
+                </button>
+                <button
+                  onClick={() => setShowLoginWarning(false)}
+                  className="bg-gray-700 hover:bg-gray-600 px-6 py-2 rounded-lg font-bold transition"
+                >
+                  Отмена
+                </button>
+              </div>
+              <p className="text-gray-500 text-xs mt-4">
+                Совет: поставь галоку "Запомнить меня" при входе
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <header className="border-b border-red-500/30 bg-black/80 backdrop-blur-lg sticky top-0 z-40">
         <div className="container mx-auto px-6 py-3 flex justify-between items-center flex-wrap gap-4">
           <h1 className="text-xl font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">💀 AUTO TRADE PRO V2 | {SYMBOLS.length} активов</h1>
           <div className="flex gap-4 items-center">
+            {/* ИНДИКАТОР СТАТУСА АВТОРИЗАЦИИ BYBIT */}
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isBybitLoggedIn ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+              <span className="text-xs text-gray-400">
+                {isBybitLoggedIn ? 'Bybit ✅' : 'Bybit ⚠️'}
+              </span>
+            </div>
             <div className="text-sm text-gray-400 font-mono">💰 ${balance.toLocaleString()}</div>
             <div className="text-sm text-gray-400 font-mono">{formattedCurrentTime}</div>
           </div>
@@ -392,7 +478,6 @@ const App: React.FC = () => {
       </header>
 
       <div className="container mx-auto px-6 py-6">
-        {/* СТАТИСТИКА */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-black/60 rounded-2xl p-5 border border-red-500/30">
             <div className="text-3xl font-bold text-red-400">{signals.length}</div>
@@ -412,7 +497,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* ДОПОЛНИТЕЛЬНАЯ СТАТИСТИКА */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-black/60 rounded-2xl p-5 border border-green-500/30">
             <div className="text-gray-400 text-sm">Общий PnL</div>
