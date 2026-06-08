@@ -78,7 +78,6 @@ const App: React.FC = () => {
   // Refs
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsRef = useRef<any>(null);
-  const tradeIntervalRef = useRef<NodeJS.Timeout>();
 
   // ==================== ХЕЛПЕРЫ ====================
   const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
