@@ -91,6 +91,23 @@ const App: React.FC = () => {
   const formatPrice = (price: number) => price.toFixed(4);
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
 
+  // ==================== АВТОУДАЛЕНИЕ СТАРЫХ СИГНАЛОВ (каждую минуту) ====================
+  useEffect(() => {
+    const cleanupSignals = () => {
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000; // 5 минут
+      const oldSignalsCount = signals.filter(s => s.timestamp < fiveMinutesAgo).length;
+      if (oldSignalsCount > 0) {
+        const newSignals = signals.filter(s => s.timestamp >= fiveMinutesAgo);
+        setSignals(newSignals);
+        console.log(`🗑️ Удалено ${oldSignalsCount} старых сигналов (старше 5 минут). Осталось: ${newSignals.length}`);
+      }
+    };
+    
+    const interval = setInterval(cleanupSignals, 60000); // Проверяем каждую минуту
+    return () => clearInterval(interval);
+  }, [signals]);
+
+  // Сохранение состояния
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
@@ -112,7 +129,7 @@ const App: React.FC = () => {
   }, [riskPercent]);
 
   useEffect(() => {
-    localStorage.setItem('signals', JSON.stringify(signals.slice(0, 100)));
+    localStorage.setItem('signals', JSON.stringify(signals.slice(0, 200)));
   }, [signals]);
 
   useEffect(() => {
@@ -347,7 +364,7 @@ const App: React.FC = () => {
     
     const signal = generateSignal(symbol, price);
     if (signal) {
-      setSignals(prev => [signal, ...prev].slice(0, 100));
+      setSignals(prev => [signal, ...prev].slice(0, 200));
       if (autoTrade) {
         executeTrade(signal);
       }
@@ -431,7 +448,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | Сигналы живут 5 мин</p>
               </div>
             </div>
             
@@ -631,38 +648,45 @@ const App: React.FC = () => {
               <div className="bg-black/40 backdrop-blur rounded-xl p-8 text-center border border-red-500/20">
                 <div className="text-5xl mb-3">⏳</div>
                 <div className="text-gray-400 text-sm">Нет сигналов. Ожидаем RSI &lt; 30 или RSI &gt; 70...</div>
-                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnectedCount}/{SYMBOLS.length}</div>
+                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnectedCount}/{SYMBOLS.length} | Сигналы живут 5 минут</div>
               </div>
             ) : (
-              signals.map((signal, idx) => {
-                const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength);
-                return (
-                  <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-black/60 to-red-900/20 backdrop-blur rounded-lg p-3 border border-red-500/30 hover:border-red-500/50 cursor-pointer transition">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{signal.action === 'buy' ? '🟢' : '🔴'}</span>
-                        <div>
-                          <div className="font-bold">{signal.symbol}</div>
-                          <div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
+              <>
+                <div className="text-xs text-gray-500 text-right mb-1">Актуальных сигналов: {signals.length} (старше 5 мин удаляются)</div>
+                {signals.map((signal, idx) => {
+                  const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength);
+                  const timeLeft = Math.max(0, 5 - Math.floor((Date.now() - signal.timestamp) / 60000));
+                  return (
+                    <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-black/60 to-red-900/20 backdrop-blur rounded-lg p-3 border border-red-500/30 hover:border-red-500/50 cursor-pointer transition">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{signal.action === 'buy' ? '🟢' : '🔴'}</span>
+                          <div>
+                            <div className="font-bold">{signal.symbol}</div>
+                            <div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
+                          </div>
+                        </div>
+                        <div className={`px-3 py-1 rounded-lg text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
+                          {signal.action === 'buy' ? 'BUY' : 'SELL'} @ ${formatPrice(signal.price)}
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <div className="text-yellow-400 text-xs">{stars}</div>
+                          <div className="text-[10px] text-gray-500">живёт {timeLeft} мин</div>
                         </div>
                       </div>
-                      <div className={`px-3 py-1 rounded-lg text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
-                        {signal.action === 'buy' ? 'BUY' : 'SELL'} @ ${formatPrice(signal.price)}
+                      <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">RSI</div><div className="font-bold">{signal.rsi.toFixed(1)}</div></div>
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">MACD</div><div className="font-mono">{signal.macd > 0 ? '+' : ''}{signal.macd.toFixed(4)}</div></div>
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">EMA</div><div className="text-xs">{signal.ema20.toFixed(0)}/{signal.ema50.toFixed(0)}</div></div>
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">Сила</div><div className="text-yellow-400">{stars}</div></div>
                       </div>
-                      <div className="text-yellow-400 text-xs">{stars}</div>
+                      <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
+                        {signal.reasons.map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">RSI</div><div className="font-bold">{signal.rsi.toFixed(1)}</div></div>
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">MACD</div><div className="font-mono">{signal.macd > 0 ? '+' : ''}{signal.macd.toFixed(4)}</div></div>
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">EMA</div><div className="text-xs">{signal.ema20.toFixed(0)}/{signal.ema50.toFixed(0)}</div></div>
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">Сила</div><div className="text-yellow-400">{stars}</div></div>
-                    </div>
-                    <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
-                      {signal.reasons.map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </>
             )}
           </div>
         )}
