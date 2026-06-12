@@ -80,27 +80,24 @@ const App: React.FC = () => {
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
   const [currentTime, setCurrentTime] = useState(new Date());
   const [wsConnectedCount, setWsConnectedCount] = useState(0);
-  const [lastTradeTime, setLastTradeTime] = useState<Map<string, number>>(new Map());
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
-  const processingSignalRef = useRef<Set<string>>(new Set());
-  // Защита от повторяющихся сигналов (последний сигнал по символу)
-  const lastSignalForSymbol = useRef<Map<string, { action: string; timestamp: number }>>(new Map());
+  // Защита от дублей сделок (последняя сделка по символу)
+  const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
 
   const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatPrice = (price: number) => price.toFixed(4);
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
 
-  // Автоудаление старых сигналов
+  // Автоудаление старых сигналов (5 минут)
   useEffect(() => {
     const cleanupSignals = () => {
       const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
       const newSignals = signals.filter(s => s.timestamp >= fiveMinutesAgo);
       if (newSignals.length !== signals.length) {
         setSignals(newSignals);
-        console.log(`🗑️ Удалено ${signals.length - newSignals.length} старых сигналов`);
       }
     };
     const interval = setInterval(cleanupSignals, 60000);
@@ -151,12 +148,11 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== РАСЧЕТ ИНДИКАТОРОВ (увеличен период для точности) ====================
+  // ==================== РАСЧЕТ ИНДИКАТОРОВ ====================
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (prices.length < period + 1) return 50;
     
     let gains = 0, losses = 0;
-    // Используем больше данных для точности
     const startIdx = Math.max(0, prices.length - period - 20);
     const recentPrices = prices.slice(startIdx);
     
@@ -171,10 +167,7 @@ const App: React.FC = () => {
     
     if (avgLoss === 0) return 100;
     const rs = avgGain / avgLoss;
-    const rsi = 100 - (100 / (1 + rs));
-    
-    // Округляем до целого как на Bybit
-    return Math.round(rsi);
+    return Math.round(100 - (100 / (1 + rs)));
   };
 
   const calculateEMA = (prices: number[], period: number): number => {
@@ -193,15 +186,13 @@ const App: React.FC = () => {
     if (prices.length < 35) return 0;
     const ema12 = calculateEMA(prices, 12);
     const ema26 = calculateEMA(prices, 26);
-    const macd = ema12 - ema26;
-    // Округляем до 4 знаков как на Bybit
-    return parseFloat(macd.toFixed(4));
+    return parseFloat((ema12 - ema26).toFixed(4));
   };
 
-  // ==================== ГЕНЕРАЦИЯ СИГНАЛА С ЗАЩИТОЙ ОТ ДУБЛЕЙ ====================
+  // ==================== ГЕНЕРАЦИЯ СИГНАЛА (БЕЗ ЗАЩИТЫ ОТ ДУБЛЕЙ) ====================
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const history = priceHistoryRef.current.get(symbol);
-    if (!history || history.length < 60) return null; // Нужно минимум 60 свечей для точности
+    if (!history || history.length < 60) return null;
     
     const rsi = calculateRSI(history);
     const macd = calculateMACD(history);
@@ -211,43 +202,26 @@ const App: React.FC = () => {
     let action: 'buy' | 'sell' | null = null;
     let reasons: string[] = [];
     
-    // Проверка условий для BUY
     if (rsi < 30 && macd > 0 && ema20 > ema50) {
       action = 'buy';
-      reasons = [`RSI ${rsi} < 30`, `MACD бычий (${macd > 0 ? '+' : ''}${macd})`, `EMA20(${ema20.toFixed(0)}) > EMA50(${ema50.toFixed(0)})`];
+      reasons = [`RSI ${rsi} < 30`, `MACD бычий`, `EMA20 > EMA50`];
     }
     
-    // Проверка условий для SELL
     if (rsi > 70 && macd < 0 && ema20 < ema50) {
       action = 'sell';
-      reasons = [`RSI ${rsi} > 70`, `MACD медвежий (${macd})`, `EMA20(${ema20.toFixed(0)}) < EMA50(${ema50.toFixed(0)})`];
+      reasons = [`RSI ${rsi} > 70`, `MACD медвежий`, `EMA20 < EMA50`];
     }
     
     if (!action) return null;
     
-    // ========== ЗАЩИТА ОТ ПОВТОРЯЮЩИХСЯ СИГНАЛОВ ==========
-    const lastSignal = lastSignalForSymbol.current.get(symbol);
-    const now = Date.now();
-    
-    // Если последний сигнал был меньше 2 минут назад - пропускаем
-    if (lastSignal && (now - lastSignal.timestamp) < 120000 && lastSignal.action === action) {
-      console.log(`⏸️ Пропуск повторного ${action.toUpperCase()} сигнала для ${symbol} (прошло ${Math.floor((now - lastSignal.timestamp) / 1000)} сек)`);
-      return null;
-    }
-    
-    // Сохраняем последний сигнал
-    lastSignalForSymbol.current.set(symbol, { action, timestamp: now });
-    
     const strength = (action === 'buy' && rsi < 20) || (action === 'sell' && rsi > 80) ? 3 : 2;
-    
-    console.log(`📊 НОВЫЙ СИГНАЛ: ${action.toUpperCase()} ${symbol} | RSI=${rsi} | MACD=${macd} | EMA20=${ema20.toFixed(0)} EMA50=${ema50.toFixed(0)}`);
     
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
       symbol,
       action,
       price: currentPrice,
-      timestamp: now,
+      timestamp: Date.now(),
       strength,
       rsi,
       macd,
@@ -257,45 +231,43 @@ const App: React.FC = () => {
     };
   };
 
+  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ С ЗАЩИТОЙ ОТ ДУБЛЕЙ ====================
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
     
-    if (processingSignalRef.current.has(signal.symbol)) return;
-    processingSignalRef.current.add(signal.symbol);
+    // ЗАЩИТА: не чаще 1 сделки на символ в 2 минуты
+    const lastTradeTime = lastTradeTimeForSymbol.current.get(signal.symbol);
+    const now = Date.now();
     
-    const lastTrade = lastTradeTime.get(signal.symbol);
-    if (lastTrade && Date.now() - lastTrade < 180000) {
-      processingSignalRef.current.delete(signal.symbol);
+    if (lastTradeTime && (now - lastTradeTime) < 120000) {
+      console.log(`⏸️ Пропуск сделки ${signal.symbol} - прошло ${Math.floor((now - lastTradeTime) / 1000)} сек с последней сделки (мин. интервал 120 сек)`);
       return;
     }
     
+    // Проверка на уже открытую позицию
     const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
     if (openTrade) {
-      processingSignalRef.current.delete(signal.symbol);
+      console.log(`🚫 Позиция по ${signal.symbol} уже открыта`);
       return;
     }
     
     const riskAmount = balance * (riskPercent / 100);
-    if (riskAmount <= 0 || riskAmount > balance) {
-      processingSignalRef.current.delete(signal.symbol);
-      return;
-    }
+    if (riskAmount <= 0 || riskAmount > balance) return;
     
     const quantity = riskAmount / signal.price;
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     
-    if (roundedQty <= 0) {
-      processingSignalRef.current.delete(signal.symbol);
-      return;
-    }
+    if (roundedQty <= 0) return;
     
     const tpPercent = 3;
     const slPercent = 2;
     const tpPrice = signal.action === 'buy' ? signal.price * (1 + tpPercent / 100) : signal.price * (1 - tpPercent / 100);
     const slPrice = signal.action === 'buy' ? signal.price * (1 - slPercent / 100) : signal.price * (1 + slPercent / 100);
     
+    // Запоминаем время последней сделки
+    lastTradeTimeForSymbol.current.set(signal.symbol, now);
+    
     setBalance(prev => prev - riskAmount);
-    setLastTradeTime(prev => new Map(prev).set(signal.symbol, Date.now()));
     
     const newTrade: Trade = {
       id: `${signal.symbol}_${Date.now()}_${Math.random()}`,
@@ -314,11 +286,7 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol}`);
-    
-    setTimeout(() => {
-      processingSignalRef.current.delete(signal.symbol);
-    }, 1000);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
   };
 
   const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -349,6 +317,7 @@ const App: React.FC = () => {
     console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
   };
 
+  // Мониторинг TP/SL
   useEffect(() => {
     const checkTPandSL = () => {
       const openTrades = trades.filter(t => t.status === 'open');
@@ -382,7 +351,6 @@ const App: React.FC = () => {
     
     let history = priceHistoryRef.current.get(symbol) || [];
     history.push(price);
-    // Храним больше истории для точности (300 свечей)
     if (history.length > 300) history = history.slice(-300);
     priceHistoryRef.current.set(symbol, history);
     
@@ -430,7 +398,7 @@ const App: React.FC = () => {
       setTrades([]);
       setSignals([]);
       setTotalProfit(0);
-      lastSignalForSymbol.current.clear();
+      lastTradeTimeForSymbol.current.clear();
       localStorage.removeItem('trades');
       localStorage.removeItem('signals');
       alert('✅ История очищена');
@@ -443,7 +411,7 @@ const App: React.FC = () => {
       setTotalProfit(0);
       setTrades([]);
       setSignals([]);
-      lastSignalForSymbol.current.clear();
+      lastTradeTimeForSymbol.current.clear();
       localStorage.removeItem('trades');
       localStorage.removeItem('signals');
       alert('✅ Баланс сброшен до $10,000');
@@ -461,8 +429,7 @@ const App: React.FC = () => {
 
   const openBybit = (symbol: string): void => {
     const [base, quote] = symbol.split('/');
-    const url = `https://www.bybit.com/trade/spot/${base}/${quote}`;
-    window.open(url, '_blank');
+    window.open(`https://www.bybit.com/trade/spot/${base}/${quote}`, '_blank');
   };
 
   return (
@@ -474,7 +441,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | Сигналы раз в 2 мин</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | Сделки не чаще 1 раза в 2 мин</p>
               </div>
             </div>
             
@@ -565,7 +532,7 @@ const App: React.FC = () => {
               {autoTrade && (
                 <div className="mt-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
                   <p className="text-green-400 font-bold text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
-                  <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | TP 3% / SL 2%</p>
+                  <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | TP 3% / SL 2% | Сделки не чаще 1 раза в 2 мин</p>
                 </div>
               )}
             </div>
@@ -592,15 +559,7 @@ const App: React.FC = () => {
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="bg-black/40 text-gray-400 text-xs">
-                      <tr>
-                        <th className="text-left p-2">МОНЕТА</th>
-                        <th className="text-left p-2">ТИП</th>
-                        <th className="text-right p-2">ЦЕНА</th>
-                        <th className="text-right p-2">КОЛ-ВО</th>
-                        <th className="text-right p-2">TP</th>
-                        <th className="text-right p-2">SL</th>
-                        <th className="text-right p-2">P&L</th>
-                      </tr>
+                      <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА</th><th className="text-right p-2">КОЛ-ВО</th><th className="text-right p-2">TP</th><th className="text-right p-2">SL</th><th className="text-right p-2">P&L</th></tr>
                     </thead>
                     <tbody>
                       {openTrades.map(trade => {
@@ -639,15 +598,7 @@ const App: React.FC = () => {
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-black/40 text-gray-400 text-xs sticky top-0">
-                    <tr>
-                      <th className="text-left p-2">МОНЕТА</th>
-                      <th className="text-left p-2">ТИП</th>
-                      <th className="text-right p-2">ЦЕНА ВХ.</th>
-                      <th className="text-right p-2">ЦЕНА ВЫХ.</th>
-                      <th className="text-right p-2">PnL</th>
-                      <th className="text-right p-2">%</th>
-                      <th className="text-right p-2">ВРЕМЯ</th>
-                    </tr>
+                    <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА ВХ.</th><th className="text-right p-2">ЦЕНА ВЫХ.</th><th className="text-right p-2">PnL</th><th className="text-right p-2">%</th><th className="text-right p-2">ВРЕМЯ</th></tr>
                   </thead>
                   <tbody>
                     {closedTrades.slice().reverse().map(trade => (
@@ -659,7 +610,7 @@ const App: React.FC = () => {
                         <td className={`p-2 text-right font-bold ${(trade.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{(trade.profit || 0) >= 0 ? '+' : ''}{formatNumber(trade.profit || 0)}</td>
                         <td className={`p-2 text-right ${(trade.profitPercent || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{(trade.profitPercent || 0) >= 0 ? '+' : ''}{(trade.profitPercent || 0).toFixed(1)}%</td>
                         <td className="p-2 text-right text-gray-500 text-xs">{formatTime(trade.entryTime)}</td>
-                      </tr>
+                      </table>
                     ))}
                   </tbody>
                 </table>
@@ -674,11 +625,11 @@ const App: React.FC = () => {
               <div className="bg-black/40 backdrop-blur rounded-xl p-8 text-center border border-red-500/20">
                 <div className="text-5xl mb-3">⏳</div>
                 <div className="text-gray-400 text-sm">Нет сигналов. Ожидаем RSI &lt; 30 или RSI &gt; 70...</div>
-                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnectedCount}/{SYMBOLS.length} | Интервал между сигналами: 2 мин</div>
+                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnectedCount}/{SYMBOLS.length}</div>
               </div>
             ) : (
               <>
-                <div className="text-xs text-gray-500 text-right mb-1">Актуальных сигналов: {signals.length} (живут 5 мин, повтор не чаще 2 мин)</div>
+                <div className="text-xs text-gray-500 text-right mb-1">Актуальных сигналов: {signals.length} (живут 5 минут)</div>
                 {signals.map((signal, idx) => {
                   const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength);
                   const timeLeft = Math.max(0, 5 - Math.floor((Date.now() - signal.timestamp) / 60000));
