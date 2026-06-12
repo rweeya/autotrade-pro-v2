@@ -84,14 +84,13 @@ const App: React.FC = () => {
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
-  // Защита от дублей сделок (последняя сделка по символу)
   const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
 
   const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatPrice = (price: number) => price.toFixed(4);
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
 
-  // Автоудаление старых сигналов (5 минут)
+  // Автоудаление старых сигналов
   useEffect(() => {
     const cleanupSignals = () => {
       const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
@@ -104,7 +103,6 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [signals]);
 
-  // Сохранение состояния
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
@@ -148,7 +146,6 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== РАСЧЕТ ИНДИКАТОРОВ ====================
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (prices.length < period + 1) return 50;
     
@@ -189,7 +186,6 @@ const App: React.FC = () => {
     return parseFloat((ema12 - ema26).toFixed(4));
   };
 
-  // ==================== ГЕНЕРАЦИЯ СИГНАЛА (БЕЗ ЗАЩИТЫ ОТ ДУБЛЕЙ) ====================
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const history = priceHistoryRef.current.get(symbol);
     if (!history || history.length < 60) return null;
@@ -231,20 +227,17 @@ const App: React.FC = () => {
     };
   };
 
-  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ С ЗАЩИТОЙ ОТ ДУБЛЕЙ ====================
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
     
-    // ЗАЩИТА: не чаще 1 сделки на символ в 2 минуты
     const lastTradeTime = lastTradeTimeForSymbol.current.get(signal.symbol);
     const now = Date.now();
     
     if (lastTradeTime && (now - lastTradeTime) < 120000) {
-      console.log(`⏸️ Пропуск сделки ${signal.symbol} - прошло ${Math.floor((now - lastTradeTime) / 1000)} сек с последней сделки (мин. интервал 120 сек)`);
+      console.log(`⏸️ Пропуск сделки ${signal.symbol} - интервал 120 сек`);
       return;
     }
     
-    // Проверка на уже открытую позицию
     const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
     if (openTrade) {
       console.log(`🚫 Позиция по ${signal.symbol} уже открыта`);
@@ -259,14 +252,10 @@ const App: React.FC = () => {
     
     if (roundedQty <= 0) return;
     
-    const tpPercent = 3;
-    const slPercent = 2;
-    const tpPrice = signal.action === 'buy' ? signal.price * (1 + tpPercent / 100) : signal.price * (1 - tpPercent / 100);
-    const slPrice = signal.action === 'buy' ? signal.price * (1 - slPercent / 100) : signal.price * (1 + slPercent / 100);
+    const tpPrice = signal.action === 'buy' ? signal.price * 1.03 : signal.price * 0.97;
+    const slPrice = signal.action === 'buy' ? signal.price * 0.98 : signal.price * 1.02;
     
-    // Запоминаем время последней сделки
     lastTradeTimeForSymbol.current.set(signal.symbol, now);
-    
     setBalance(prev => prev - riskAmount);
     
     const newTrade: Trade = {
@@ -286,7 +275,7 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol}`);
   };
 
   const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -317,7 +306,7 @@ const App: React.FC = () => {
     console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
   };
 
-  // Мониторинг TP/SL
+  // МОНИТОРИНГ TP/SL - каждую секунду проверяем цены
   useEffect(() => {
     const checkTPandSL = () => {
       const openTrades = trades.filter(t => t.status === 'open');
@@ -441,7 +430,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | Сделки не чаще 1 раза в 2 мин</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | TP 3% / SL 2%</p>
               </div>
             </div>
             
@@ -532,7 +521,7 @@ const App: React.FC = () => {
               {autoTrade && (
                 <div className="mt-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
                   <p className="text-green-400 font-bold text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
-                  <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | TP 3% / SL 2% | Сделки не чаще 1 раза в 2 мин</p>
+                  <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL</p>
                 </div>
               )}
             </div>
@@ -559,7 +548,15 @@ const App: React.FC = () => {
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="bg-black/40 text-gray-400 text-xs">
-                      <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА</th><th className="text-right p-2">КОЛ-ВО</th><th className="text-right p-2">TP</th><th className="text-right p-2">SL</th><th className="text-right p-2">P&L</th></tr>
+                      <tr>
+                        <th className="text-left p-2">МОНЕТА</th>
+                        <th className="text-left p-2">ТИП</th>
+                        <th className="text-right p-2">ЦЕНА</th>
+                        <th className="text-right p-2">КОЛ-ВО</th>
+                        <th className="text-right p-2">TP</th>
+                        <th className="text-right p-2">SL</th>
+                        <th className="text-right p-2">P&L</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {openTrades.map(trade => {
@@ -598,7 +595,15 @@ const App: React.FC = () => {
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-black/40 text-gray-400 text-xs sticky top-0">
-                    <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА ВХ.</th><th className="text-right p-2">ЦЕНА ВЫХ.</th><th className="text-right p-2">PnL</th><th className="text-right p-2">%</th><th className="text-right p-2">ВРЕМЯ</th></tr>
+                    <tr>
+                      <th className="text-left p-2">МОНЕТА</th>
+                      <th className="text-left p-2">ТИП</th>
+                      <th className="text-right p-2">ЦЕНА ВХ.</th>
+                      <th className="text-right p-2">ЦЕНА ВЫХ.</th>
+                      <th className="text-right p-2">PnL</th>
+                      <th className="text-right p-2">%</th>
+                      <th className="text-right p-2">ВРЕМЯ</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {closedTrades.slice().reverse().map(trade => (
@@ -610,7 +615,7 @@ const App: React.FC = () => {
                         <td className={`p-2 text-right font-bold ${(trade.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{(trade.profit || 0) >= 0 ? '+' : ''}{formatNumber(trade.profit || 0)}</td>
                         <td className={`p-2 text-right ${(trade.profitPercent || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{(trade.profitPercent || 0) >= 0 ? '+' : ''}{(trade.profitPercent || 0).toFixed(1)}%</td>
                         <td className="p-2 text-right text-gray-500 text-xs">{formatTime(trade.entryTime)}</td>
-                      </table>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
