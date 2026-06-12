@@ -249,7 +249,7 @@ const App: React.FC = () => {
         return;
       }
       
-      // Расчёт размера позиции (НЕ МОЖЕТ БЫТЬ БОЛЬШЕ БАЛАНСА)
+      // Расчёт размера позиции
       const riskAmount = Math.min(balance * (riskPercent / 100), balance);
       if (riskAmount <= 0 || riskAmount > balance) {
         processingTradeRef.current.delete(signal.symbol);
@@ -270,7 +270,7 @@ const App: React.FC = () => {
       const tpPrice = signal.action === 'buy' ? signal.price * (1 + tpPercent / 100) : signal.price * (1 - tpPercent / 100);
       const slPrice = signal.action === 'buy' ? signal.price * (1 - slPercent / 100) : signal.price * (1 + slPercent / 100);
       
-      // СОЗДАЁМ СДЕЛКУ (НЕ вычитаем из баланса, а замораживаем сумму)
+      // Создаём сделку
       const newTrade: Trade = {
         id: `${signal.symbol}_${Date.now()}`,
         symbol: signal.symbol,
@@ -289,7 +289,7 @@ const App: React.FC = () => {
       
       setTrades(prev => [...prev, newTrade]);
       
-      console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | ${roundedQty} @ $${signal.price} | Сумма: $${riskAmount.toFixed(2)}`);
+      console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | ${roundedQty} @ $${signal.price}`);
     } finally {
       setTimeout(() => {
         processingTradeRef.current.delete(signal.symbol);
@@ -326,7 +326,7 @@ const App: React.FC = () => {
         : t
     ));
     
-    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} (${profitPercent.toFixed(2)}%) | Новый баланс: $${newBalance.toFixed(2)}`);
+    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
   };
 
   // ==================== МОНИТОРИНГ TP/SL ====================
@@ -435,10 +435,10 @@ const App: React.FC = () => {
     }
   };
 
-  // ==================== ОТКРЫТИЕ BYBIT ====================
+  // ==================== ОТКРЫТИЕ BYBIT (REAL с демо-счетом) ====================
   const openBybit = (symbol: string) => {
-    // Открываем главную страницу Bybit Testnet с редиректом на торговую пару
-    window.open(`https://testnet.bybit.com/trade/${symbol.replace('/', '')}`, '_blank');
+    // Открываем обычный Bybit (не тестнет) - там есть демо-счет
+    window.open(`https://www.bybit.com/trade/${symbol.replace('/', '')}`, '_blank');
   };
 
   // ==================== РЕНДЕР ====================
