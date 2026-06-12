@@ -6,20 +6,16 @@ import TopMovers from './components/TopMovers';
 import Watchlist from './components/Watchlist';
 import { createWebSocketManager, PriceData } from './services/websocket';
 
-// ==================== 150+ РЕАЛЬНЫХ АКТИВОВ ====================
+// ==================== ПРОВЕРЕННЫЕ РАБОТАЮЩИЕ СИМВОЛЫ ====================
 const SYMBOLS = [
-  'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT', 
+  'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT',
   'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT', 'LTC/USDT', 'UNI/USDT', 'ATOM/USDT',
   'ETC/USDT', 'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'NEAR/USDT',
   'INJ/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT', 'RNDR/USDT', 'MKR/USDT',
-  'AAVE/USDT', 'SNX/USDT', 'CRV/USDT', 'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT',
-  'GALA/USDT', 'AXS/USDT', 'ENJ/USDT', 'CHZ/USDT', 'THETA/USDT', 'EOS/USDT', 'XTZ/USDT',
-  'KSM/USDT', 'ZEC/USDT', 'DASH/USDT', 'COMP/USDT', 'ZIL/USDT', 'BAT/USDT', 'ZRX/USDT',
+  'AAVE/USDT', 'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT', 'AXS/USDT',
+  'CHZ/USDT', 'EOS/USDT', 'KSM/USDT', 'ZEC/USDT', 'COMP/USDT', 'ZIL/USDT', 'BAT/USDT',
   'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT', 'FLOW/USDT', 'WAVES/USDT',
-  'NEO/USDT', 'IOTA/USDT', 'ONE/USDT', 'HOT/USDT', 'CRO/USDT', 'CELO/USDT', 'ROSE/USDT',
-  'KLAY/USDT', 'CKB/USDT', 'ERG/USDT', 'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT',
-  'SHIB/USDT', 'SEI/USDT', 'TIA/USDT', 'PYTH/USDT', 'JUP/USDT', 'ONDO/USDT', 'WLD/USDT',
-  'FET/USDT', 'LDO/USDT', 'BLUR/USDT', 'CAKE/USDT', 'XVS/USDT'
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT', 'SEI/USDT', 'WLD/USDT'
 ];
 
 interface Signal {
@@ -306,7 +302,7 @@ const App: React.FC = () => {
     console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
   };
 
-  // МОНИТОРИНГ TP/SL - каждую секунду проверяем цены
+  // Мониторинг TP/SL
   useEffect(() => {
     const checkTPandSL = () => {
       const openTrades = trades.filter(t => t.status === 'open');
@@ -363,6 +359,7 @@ const App: React.FC = () => {
           connectedRef.current.add(symbol);
           connected++;
           setWsConnectedCount(connected);
+          console.log(`✅ WebSocket подключен: ${symbol} (${connected}/${SYMBOLS.length})`);
         }
         updatePrice(symbol, data.price);
       });
@@ -494,7 +491,7 @@ const App: React.FC = () => {
           <div className="bg-black/40 backdrop-blur rounded-xl p-3 border border-red-500/20">
             <div className="flex gap-3 mb-3">
               <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-3 py-1.5 text-sm text-white">
-                {SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}
+                {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               <div className="text-right ml-auto">
                 <div className="text-xs text-gray-500">Текущая цена</div>
@@ -548,15 +545,7 @@ const App: React.FC = () => {
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="bg-black/40 text-gray-400 text-xs">
-                      <tr>
-                        <th className="text-left p-2">МОНЕТА</th>
-                        <th className="text-left p-2">ТИП</th>
-                        <th className="text-right p-2">ЦЕНА</th>
-                        <th className="text-right p-2">КОЛ-ВО</th>
-                        <th className="text-right p-2">TP</th>
-                        <th className="text-right p-2">SL</th>
-                        <th className="text-right p-2">P&L</th>
-                      </tr>
+                      <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА</th><th className="text-right p-2">КОЛ-ВО</th><th className="text-right p-2">TP</th><th className="text-right p-2">SL</th><th className="text-right p-2">P&L</th></tr>
                     </thead>
                     <tbody>
                       {openTrades.map(trade => {
@@ -595,15 +584,7 @@ const App: React.FC = () => {
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-black/40 text-gray-400 text-xs sticky top-0">
-                    <tr>
-                      <th className="text-left p-2">МОНЕТА</th>
-                      <th className="text-left p-2">ТИП</th>
-                      <th className="text-right p-2">ЦЕНА ВХ.</th>
-                      <th className="text-right p-2">ЦЕНА ВЫХ.</th>
-                      <th className="text-right p-2">PnL</th>
-                      <th className="text-right p-2">%</th>
-                      <th className="text-right p-2">ВРЕМЯ</th>
-                    </tr>
+                    <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА ВХ.</th><th className="text-right p-2">ЦЕНА ВЫХ.</th><th className="text-right p-2">PnL</th><th className="text-right p-2">%</th><th className="text-right p-2">ВРЕМЯ</th></tr>
                   </thead>
                   <tbody>
                     {closedTrades.slice().reverse().map(trade => (
