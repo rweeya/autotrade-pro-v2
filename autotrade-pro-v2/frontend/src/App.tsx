@@ -91,7 +91,6 @@ const App: React.FC = () => {
   const formatPrice = (price: number) => price.toFixed(4);
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
 
-  // Сохранение состояния
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
@@ -218,29 +217,24 @@ const App: React.FC = () => {
     return null;
   };
 
-  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ ====================
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
     
-    // Защита от дублей сигналов
     if (processingSignalRef.current.has(signal.symbol)) return;
     processingSignalRef.current.add(signal.symbol);
     
-    // Защита от частых сделок (раз в 3 минуты)
     const lastTrade = lastTradeTime.get(signal.symbol);
     if (lastTrade && Date.now() - lastTrade < 180000) {
       processingSignalRef.current.delete(signal.symbol);
       return;
     }
     
-    // Проверка на уже открытую позицию
     const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
     if (openTrade) {
       processingSignalRef.current.delete(signal.symbol);
       return;
     }
     
-    // Расчёт размера позиции
     const riskAmount = balance * (riskPercent / 100);
     if (riskAmount <= 0 || riskAmount > balance) {
       processingSignalRef.current.delete(signal.symbol);
@@ -255,13 +249,11 @@ const App: React.FC = () => {
       return;
     }
     
-    // Расчёт TP/SL
     const tpPercent = 3;
     const slPercent = 2;
     const tpPrice = signal.action === 'buy' ? signal.price * (1 + tpPercent / 100) : signal.price * (1 - tpPercent / 100);
     const slPrice = signal.action === 'buy' ? signal.price * (1 - slPercent / 100) : signal.price * (1 + slPercent / 100);
     
-    // Обновляем баланс (списываем сумму сделки)
     setBalance(prev => prev - riskAmount);
     setLastTradeTime(prev => new Map(prev).set(signal.symbol, Date.now()));
     
@@ -282,14 +274,13 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Кол-во: ${roundedQty} | Цена: $${signal.price} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)} | Новый баланс: $${(balance - riskAmount).toFixed(2)}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol}`);
     
     setTimeout(() => {
       processingSignalRef.current.delete(signal.symbol);
     }, 1000);
   };
 
-  // ==================== ЗАКРЫТИЕ СДЕЛКИ ====================
   const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
     let profit = 0;
     let profitPercent = 0;
@@ -303,7 +294,6 @@ const App: React.FC = () => {
       profitPercent = ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
     }
     
-    // Обновляем баланс (возвращаем инвестиции + прибыль/убыток)
     const newBalance = balance + investedAmount + profit;
     const newTotalProfit = totalProfit + profit;
     
@@ -316,10 +306,9 @@ const App: React.FC = () => {
         : t
     ));
     
-    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} (${profitPercent.toFixed(2)}%) | Новый баланс: $${newBalance.toFixed(2)}`);
+    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
   };
 
-  // ==================== МОНИТОРИНГ TP/SL ====================
   useEffect(() => {
     const checkTPandSL = () => {
       const openTrades = trades.filter(t => t.status === 'open');
@@ -348,7 +337,6 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [trades, prices, balance, totalProfit]);
 
-  // ==================== ОБНОВЛЕНИЕ ЦЕН ====================
   const updatePrice = useCallback((symbol: string, price: number) => {
     setPrices(prev => new Map(prev).set(symbol, price));
     
@@ -366,7 +354,6 @@ const App: React.FC = () => {
     }
   }, [autoTrade]);
 
-  // ==================== WEBSOCKET ====================
   useEffect(() => {
     const wsManager = createWebSocketManager();
     wsRef.current = wsManager;
@@ -431,18 +418,12 @@ const App: React.FC = () => {
 
   const openBybit = (symbol: string): void => {
     const [base, quote] = symbol.split('/');
-    const urls = [
-      `https://www.bybit.com/trade/spot/${base}/${quote}`,
-      `https://www.bybit.com/trade/${base}/${quote}`,
-      `https://www.bybit.com/ru-RU/trade/spot/${base}/${quote}`,
-      `https://www.bybit.com/ru-RU/trade/${base}${quote}`,
-    ];
-    window.open(urls[0], '_blank');
+    const url = `https://www.bybit.com/trade/spot/${base}/${quote}`;
+    window.open(url, '_blank');
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/30 to-black">
-      {/* ХЕДЕР */}
       <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center flex-wrap gap-3">
@@ -480,7 +461,6 @@ const App: React.FC = () => {
       </header>
 
       <div className="relative z-10 container mx-auto px-4 py-4">
-        {/* ВЕРХНЯЯ СТАТИСТИКА */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           <div className="bg-black/60 backdrop-blur rounded-xl p-3 border border-red-500/30">
             <div className="text-gray-400 text-xs">Сигналов</div>
@@ -504,7 +484,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* ТАБЫ */}
         <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto">
           <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🎯 Сигналы</button>
           <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📈 График</button>
@@ -512,7 +491,6 @@ const App: React.FC = () => {
           <button onClick={() => setActiveTab('history')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📜 История</button>
         </div>
 
-        {/* ВКЛАДКА ТОРГОВЛИ */}
         {activeTab === 'trading' && (
           <div className="bg-black/40 backdrop-blur rounded-xl p-3 border border-red-500/20">
             <div className="flex gap-3 mb-3">
@@ -528,10 +506,8 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ВКЛАДКА АВТОТОРГОВЛИ + ОТКРЫТЫЕ ПОЗИЦИИ */}
         {activeTab === 'autotrade' && (
           <div className="space-y-4">
-            {/* Панель управления */}
             <div className="bg-black/40 backdrop-blur rounded-xl p-4 border border-red-500/20">
               <h3 className="text-lg font-bold text-red-400 mb-3">🤖 УПРАВЛЕНИЕ</h3>
               <div className="flex flex-wrap gap-3">
@@ -551,7 +527,6 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* Настройки риска */}
             <div className="bg-black/40 backdrop-blur rounded-xl p-4 border border-red-500/20">
               <h3 className="text-lg font-bold text-red-400 mb-3">💰 НАСТРОЙКИ РИСКА</h3>
               <label className="block text-sm text-gray-400 mb-1">Риск на сделку: {riskPercent}%</label>
@@ -564,7 +539,6 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* ОТКРЫТЫЕ ПОЗИЦИИ */}
             <div className="bg-black/40 backdrop-blur rounded-xl border border-red-500/20 overflow-hidden">
               <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30">
                 <h3 className="font-bold text-red-400">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length})</h3>
@@ -575,7 +549,15 @@ const App: React.FC = () => {
                 ) : (
                   <table className="w-full text-sm">
                     <thead className="bg-black/40 text-gray-400 text-xs">
-                      <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА</th><th className="text-right p-2">КОЛ-ВО</th><th className="text-right p-2">TP</th><th className="text-right p-2">SL</th><th className="text-right p-2">P&L</th></tr>
+                      <tr>
+                        <th className="text-left p-2">МОНЕТА</th>
+                        <th className="text-left p-2">ТИП</th>
+                        <th className="text-right p-2">ЦЕНА</th>
+                        <th className="text-right p-2">КОЛ-ВО</th>
+                        <th className="text-right p-2">TP</th>
+                        <th className="text-right p-2">SL</th>
+                        <th className="text-right p-2">P&L</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {openTrades.map(trade => {
@@ -602,7 +584,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ВКЛАДКА ИСТОРИИ */}
         {activeTab === 'history' && (
           <div className="bg-black/40 backdrop-blur rounded-xl border border-red-500/20 overflow-hidden">
             <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30 flex justify-between items-center">
@@ -615,7 +596,15 @@ const App: React.FC = () => {
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-black/40 text-gray-400 text-xs sticky top-0">
-                    <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА ВХ.</th><th className="text-right p-2">ЦЕНА ВЫХ.</th><th className="text-right p-2">PnL</th><th className="text-right p-2">%</th><th className="text-right p-2">ВРЕМЯ</th></tr>
+                    <tr>
+                      <th className="text-left p-2">МОНЕТА</th>
+                      <th className="text-left p-2">ТИП</th>
+                      <th className="text-right p-2">ЦЕНА ВХ.</th>
+                      <th className="text-right p-2">ЦЕНА ВЫХ.</th>
+                      <th className="text-right p-2">PnL</th>
+                      <th className="text-right p-2">%</th>
+                      <th className="text-right p-2">ВРЕМЯ</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {closedTrades.slice().reverse().map(trade => (
@@ -627,7 +616,7 @@ const App: React.FC = () => {
                         <td className={`p-2 text-right font-bold ${(trade.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{(trade.profit || 0) >= 0 ? '+' : ''}{formatNumber(trade.profit || 0)}</td>
                         <td className={`p-2 text-right ${(trade.profitPercent || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{(trade.profitPercent || 0) >= 0 ? '+' : ''}{(trade.profitPercent || 0).toFixed(1)}%</td>
                         <td className="p-2 text-right text-gray-500 text-xs">{formatTime(trade.entryTime)}</td>
-                      </table>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -636,7 +625,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* ВКЛАДКА СИГНАЛОВ */}
         {activeTab === 'signals' && (
           <div className="space-y-2">
             {signals.length === 0 ? (
@@ -669,7 +657,9 @@ const App: React.FC = () => {
                       <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">EMA</div><div className="text-xs">{signal.ema20.toFixed(0)}/{signal.ema50.toFixed(0)}</div></div>
                       <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">Сила</div><div className="text-yellow-400">{stars}</div></div>
                     </div>
-                    <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">{signal.reasons.map((r,i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}</div>
+                    <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
+                      {signal.reasons.map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
+                    </div>
                   </div>
                 );
               })
