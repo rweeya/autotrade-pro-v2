@@ -435,20 +435,26 @@ const App: React.FC = () => {
     }
   };
 
-  // ==================== ОТКРЫТИЕ BYBIT (КОПИРОВАНИЕ СИМВОЛА) ====================
+  // ==================== ОТКРЫТИЕ BYBIT (ДАШБОРД → РЕДИРЕКТ НА АКТИВ) ====================
   const openBybit = (symbol: string) => {
     const cleanSymbol = symbol.replace('/', '');
-    navigator.clipboard.writeText(cleanSymbol);
     
     // Показываем уведомление
     const notification = document.createElement('div');
-    notification.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-pulse';
-    notification.innerHTML = `✅ ${cleanSymbol} скопирован! Вставь в поиск Bybit (Ctrl+V)`;
+    notification.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+    notification.innerHTML = `🔄 Открываем ${cleanSymbol}...`;
     document.body.appendChild(notification);
     setTimeout(() => notification.remove(), 3000);
     
     // Открываем Bybit в новой вкладке
-    window.open('https://www.bybit.com', '_blank');
+    const win = window.open('https://www.bybit.com/ru-RU/dashboard', '_blank');
+    
+    // Через 2.5 секунды перенаправляем на торговую пару
+    if (win) {
+      setTimeout(() => {
+        win.location.href = `https://www.bybit.com/ru-RU/trade/${cleanSymbol}`;
+      }, 2500);
+    }
   };
 
   // ==================== РЕНДЕР ====================
@@ -658,7 +664,7 @@ const App: React.FC = () => {
                           {(trade.profitPercent || 0) >= 0 ? '+' : ''}{(trade.profitPercent || 0).toFixed(2)}%
                         </td>
                         <td className="p-3 text-right text-gray-500 text-xs">{formatTime(trade.entryTime)}</td>
-                       </tr>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
