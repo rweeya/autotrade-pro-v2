@@ -435,26 +435,12 @@ const App: React.FC = () => {
     }
   };
 
-  // ==================== ОТКРЫТИЕ BYBIT (ДАШБОРД → РЕДИРЕКТ НА АКТИВ) ====================
+  // ==================== ОТКРЫТИЕ BYBIT (ПРЯМАЯ ССЫЛКА НА АКТИВ) ====================
   const openBybit = (symbol: string) => {
-    const cleanSymbol = symbol.replace('/', '');
-    
-    // Показываем уведомление
-    const notification = document.createElement('div');
-    notification.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
-    notification.innerHTML = `🔄 Открываем ${cleanSymbol}...`;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 3000);
-    
-    // Открываем Bybit в новой вкладке
-    const win = window.open('https://www.bybit.com/ru-RU/dashboard', '_blank');
-    
-    // Через 2.5 секунды перенаправляем на торговую пару
-    if (win) {
-      setTimeout(() => {
-        win.location.href = `https://www.bybit.com/ru-RU/trade/${cleanSymbol}`;
-      }, 2500);
-    }
+    // Bybit использует формат без /USDT в конце для URL
+    const cleanSymbol = symbol.replace('/USDT', '');
+    const url = `https://www.bybit.com/ru-RU/trade/${cleanSymbol}`;
+    window.open(url, '_blank');
   };
 
   // ==================== РЕНДЕР ====================
