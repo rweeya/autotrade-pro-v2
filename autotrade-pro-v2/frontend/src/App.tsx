@@ -86,24 +86,24 @@ const App: React.FC = () => {
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
   const processingSignalRef = useRef<Set<string>>(new Set());
+  // Защита от повторяющихся сигналов (последний сигнал по символу)
+  const lastSignalForSymbol = useRef<Map<string, { action: string; timestamp: number }>>(new Map());
 
   const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatPrice = (price: number) => price.toFixed(4);
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
 
-  // ==================== АВТОУДАЛЕНИЕ СТАРЫХ СИГНАЛОВ (каждую минуту) ====================
+  // Автоудаление старых сигналов
   useEffect(() => {
     const cleanupSignals = () => {
-      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000; // 5 минут
-      const oldSignalsCount = signals.filter(s => s.timestamp < fiveMinutesAgo).length;
-      if (oldSignalsCount > 0) {
-        const newSignals = signals.filter(s => s.timestamp >= fiveMinutesAgo);
+      const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+      const newSignals = signals.filter(s => s.timestamp >= fiveMinutesAgo);
+      if (newSignals.length !== signals.length) {
         setSignals(newSignals);
-        console.log(`🗑️ Удалено ${oldSignalsCount} старых сигналов (старше 5 минут). Осталось: ${newSignals.length}`);
+        console.log(`🗑️ Удалено ${signals.length - newSignals.length} старых сигналов`);
       }
     };
-    
-    const interval = setInterval(cleanupSignals, 60000); // Проверяем каждую минуту
+    const interval = setInterval(cleanupSignals, 60000);
     return () => clearInterval(interval);
   }, [signals]);
 
@@ -151,11 +151,14 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // ==================== РАСЧЕТ ИНДИКАТОРОВ (увеличен период для точности) ====================
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (prices.length < period + 1) return 50;
     
     let gains = 0, losses = 0;
-    const recentPrices = prices.slice(-period - 1);
+    // Используем больше данных для точности
+    const startIdx = Math.max(0, prices.length - period - 20);
+    const recentPrices = prices.slice(startIdx);
     
     for (let i = 1; i < recentPrices.length; i++) {
       const change = recentPrices[i] - recentPrices[i - 1];
@@ -168,7 +171,10 @@ const App: React.FC = () => {
     
     if (avgLoss === 0) return 100;
     const rs = avgGain / avgLoss;
-    return 100 - (100 / (1 + rs));
+    const rsi = 100 - (100 / (1 + rs));
+    
+    // Округляем до целого как на Bybit
+    return Math.round(rsi);
   };
 
   const calculateEMA = (prices: number[], period: number): number => {
@@ -184,54 +190,71 @@ const App: React.FC = () => {
   };
 
   const calculateMACD = (prices: number[]): number => {
-    if (prices.length < 26) return 0;
+    if (prices.length < 35) return 0;
     const ema12 = calculateEMA(prices, 12);
     const ema26 = calculateEMA(prices, 26);
-    return ema12 - ema26;
+    const macd = ema12 - ema26;
+    // Округляем до 4 знаков как на Bybit
+    return parseFloat(macd.toFixed(4));
   };
 
+  // ==================== ГЕНЕРАЦИЯ СИГНАЛА С ЗАЩИТОЙ ОТ ДУБЛЕЙ ====================
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const history = priceHistoryRef.current.get(symbol);
-    if (!history || history.length < 50) return null;
+    if (!history || history.length < 60) return null; // Нужно минимум 60 свечей для точности
     
     const rsi = calculateRSI(history);
     const macd = calculateMACD(history);
     const ema20 = calculateEMA(history, 20);
     const ema50 = calculateEMA(history, 50);
     
+    let action: 'buy' | 'sell' | null = null;
+    let reasons: string[] = [];
+    
+    // Проверка условий для BUY
     if (rsi < 30 && macd > 0 && ema20 > ema50) {
-      return {
-        id: `${symbol}_${Date.now()}_${Math.random()}`,
-        symbol,
-        action: 'buy',
-        price: currentPrice,
-        timestamp: Date.now(),
-        strength: rsi < 20 ? 3 : 2,
-        rsi,
-        macd,
-        ema20,
-        ema50,
-        reasons: [`RSI ${rsi.toFixed(1)} < 30`, `MACD бычий`, `EMA20 > EMA50`]
-      };
+      action = 'buy';
+      reasons = [`RSI ${rsi} < 30`, `MACD бычий (${macd > 0 ? '+' : ''}${macd})`, `EMA20(${ema20.toFixed(0)}) > EMA50(${ema50.toFixed(0)})`];
     }
     
+    // Проверка условий для SELL
     if (rsi > 70 && macd < 0 && ema20 < ema50) {
-      return {
-        id: `${symbol}_${Date.now()}_${Math.random()}`,
-        symbol,
-        action: 'sell',
-        price: currentPrice,
-        timestamp: Date.now(),
-        strength: rsi > 80 ? 3 : 2,
-        rsi,
-        macd,
-        ema20,
-        ema50,
-        reasons: [`RSI ${rsi.toFixed(1)} > 70`, `MACD медвежий`, `EMA20 < EMA50`]
-      };
+      action = 'sell';
+      reasons = [`RSI ${rsi} > 70`, `MACD медвежий (${macd})`, `EMA20(${ema20.toFixed(0)}) < EMA50(${ema50.toFixed(0)})`];
     }
     
-    return null;
+    if (!action) return null;
+    
+    // ========== ЗАЩИТА ОТ ПОВТОРЯЮЩИХСЯ СИГНАЛОВ ==========
+    const lastSignal = lastSignalForSymbol.current.get(symbol);
+    const now = Date.now();
+    
+    // Если последний сигнал был меньше 2 минут назад - пропускаем
+    if (lastSignal && (now - lastSignal.timestamp) < 120000 && lastSignal.action === action) {
+      console.log(`⏸️ Пропуск повторного ${action.toUpperCase()} сигнала для ${symbol} (прошло ${Math.floor((now - lastSignal.timestamp) / 1000)} сек)`);
+      return null;
+    }
+    
+    // Сохраняем последний сигнал
+    lastSignalForSymbol.current.set(symbol, { action, timestamp: now });
+    
+    const strength = (action === 'buy' && rsi < 20) || (action === 'sell' && rsi > 80) ? 3 : 2;
+    
+    console.log(`📊 НОВЫЙ СИГНАЛ: ${action.toUpperCase()} ${symbol} | RSI=${rsi} | MACD=${macd} | EMA20=${ema20.toFixed(0)} EMA50=${ema50.toFixed(0)}`);
+    
+    return {
+      id: `${symbol}_${Date.now()}_${Math.random()}`,
+      symbol,
+      action,
+      price: currentPrice,
+      timestamp: now,
+      strength,
+      rsi,
+      macd,
+      ema20,
+      ema50,
+      reasons
+    };
   };
 
   const executeTrade = (signal: Signal) => {
@@ -359,7 +382,8 @@ const App: React.FC = () => {
     
     let history = priceHistoryRef.current.get(symbol) || [];
     history.push(price);
-    if (history.length > 200) history = history.slice(-200);
+    // Храним больше истории для точности (300 свечей)
+    if (history.length > 300) history = history.slice(-300);
     priceHistoryRef.current.set(symbol, history);
     
     const signal = generateSignal(symbol, price);
@@ -406,6 +430,7 @@ const App: React.FC = () => {
       setTrades([]);
       setSignals([]);
       setTotalProfit(0);
+      lastSignalForSymbol.current.clear();
       localStorage.removeItem('trades');
       localStorage.removeItem('signals');
       alert('✅ История очищена');
@@ -418,6 +443,7 @@ const App: React.FC = () => {
       setTotalProfit(0);
       setTrades([]);
       setSignals([]);
+      lastSignalForSymbol.current.clear();
       localStorage.removeItem('trades');
       localStorage.removeItem('signals');
       alert('✅ Баланс сброшен до $10,000');
@@ -448,7 +474,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | Сигналы живут 5 мин</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | Сигналы раз в 2 мин</p>
               </div>
             </div>
             
@@ -648,11 +674,11 @@ const App: React.FC = () => {
               <div className="bg-black/40 backdrop-blur rounded-xl p-8 text-center border border-red-500/20">
                 <div className="text-5xl mb-3">⏳</div>
                 <div className="text-gray-400 text-sm">Нет сигналов. Ожидаем RSI &lt; 30 или RSI &gt; 70...</div>
-                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnectedCount}/{SYMBOLS.length} | Сигналы живут 5 минут</div>
+                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnectedCount}/{SYMBOLS.length} | Интервал между сигналами: 2 мин</div>
               </div>
             ) : (
               <>
-                <div className="text-xs text-gray-500 text-right mb-1">Актуальных сигналов: {signals.length} (старше 5 мин удаляются)</div>
+                <div className="text-xs text-gray-500 text-right mb-1">Актуальных сигналов: {signals.length} (живут 5 мин, повтор не чаще 2 мин)</div>
                 {signals.map((signal, idx) => {
                   const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength);
                   const timeLeft = Math.max(0, 5 - Math.floor((Date.now() - signal.timestamp) / 60000));
@@ -675,10 +701,22 @@ const App: React.FC = () => {
                         </div>
                       </div>
                       <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
-                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">RSI</div><div className="font-bold">{signal.rsi.toFixed(1)}</div></div>
-                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">MACD</div><div className="font-mono">{signal.macd > 0 ? '+' : ''}{signal.macd.toFixed(4)}</div></div>
-                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">EMA</div><div className="text-xs">{signal.ema20.toFixed(0)}/{signal.ema50.toFixed(0)}</div></div>
-                        <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">Сила</div><div className="text-yellow-400">{stars}</div></div>
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center">
+                          <div className="text-gray-500">RSI</div>
+                          <div className={`font-bold ${signal.rsi < 30 ? 'text-green-400' : signal.rsi > 70 ? 'text-red-400' : 'text-white'}`}>{signal.rsi}</div>
+                        </div>
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center">
+                          <div className="text-gray-500">MACD</div>
+                          <div className={`font-mono ${signal.macd > 0 ? 'text-green-400' : 'text-red-400'}`}>{signal.macd > 0 ? '+' : ''}{signal.macd}</div>
+                        </div>
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center">
+                          <div className="text-gray-500">EMA20/50</div>
+                          <div className={`text-xs ${signal.ema20 > signal.ema50 ? 'text-green-400' : 'text-red-400'}`}>{signal.ema20.toFixed(0)}/{signal.ema50.toFixed(0)}</div>
+                        </div>
+                        <div className="bg-black/50 rounded-lg p-1.5 text-center">
+                          <div className="text-gray-500">Сила</div>
+                          <div className="text-yellow-400">{stars}</div>
+                        </div>
                       </div>
                       <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
                         {signal.reasons.map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
