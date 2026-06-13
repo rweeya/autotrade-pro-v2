@@ -6,16 +6,10 @@ import TopMovers from './components/TopMovers';
 import Watchlist from './components/Watchlist';
 import { createWebSocketManager, PriceData } from './services/websocket';
 
-// ==================== ПРОВЕРЕННЫЕ РАБОТАЮЩИЕ СИМВОЛЫ ====================
+// ==================== ТОП-10 ГАРАНТИРОВАННО РАБОТАЮЩИХ СИМВОЛОВ ====================
 const SYMBOLS = [
-  'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT',
-  'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT', 'LTC/USDT', 'UNI/USDT', 'ATOM/USDT',
-  'ETC/USDT', 'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'NEAR/USDT',
-  'INJ/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT', 'RNDR/USDT', 'MKR/USDT',
-  'AAVE/USDT', 'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT', 'AXS/USDT',
-  'CHZ/USDT', 'EOS/USDT', 'KSM/USDT', 'ZEC/USDT', 'COMP/USDT', 'ZIL/USDT', 'BAT/USDT',
-  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT', 'FLOW/USDT', 'WAVES/USDT',
-  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT', 'SEI/USDT', 'WLD/USDT'
+  'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
+  'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT'
 ];
 
 interface Signal {
@@ -81,12 +75,13 @@ const App: React.FC = () => {
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
   const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
-  const lastSignalTimeForSymbol = useRef<Map<string, number>>(new Map()); // ЗАЩИТА ОТ ДУБЛЕЙ СИГНАЛОВ
+  const lastSignalTimeForSymbol = useRef<Map<string, number>>(new Map());
 
   const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const formatPrice = (price: number) => price.toFixed(4);
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
 
+  // Автоудаление старых сигналов (5 минут)
   useEffect(() => {
     const cleanupSignals = () => {
       const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
@@ -99,6 +94,7 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [signals]);
 
+  // Сохранение состояния
   useEffect(() => {
     localStorage.setItem('activeTab', activeTab);
   }, [activeTab]);
@@ -127,6 +123,7 @@ const App: React.FC = () => {
     localStorage.setItem('trades', JSON.stringify(trades));
   }, [trades]);
 
+  // Расчет винрейта
   useEffect(() => {
     const closedTrades = trades.filter(t => t.status === 'closed' && t.profit !== null);
     if (closedTrades.length === 0) {
@@ -137,11 +134,13 @@ const App: React.FC = () => {
     setWinRate((wins / closedTrades.length) * 100);
   }, [trades]);
 
+  // Таймер
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // ==================== ТЕХНИЧЕСКИЕ ИНДИКАТОРЫ ====================
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (prices.length < period + 1) return 50;
     
@@ -182,11 +181,12 @@ const App: React.FC = () => {
     return parseFloat((ema12 - ema26).toFixed(4));
   };
 
+  // ==================== ГЕНЕРАЦИЯ СИГНАЛОВ ====================
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const history = priceHistoryRef.current.get(symbol);
     if (!history || history.length < 60) return null;
     
-    // ЗАЩИТА ОТ ЧАСТЫХ СИГНАЛОВ (не чаще 1 раза в 30 секунд)
+    // Защита от частых сигналов (не чаще 1 раза в 30 секунд)
     const lastSignalTime = lastSignalTimeForSymbol.current.get(symbol);
     const now = Date.now();
     if (lastSignalTime && (now - lastSignalTime) < 30000) {
@@ -213,7 +213,6 @@ const App: React.FC = () => {
     
     if (!action) return null;
     
-    // Сохраняем время последнего сигнала
     lastSignalTimeForSymbol.current.set(symbol, now);
     
     const strength = (action === 'buy' && rsi < 20) || (action === 'sell' && rsi > 80) ? 3 : 2;
@@ -233,6 +232,7 @@ const App: React.FC = () => {
     };
   };
 
+  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ ====================
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
     
@@ -281,37 +281,10 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
   };
 
-  const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
-    let profit = 0;
-    let profitPercent = 0;
-    const investedAmount = trade.entryPrice * trade.quantity;
-    
-    if (trade.side === 'buy') {
-      profit = (currentPrice - trade.entryPrice) * trade.quantity;
-      profitPercent = ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100;
-    } else {
-      profit = (trade.entryPrice - currentPrice) * trade.quantity;
-      profitPercent = ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
-    }
-    
-    const newBalance = balance + investedAmount + profit;
-    const newTotalProfit = totalProfit + profit;
-    
-    setBalance(newBalance);
-    setTotalProfit(newTotalProfit);
-    
-    setTrades(prev => prev.map(t => 
-      t.id === trade.id 
-        ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent }
-        : t
-    ));
-    
-    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
-  };
-
+  // ==================== ЗАКРЫТИЕ СДЕЛКИ ПО TP/SL (ИСПРАВЛЕННОЕ) ====================
   useEffect(() => {
     const checkTPandSL = () => {
       const openTrades = trades.filter(t => t.status === 'open');
@@ -321,16 +294,58 @@ const App: React.FC = () => {
         if (!currentPrice) continue;
         
         if (trade.side === 'buy') {
+          // BUY: TP при цене выше, SL при цене ниже
           if (currentPrice >= trade.tpPrice) {
-            closeTrade(trade, currentPrice, 'TP');
+            const profit = (currentPrice - trade.entryPrice) * trade.quantity;
+            const invested = trade.entryPrice * trade.quantity;
+            
+            setBalance(prev => prev + invested + profit);
+            setTotalProfit(prev => prev + profit);
+            setTrades(prev => prev.map(t => 
+              t.id === trade.id 
+                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 }
+                : t
+            ));
+            console.log(`🎯 TP (BUY) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
           } else if (currentPrice <= trade.slPrice) {
-            closeTrade(trade, currentPrice, 'SL');
+            const profit = (currentPrice - trade.entryPrice) * trade.quantity;
+            const invested = trade.entryPrice * trade.quantity;
+            
+            setBalance(prev => prev + invested + profit);
+            setTotalProfit(prev => prev + profit);
+            setTrades(prev => prev.map(t => 
+              t.id === trade.id 
+                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 }
+                : t
+            ));
+            console.log(`🛑 SL (BUY) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
           }
         } else {
+          // SELL: TP при цене ниже, SL при цене выше
           if (currentPrice <= trade.tpPrice) {
-            closeTrade(trade, currentPrice, 'TP');
+            const profit = (trade.entryPrice - currentPrice) * trade.quantity;
+            const invested = trade.entryPrice * trade.quantity;
+            
+            setBalance(prev => prev + invested + profit);
+            setTotalProfit(prev => prev + profit);
+            setTrades(prev => prev.map(t => 
+              t.id === trade.id 
+                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100 }
+                : t
+            ));
+            console.log(`🎯 TP (SELL) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
           } else if (currentPrice >= trade.slPrice) {
-            closeTrade(trade, currentPrice, 'SL');
+            const profit = (trade.entryPrice - currentPrice) * trade.quantity;
+            const invested = trade.entryPrice * trade.quantity;
+            
+            setBalance(prev => prev + invested + profit);
+            setTotalProfit(prev => prev + profit);
+            setTrades(prev => prev.map(t => 
+              t.id === trade.id 
+                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100 }
+                : t
+            ));
+            console.log(`🛑 SL (SELL) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
           }
         }
       }
@@ -338,8 +353,9 @@ const App: React.FC = () => {
     
     const interval = setInterval(checkTPandSL, 1000);
     return () => clearInterval(interval);
-  }, [trades, prices, balance, totalProfit]);
+  }, [trades, prices]); // balance и totalProfit НЕ в зависимостях - используем setState
 
+  // ==================== ОБНОВЛЕНИЕ ЦЕН ====================
   const updatePrice = useCallback((symbol: string, price: number) => {
     setPrices(prev => new Map(prev).set(symbol, price));
     
@@ -357,6 +373,7 @@ const App: React.FC = () => {
     }
   }, [autoTrade]);
 
+  // ==================== WEBSOCKET ====================
   useEffect(() => {
     const wsManager = createWebSocketManager();
     wsRef.current = wsManager;
@@ -368,6 +385,7 @@ const App: React.FC = () => {
           connectedRef.current.add(symbol);
           connected++;
           setWsConnectedCount(connected);
+          console.log(`✅ WebSocket подключен: ${symbol} (${connected}/${SYMBOLS.length})`);
         }
         updatePrice(symbol, data.price);
       });
@@ -378,6 +396,7 @@ const App: React.FC = () => {
     };
   }, [updatePrice]);
 
+  // ==================== СТАТИСТИКА ====================
   const closedTrades = trades.filter(t => t.status === 'closed');
   const openTrades = trades.filter(t => t.status === 'open');
   const totalTrades = closedTrades.length;
@@ -387,6 +406,7 @@ const App: React.FC = () => {
   const worstTrade = closedTrades.length > 0 ? Math.min(...closedTrades.map(t => t.profit || 0)) : 0;
   const avgProfit = totalTrades > 0 ? totalProfit / totalTrades : 0;
 
+  // ==================== ДЕЙСТВИЯ ====================
   const clearHistory = () => {
     if (window.confirm('Очистить всю историю сделок и сигналов?')) {
       setTrades([]);
@@ -418,7 +438,22 @@ const App: React.FC = () => {
     if (window.confirm(`Закрыть все ${openTrades.length} открытых позиций?`)) {
       openTrades.forEach(trade => {
         const currentPrice = prices.get(trade.symbol) || trade.entryPrice;
-        closeTrade(trade, currentPrice, 'manual');
+        if (trade.side === 'buy') {
+          const profit = (currentPrice - trade.entryPrice) * trade.quantity;
+          const invested = trade.entryPrice * trade.quantity;
+          setBalance(prev => prev + invested + profit);
+          setTotalProfit(prev => prev + profit);
+        } else {
+          const profit = (trade.entryPrice - currentPrice) * trade.quantity;
+          const invested = trade.entryPrice * trade.quantity;
+          setBalance(prev => prev + invested + profit);
+          setTotalProfit(prev => prev + profit);
+        }
+        setTrades(prev => prev.map(t => 
+          t.id === trade.id 
+            ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit: 0, profitPercent: 0 }
+            : t
+        ));
       });
     }
   };
@@ -428,6 +463,7 @@ const App: React.FC = () => {
     window.open(`https://www.bybit.com/trade/spot/${base}/${quote}`, '_blank');
   };
 
+  // ==================== РЕНДЕР ====================
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/30 to-black">
       <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0">
@@ -437,7 +473,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | Сигнал раз в 30 сек</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | TP 3% / SL 2%</p>
               </div>
             </div>
             
@@ -528,7 +564,7 @@ const App: React.FC = () => {
               {autoTrade && (
                 <div className="mt-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
                   <p className="text-green-400 font-bold text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
-                  <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | Сделка раз в 2 мин</p>
+                  <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | TP 3% / SL 2%</p>
                 </div>
               )}
             </div>
