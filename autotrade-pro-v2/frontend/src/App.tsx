@@ -18,6 +18,8 @@ const SYMBOLS = [
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT', 'SEI/USDT', 'WLD/USDT'
 ];
 
+const MIN_BALANCE = 10000; // Минимальный баланс для торговли
+
 interface Signal {
   id: string;
   symbol: string;
@@ -219,11 +221,6 @@ const App: React.FC = () => {
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
     const strength = (rsi < 20 || rsi > 80) ? 3 : 2;
     
-    // Дебаг для BTC
-    if (symbol === 'BTC/USDT') {
-      console.log(`📊 ${symbol} RSI: ${rsi} | MACD: ${macd.toFixed(4)} | Действие: ${action}`);
-    }
-    
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
       symbol,
@@ -241,6 +238,12 @@ const App: React.FC = () => {
 
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
+    
+    // ==================== ОГРАНИЧЕНИЕ ПО БАЛАНСУ ====================
+    if (balance < MIN_BALANCE) {
+      console.log(`⏸️ Автоторговля приостановлена: баланс $${balance.toFixed(2)} < $${MIN_BALANCE}`);
+      return;
+    }
     
     const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
     if (lastTrade && Date.now() - lastTrade < 120000) return;
@@ -277,7 +280,7 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Остаток баланса: $${(balance - riskAmount).toFixed(2)}`);
   };
 
   const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -436,7 +439,14 @@ const App: React.FC = () => {
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <div className="text-xs text-gray-400">Баланс</div>
-                <div className="text-xl font-bold text-green-400">${formatNumber(balance)}</div>
+                <div className={`text-xl font-bold ${balance >= MIN_BALANCE ? 'text-green-400' : 'text-red-400'}`}>
+                  ${formatNumber(balance)}
+                  {balance < MIN_BALANCE && <span className="text-xs ml-1">⚠️</span>}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-400">Мин. баланс</div>
+                <div className="text-lg font-bold text-gray-500">${MIN_BALANCE}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-gray-400">Общий PnL</div>
@@ -590,7 +600,15 @@ const App: React.FC = () => {
                   <button onClick={closeAllPositions} className="px-4 py-2 bg-red-700/80 hover:bg-red-700 rounded-lg transition text-sm">🔒 ЗАКРЫТЬ ВСЕ ({openTrades.length})</button>
                 )}
               </div>
-              {autoTrade && (
+              
+              {balance < MIN_BALANCE && (
+                <div className="mt-3 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+                  <p className="text-red-400 font-bold text-sm">⚠️ АВТОТОРГОВЛЯ ОСТАНОВЛЕНА</p>
+                  <p className="text-gray-400 text-xs">Баланс ${formatNumber(balance)} ниже минимального ${MIN_BALANCE}. Нажмите "Сбросить счет".</p>
+                </div>
+              )}
+              
+              {autoTrade && balance >= MIN_BALANCE && (
                 <div className="mt-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
                   <p className="text-green-400 font-bold text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
                   <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | TP 3% / SL 2%</p>
