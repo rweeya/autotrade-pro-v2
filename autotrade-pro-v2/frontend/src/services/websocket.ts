@@ -15,10 +15,12 @@ class WebSocketManager {
   private symbols: string[] = [];
   private isConnecting = false;
 
-  subscribe(symbols: string[], callback: (data: PriceData) => void) {
-    this.symbols = symbols;
+  // Теперь принимает и string, и string[]
+  subscribe(symbols: string | string[], callback: (data: PriceData) => void) {
+    const symbolArray = Array.isArray(symbols) ? symbols : [symbols];
+    this.symbols = symbolArray;
     
-    symbols.forEach(symbol => {
+    symbolArray.forEach(symbol => {
       if (!this.subscribers.has(symbol)) {
         this.subscribers.set(symbol, new Set());
       }
