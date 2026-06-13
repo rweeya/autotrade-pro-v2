@@ -18,8 +18,6 @@ const SYMBOLS = [
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT', 'SEI/USDT', 'WLD/USDT'
 ];
 
-const MIN_BALANCE = 10000; // Минимальный баланс для торговли
-
 interface Signal {
   id: string;
   symbol: string;
@@ -236,22 +234,27 @@ const App: React.FC = () => {
     };
   };
 
+  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ С ПРОВЕРКОЙ БАЛАНСА ====================
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
     
-    // ==================== ОГРАНИЧЕНИЕ ПО БАЛАНСУ ====================
-    if (balance < MIN_BALANCE) {
-      console.log(`⏸️ Автоторговля приостановлена: баланс $${balance.toFixed(2)} < $${MIN_BALANCE}`);
-      return;
-    }
-    
-    const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
-    if (lastTrade && Date.now() - lastTrade < 120000) return;
-    
+    // Проверка на уже открытую позицию
     const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
     if (openTrade) return;
     
+    // Защита от частых сделок (раз в 2 минуты)
+    const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
+    if (lastTrade && Date.now() - lastTrade < 120000) return;
+    
+    // Расчёт суммы сделки
     const riskAmount = balance * (riskPercent / 100);
+    
+    // ========== ПРОВЕРКА: хватает ли баланса ==========
+    if (riskAmount <= 0 || riskAmount > balance) {
+      console.log(`⏸️ Недостаточно средств для сделки ${signal.symbol}: нужно $${riskAmount.toFixed(2)}, баланс $${balance.toFixed(2)}`);
+      return;
+    }
+    
     const quantity = riskAmount / signal.price;
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     if (roundedQty <= 0) return;
@@ -280,7 +283,7 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Остаток баланса: $${(balance - riskAmount).toFixed(2)}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Сумма: $${riskAmount.toFixed(2)} | Остаток: $${(balance - riskAmount).toFixed(2)}`);
   };
 
   const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -439,14 +442,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <div className="text-xs text-gray-400">Баланс</div>
-                <div className={`text-xl font-bold ${balance >= MIN_BALANCE ? 'text-green-400' : 'text-red-400'}`}>
-                  ${formatNumber(balance)}
-                  {balance < MIN_BALANCE && <span className="text-xs ml-1">⚠️</span>}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-gray-400">Мин. баланс</div>
-                <div className="text-lg font-bold text-gray-500">${MIN_BALANCE}</div>
+                <div className="text-xl font-bold text-green-400">${formatNumber(balance)}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-gray-400">Общий PnL</div>
@@ -519,7 +515,7 @@ const App: React.FC = () => {
           <button onClick={() => setActiveTab('news')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📰 Новости</button>
           <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📊 Топ монет</button>
           <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>⭐ Избранное</button>
-          <button onClick={() => setActiveTab('autotrade')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'autotrade' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🤖 Автоторговля</button>
+          <button onClick={() | setActiveTab('autotrade')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'autotrade' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🤖 Автоторговля</button>
         </div>
 
         {activeTab === 'trading' && (
@@ -571,7 +567,7 @@ const App: React.FC = () => {
                           <td className="p-2 text-right">{trade.quantity.toFixed(4)}</td>
                           <td className="p-2 text-right text-green-400">${formatPrice(trade.tpPrice)}</td>
                           <td className="p-2 text-right text-red-400">${formatPrice(trade.slPrice)}</td>
-                          <td className={`p-2 text-right font-bold ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{currentPnL >= 0 ? '+' : ''}{formatNumber(currentPnL)} ({currentPnLPercent.toFixed(1)}%)</td>
+                          <td className={`p-2 text-right font-bold ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{currentPnL >= 0 ? '+' : ''}{formatNumber(currentPnL)} ({currentPnLPercent.toFixed(1)}%)</td
                         </tr>
                       );
                     })}
@@ -601,14 +597,7 @@ const App: React.FC = () => {
                 )}
               </div>
               
-              {balance < MIN_BALANCE && (
-                <div className="mt-3 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
-                  <p className="text-red-400 font-bold text-sm">⚠️ АВТОТОРГОВЛЯ ОСТАНОВЛЕНА</p>
-                  <p className="text-gray-400 text-xs">Баланс ${formatNumber(balance)} ниже минимального ${MIN_BALANCE}. Нажмите "Сбросить счет".</p>
-                </div>
-              )}
-              
-              {autoTrade && balance >= MIN_BALANCE && (
+              {autoTrade && (
                 <div className="mt-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
                   <p className="text-green-400 font-bold text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
                   <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | TP 3% / SL 2%</p>
