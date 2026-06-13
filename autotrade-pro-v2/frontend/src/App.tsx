@@ -32,7 +32,8 @@ interface Trade {
   side: 'buy' | 'sell';
   entryPrice: number;
   exitPrice: number | null;
-  quantity: number;
+  amount: number;
+  invested: number;
   entryTime: number;
   exitTime: number | null;
   profit: number | null;
@@ -40,6 +41,7 @@ interface Trade {
   status: 'open' | 'closed';
   tpPrice: number;
   slPrice: number;
+  closeReason?: string;
 }
 
 const App: React.FC = () => {
@@ -186,7 +188,6 @@ const App: React.FC = () => {
     const history = priceHistoryRef.current.get(symbol);
     if (!history || history.length < 60) return null;
     
-    // Защита от частых сигналов (не чаще 1 раза в 30 секунд)
     const lastSignalTime = lastSignalTimeForSymbol.current.get(symbol);
     const now = Date.now();
     if (lastSignalTime && (now - lastSignalTime) < 30000) {
@@ -253,10 +254,10 @@ const App: React.FC = () => {
     const riskAmount = balance * (riskPercent / 100);
     if (riskAmount <= 0 || riskAmount > balance) return;
     
-    const quantity = riskAmount / signal.price;
-    const roundedQty = Math.floor(quantity * 1000) / 1000;
+    const amount = riskAmount / signal.price;
+    const roundedAmount = Math.floor(amount * 1000) / 1000;
     
-    if (roundedQty <= 0) return;
+    if (roundedAmount <= 0) return;
     
     const tpPrice = signal.action === 'buy' ? signal.price * 1.03 : signal.price * 0.97;
     const slPrice = signal.action === 'buy' ? signal.price * 0.98 : signal.price * 1.02;
@@ -270,7 +271,8 @@ const App: React.FC = () => {
       side: signal.action,
       entryPrice: signal.price,
       exitPrice: null,
-      quantity: roundedQty,
+      amount: roundedAmount,
+      invested: riskAmount,
       entryTime: Date.now(),
       exitTime: null,
       profit: null,
@@ -281,79 +283,96 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Кол-во: ${roundedAmount} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
   };
 
-  // ==================== ЗАКРЫТИЕ СДЕЛКИ ПО TP/SL (ИСПРАВЛЕННОЕ) ====================
+  // ==================== ПРАВИЛЬНЫЙ useEffect ДЛЯ ЗАКРЫТИЯ СДЕЛОК ПО TP/SL ====================
   useEffect(() => {
-    const checkTPandSL = () => {
-      const openTrades = trades.filter(t => t.status === 'open');
-      
-      for (const trade of openTrades) {
-        const currentPrice = prices.get(trade.symbol);
-        if (!currentPrice) continue;
+    if (!trades.length) return;
+
+    const interval = setInterval(() => {
+      // Проходим по всем открытым сделкам
+      trades.forEach((trade) => {
+        if (trade.status !== 'open') return;
         
+        const currentPrice = prices.get(trade.symbol);
+        if (!currentPrice) return;
+
+        let shouldClose = false;
+        let exitPrice = 0;
+        let reason = '';
+
+        // Проверка тейк-профита
         if (trade.side === 'buy') {
-          // BUY: TP при цене выше, SL при цене ниже
           if (currentPrice >= trade.tpPrice) {
-            const profit = (currentPrice - trade.entryPrice) * trade.quantity;
-            const invested = trade.entryPrice * trade.quantity;
-            
-            setBalance(prev => prev + invested + profit);
-            setTotalProfit(prev => prev + profit);
-            setTrades(prev => prev.map(t => 
-              t.id === trade.id 
-                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 }
-                : t
-            ));
-            console.log(`🎯 TP (BUY) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
+            shouldClose = true;
+            exitPrice = trade.tpPrice;
+            reason = 'Take Profit';
           } else if (currentPrice <= trade.slPrice) {
-            const profit = (currentPrice - trade.entryPrice) * trade.quantity;
-            const invested = trade.entryPrice * trade.quantity;
-            
-            setBalance(prev => prev + invested + profit);
-            setTotalProfit(prev => prev + profit);
-            setTrades(prev => prev.map(t => 
-              t.id === trade.id 
-                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 }
-                : t
-            ));
-            console.log(`🛑 SL (BUY) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
+            shouldClose = true;
+            exitPrice = trade.slPrice;
+            reason = 'Stop Loss';
           }
         } else {
-          // SELL: TP при цене ниже, SL при цене выше
           if (currentPrice <= trade.tpPrice) {
-            const profit = (trade.entryPrice - currentPrice) * trade.quantity;
-            const invested = trade.entryPrice * trade.quantity;
-            
-            setBalance(prev => prev + invested + profit);
-            setTotalProfit(prev => prev + profit);
-            setTrades(prev => prev.map(t => 
-              t.id === trade.id 
-                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100 }
-                : t
-            ));
-            console.log(`🎯 TP (SELL) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
+            shouldClose = true;
+            exitPrice = trade.tpPrice;
+            reason = 'Take Profit';
           } else if (currentPrice >= trade.slPrice) {
-            const profit = (trade.entryPrice - currentPrice) * trade.quantity;
-            const invested = trade.entryPrice * trade.quantity;
-            
-            setBalance(prev => prev + invested + profit);
-            setTotalProfit(prev => prev + profit);
-            setTrades(prev => prev.map(t => 
-              t.id === trade.id 
-                ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent: ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100 }
-                : t
-            ));
-            console.log(`🛑 SL (SELL) ${trade.symbol} | Цена: $${currentPrice.toFixed(4)} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
+            shouldClose = true;
+            exitPrice = trade.slPrice;
+            reason = 'Stop Loss';
           }
         }
-      }
-    };
-    
-    const interval = setInterval(checkTPandSL, 1000);
+
+        if (shouldClose) {
+          // Используем функциональное обновление balance
+          setBalance((prevBalance) => {
+            // Рассчитываем прибыль/убыток
+            let profit = 0;
+            let profitPercent = 0;
+
+            if (trade.side === 'buy') {
+              profit = (exitPrice - trade.entryPrice) * trade.amount;
+              profitPercent = ((exitPrice - trade.entryPrice) / trade.entryPrice) * 100;
+            } else {
+              profit = (trade.entryPrice - exitPrice) * trade.amount;
+              profitPercent = ((trade.entryPrice - exitPrice) / trade.entryPrice) * 100;
+            }
+
+            // Обновляем баланс: возвращаем инвестированную сумму + прибыль
+            const newBalance = prevBalance + trade.invested + profit;
+
+            // Обновляем totalProfit
+            setTotalProfit((prev) => prev + profit);
+
+            // Закрываем сделку
+            setTrades((prevTrades) =>
+              prevTrades.map((t) =>
+                t.id === trade.id
+                  ? {
+                      ...t,
+                      status: 'closed',
+                      exitPrice,
+                      profit,
+                      profitPercent,
+                      closeReason: reason,
+                      exitTime: Date.now(),
+                    }
+                  : t
+              )
+            );
+
+            console.log(`🎯 ${reason} для ${trade.symbol} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} (${profitPercent.toFixed(2)}%)`);
+
+            return newBalance;
+          });
+        }
+      });
+    }, 1000);
+
     return () => clearInterval(interval);
-  }, [trades, prices]); // balance и totalProfit НЕ в зависимостях - используем setState
+  }, [trades, prices]); // ❌ НЕ добавляйте balance и totalProfit в зависимости!
 
   // ==================== ОБНОВЛЕНИЕ ЦЕН ====================
   const updatePrice = useCallback((symbol: string, price: number) => {
@@ -385,7 +404,6 @@ const App: React.FC = () => {
           connectedRef.current.add(symbol);
           connected++;
           setWsConnectedCount(connected);
-          console.log(`✅ WebSocket подключен: ${symbol} (${connected}/${SYMBOLS.length})`);
         }
         updatePrice(symbol, data.price);
       });
@@ -437,23 +455,14 @@ const App: React.FC = () => {
   const closeAllPositions = () => {
     if (window.confirm(`Закрыть все ${openTrades.length} открытых позиций?`)) {
       openTrades.forEach(trade => {
-        const currentPrice = prices.get(trade.symbol) || trade.entryPrice;
-        if (trade.side === 'buy') {
-          const profit = (currentPrice - trade.entryPrice) * trade.quantity;
-          const invested = trade.entryPrice * trade.quantity;
-          setBalance(prev => prev + invested + profit);
-          setTotalProfit(prev => prev + profit);
-        } else {
-          const profit = (trade.entryPrice - currentPrice) * trade.quantity;
-          const invested = trade.entryPrice * trade.quantity;
-          setBalance(prev => prev + invested + profit);
-          setTotalProfit(prev => prev + profit);
-        }
-        setTrades(prev => prev.map(t => 
-          t.id === trade.id 
-            ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit: 0, profitPercent: 0 }
-            : t
-        ));
+        setBalance((prev) => prev + trade.invested);
+        setTrades((prev) =>
+          prev.map((t) =>
+            t.id === trade.id
+              ? { ...t, status: 'closed', exitPrice: prices.get(trade.symbol) || trade.entryPrice, exitTime: Date.now(), profit: 0, profitPercent: 0, closeReason: 'Manual' }
+              : t
+          )
+        );
       });
     }
   };
@@ -604,14 +613,14 @@ const App: React.FC = () => {
                     <tbody>
                       {openTrades.map(trade => {
                         const currentPrice = prices.get(trade.symbol) || trade.entryPrice;
-                        const currentPnL = trade.side === 'buy' ? (currentPrice - trade.entryPrice) * trade.quantity : (trade.entryPrice - currentPrice) * trade.quantity;
-                        const currentPnLPercent = (currentPnL / (trade.entryPrice * trade.quantity)) * 100;
+                        const currentPnL = trade.side === 'buy' ? (currentPrice - trade.entryPrice) * trade.amount : (trade.entryPrice - currentPrice) * trade.amount;
+                        const currentPnLPercent = (currentPnL / trade.invested) * 100;
                         return (
                           <tr key={trade.id} className="border-b border-gray-800">
                             <td className="p-2 font-bold">{trade.symbol}</td>
                             <td className={`p-2 ${trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>{trade.side === 'buy' ? 'BUY' : 'SELL'}</td>
                             <td className="p-2 text-right">${formatPrice(trade.entryPrice)}</td>
-                            <td className="p-2 text-right">{trade.quantity.toFixed(4)}</td>
+                            <td className="p-2 text-right">{trade.amount.toFixed(4)}</td>
                             <td className="p-2 text-right text-green-400">${formatPrice(trade.tpPrice)}</td>
                             <td className="p-2 text-right text-red-400">${formatPrice(trade.slPrice)}</td>
                             <td className={`p-2 text-right font-bold ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{currentPnL >= 0 ? '+' : ''}{formatNumber(currentPnL)} ({currentPnLPercent.toFixed(1)}%)</td>
