@@ -260,7 +260,7 @@ const App: React.FC = () => {
     }
   }, [autoTrade]);
 
-  // WebSocket - один на все символы
+  // WebSocket - передаем МАССИВ символов
   useEffect(() => {
     const wsManager = createWebSocketManager();
     
