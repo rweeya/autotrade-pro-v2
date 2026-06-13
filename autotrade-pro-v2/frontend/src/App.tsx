@@ -89,7 +89,7 @@ const App: React.FC = () => {
   const formatPrice = (price: number) => price?.toFixed(4) || '0';
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString();
 
-  // Автоудаление старых сигналов (5 минут)
+  // Автоудаление старых сигналов
   useEffect(() => {
     const cleanupSignals = () => {
       const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
@@ -146,32 +146,19 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ==================== ПРАВИЛЬНЫЙ RSI (КАК НА БИРЖЕ) ====================
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (!prices || prices.length < period + 1) return 50;
-    
     const recentPrices = prices.slice(-period - 10);
-    
-    let gains = 0;
-    let losses = 0;
-    
+    let gains = 0, losses = 0;
     for (let i = 1; i < recentPrices.length; i++) {
       const change = recentPrices[i] - recentPrices[i - 1];
-      if (change >= 0) {
-        gains += change;
-      } else {
-        losses += Math.abs(change);
-      }
+      if (change >= 0) gains += change;
+      else losses += Math.abs(change);
     }
-    
     const avgGain = gains / (recentPrices.length - 1);
     const avgLoss = losses / (recentPrices.length - 1);
-    
     if (avgLoss === 0) return 100;
-    const rs = avgGain / avgLoss;
-    const rsi = 100 - (100 / (1 + rs));
-    
-    return Math.round(rsi);
+    return Math.round(100 - (100 / (1 + avgGain / avgLoss)));
   };
 
   const calculateEMA = (prices: number[], period: number): number => {
@@ -234,24 +221,20 @@ const App: React.FC = () => {
     };
   };
 
-  // ==================== ИСПОЛНЕНИЕ СДЕЛКИ С ПРОВЕРКОЙ БАЛАНСА ====================
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
     
-    // Проверка на уже открытую позицию
     const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
     if (openTrade) return;
     
-    // Защита от частых сделок (раз в 2 минуты)
     const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
     if (lastTrade && Date.now() - lastTrade < 120000) return;
     
-    // Расчёт суммы сделки
     const riskAmount = balance * (riskPercent / 100);
     
-    // ========== ПРОВЕРКА: хватает ли баланса ==========
+    // Проверка: хватает ли баланса
     if (riskAmount <= 0 || riskAmount > balance) {
-      console.log(`⏸️ Недостаточно средств для сделки ${signal.symbol}: нужно $${riskAmount.toFixed(2)}, баланс $${balance.toFixed(2)}`);
+      console.log(`⏸️ Недостаточно средств для ${signal.symbol}: нужно $${riskAmount.toFixed(2)}, баланс $${balance.toFixed(2)}`);
       return;
     }
     
@@ -283,7 +266,7 @@ const App: React.FC = () => {
     };
     
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Сумма: $${riskAmount.toFixed(2)} | Остаток: $${(balance - riskAmount).toFixed(2)}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Сумма: $${riskAmount.toFixed(2)}`);
   };
 
   const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -313,7 +296,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkTPandSL = () => {
       const openTrades = trades.filter(t => t.status === 'open');
-      
       for (const trade of openTrades) {
         const currentPrice = prices.get(trade.symbol);
         if (!currentPrice) continue;
@@ -333,14 +315,12 @@ const App: React.FC = () => {
         }
       }
     };
-    
     const interval = setInterval(checkTPandSL, 1000);
     return () => clearInterval(interval);
   }, [trades, prices]);
 
   const updatePrice = useCallback((symbol: string, price: number) => {
     setPrices(prev => new Map(prev).set(symbol, price));
-    
     let history = priceHistoryRef.current.get(symbol) || [];
     history.push(price);
     if (history.length > 200) history = history.slice(-200);
@@ -355,11 +335,10 @@ const App: React.FC = () => {
     }
   }, [autoTrade]);
 
-  // WebSocket - один на все символы
+  // WebSocket
   useEffect(() => {
     const wsManager = createWebSocketManager();
     wsRef.current = wsManager;
-    
     let connected = 0;
     wsManager.subscribe(SYMBOLS, (data: PriceData) => {
       if (!connectedRef.current.has(data.symbol)) {
@@ -370,7 +349,6 @@ const App: React.FC = () => {
       if (!wsConnected) setWsConnected(true);
       updatePrice(data.symbol, data.price);
     });
-    
     return () => {
       wsManager.disconnect();
     };
@@ -386,7 +364,7 @@ const App: React.FC = () => {
   const avgProfit = totalTrades > 0 ? totalProfit / totalTrades : 0;
 
   const clearHistory = () => {
-    if (window.confirm('Очистить всю историю сделок и сигналов?')) {
+    if (window.confirm('Очистить всю историю?')) {
       setTrades([]);
       setSignals([]);
       setTotalProfit(0);
@@ -408,12 +386,12 @@ const App: React.FC = () => {
       lastSignalTimeForSymbol.current.clear();
       localStorage.removeItem('trades');
       localStorage.removeItem('signals');
-      alert('✅ Баланс сброшен до $10,000');
+      alert('✅ Баланс сброшен');
     }
   };
 
   const closeAllPositions = () => {
-    if (window.confirm(`Закрыть все ${openTrades.length} открытых позиций?`)) {
+    if (window.confirm(`Закрыть все ${openTrades.length} позиций?`)) {
       openTrades.forEach(trade => {
         const currentPrice = prices.get(trade.symbol) || trade.entryPrice;
         closeTrade(trade, currentPrice, 'manual');
@@ -435,23 +413,22 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70 | TP 3% / SL 2%</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70</p>
               </div>
             </div>
-            
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <div className="text-xs text-gray-400">Баланс</div>
                 <div className="text-xl font-bold text-green-400">${formatNumber(balance)}</div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-gray-400">Общий PnL</div>
+                <div className="text-xs text-gray-400">PnL</div>
                 <div className={`text-xl font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-gray-400">Винрейт</div>
+                <div className="text-xs text-gray-400">WR</div>
                 <div className="text-xl font-bold text-yellow-400">{winRate.toFixed(1)}%</div>
               </div>
               <div className="flex items-center gap-2 ml-2">
@@ -466,115 +443,45 @@ const App: React.FC = () => {
 
       <div className="relative z-10 container mx-auto px-4 py-4">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          <div className="bg-black/60 backdrop-blur rounded-xl p-3 border border-red-500/30">
+          <div className="bg-black/60 rounded-xl p-3 border border-red-500/30">
             <div className="text-gray-400 text-xs">Сигналов</div>
             <div className="text-2xl font-bold text-red-400">{signals.length}</div>
           </div>
-          <div className="bg-black/60 backdrop-blur rounded-xl p-3 border border-green-500/30">
+          <div className="bg-black/60 rounded-xl p-3 border border-green-500/30">
             <div className="text-gray-400 text-xs">BUY</div>
             <div className="text-2xl font-bold text-green-400">{signals.filter(s => s.action === 'buy').length}</div>
           </div>
-          <div className="bg-black/60 backdrop-blur rounded-xl p-3 border border-red-500/30">
+          <div className="bg-black/60 rounded-xl p-3 border border-red-500/30">
             <div className="text-gray-400 text-xs">SELL</div>
             <div className="text-2xl font-bold text-red-400">{signals.filter(s => s.action === 'sell').length}</div>
           </div>
-          <div className="bg-black/60 backdrop-blur rounded-xl p-3 border border-yellow-500/30">
+          <div className="bg-black/60 rounded-xl p-3 border border-yellow-500/30">
             <div className="text-gray-400 text-xs">Открыто</div>
             <div className="text-2xl font-bold text-yellow-400">{openTrades.length}</div>
           </div>
-          <div className="bg-black/60 backdrop-blur rounded-xl p-3 border border-blue-500/30">
+          <div className="bg-black/60 rounded-xl p-3 border border-blue-500/30">
             <div className="text-gray-400 text-xs">Закрыто</div>
             <div className="text-2xl font-bold text-blue-400">{totalTrades}</div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-          <div className="bg-black/40 backdrop-blur rounded-xl p-2 border border-gray-700 text-center">
-            <div className="text-gray-500 text-xs">Побед / Поражений</div>
-            <div className="text-sm font-bold"><span className="text-green-400">{winningTrades}</span> / <span className="text-red-400">{losingTrades}</span></div>
-          </div>
-          <div className="bg-black/40 backdrop-blur rounded-xl p-2 border border-gray-700 text-center">
-            <div className="text-gray-500 text-xs">Лучшая / Худшая</div>
-            <div className="text-sm font-bold"><span className="text-green-400">+${formatNumber(bestTrade)}</span> / <span className="text-red-400">${formatNumber(worstTrade)}</span></div>
-          </div>
-          <div className="bg-black/40 backdrop-blur rounded-xl p-2 border border-gray-700 text-center">
-            <div className="text-gray-500 text-xs">Средний профит</div>
-            <div className={`text-sm font-bold ${avgProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{avgProfit >= 0 ? '+' : ''}{formatNumber(avgProfit)}</div>
-          </div>
-          <div className="bg-black/40 backdrop-blur rounded-xl p-2 border border-gray-700 text-center">
-            <div className="text-gray-500 text-xs">Риск на сделку</div>
-            <div className="text-sm font-bold text-yellow-400">{riskPercent}%</div>
-          </div>
-        </div>
-
         <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto">
-          <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🎯 Сигналы</button>
-          <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📈 График</button>
-          <button onClick={() => setActiveTab('positions')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'positions' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📊 Позиции</button>
-          <button onClick={() => setActiveTab('history')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📜 История</button>
-          <button onClick={() => setActiveTab('news')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📰 Новости</button>
-          <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>📊 Топ монет</button>
-          <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>⭐ Избранное</button>
-          <button onClick={() | setActiveTab('autotrade')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${activeTab === 'autotrade' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>🤖 Автоторговля</button>
+          <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>🎯 Сигналы</button>
+          <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📈 График</button>
+          <button onClick={() => setActiveTab('positions')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'positions' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📊 Позиции</button>
+          <button onClick={() => setActiveTab('history')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📜 История</button>
+          <button onClick={() => setActiveTab('news')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📰 Новости</button>
+          <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📊 Топ монет</button>
+          <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>⭐ Избранное</button>
+          <button onClick={() => setActiveTab('autotrade')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'autotrade' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>🤖 Автоторговля</button>
         </div>
 
         {activeTab === 'trading' && (
-          <div className="bg-black/40 backdrop-blur rounded-xl p-3 border border-red-500/20">
-            <div className="flex gap-3 mb-3">
-              <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-3 py-1.5 text-sm text-white">
-                {SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <div className="text-right ml-auto">
-                <div className="text-xs text-gray-500">Текущая цена</div>
-                <div className="text-xl font-bold text-green-400">${formatPrice(prices.get(selectedSymbol) || 0)}</div>
-              </div>
-            </div>
+          <div className="bg-black/40 rounded-xl p-3 border border-red-500/20">
+            <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-3 py-1.5 text-sm text-white mb-3 w-full">
+              {SYMBOLS.slice(0, 30).map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
             <TradingChart symbol={selectedSymbol} />
-          </div>
-        )}
-
-        {activeTab === 'positions' && (
-          <div className="bg-black/40 backdrop-blur rounded-xl border border-red-500/20 overflow-hidden">
-            <div className="px-4 py-2 bg-red-950/30 border-b border-red-500/30">
-              <h3 className="font-bold text-red-400 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length})</h3>
-            </div>
-            <div className="overflow-x-auto">
-              {openTrades.length === 0 ? (
-                <div className="text-center text-gray-500 py-8 text-sm">Нет открытых позиций</div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-black/40 text-gray-400 text-xs">
-                    <tr>
-                      <th className="text-left p-2">МОНЕТА</th>
-                      <th className="text-left p-2">ТИП</th>
-                      <th className="text-right p-2">ЦЕНА</th>
-                      <th className="text-right p-2">КОЛ-ВО</th>
-                      <th className="text-right p-2">TP</th>
-                      <th className="text-right p-2">SL</th>
-                      <th className="text-right p-2">P&L</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openTrades.map(trade => {
-                      const currentPrice = prices.get(trade.symbol) || trade.entryPrice;
-                      const currentPnL = trade.side === 'buy' ? (currentPrice - trade.entryPrice) * trade.quantity : (trade.entryPrice - currentPrice) * trade.quantity;
-                      const currentPnLPercent = (currentPnL / trade.invested) * 100;
-                      return (
-                        <tr key={trade.id} className="border-b border-gray-800">
-                          <td className="p-2 font-bold">{trade.symbol}</td>
-                          <td className={`p-2 ${trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>{trade.side === 'buy' ? 'BUY' : 'SELL'}</td>
-                          <td className="p-2 text-right">${formatPrice(trade.entryPrice)}</td>
-                          <td className="p-2 text-right">{trade.quantity.toFixed(4)}</td>
-                          <td className="p-2 text-right text-green-400">${formatPrice(trade.tpPrice)}</td>
-                          <td className="p-2 text-right text-red-400">${formatPrice(trade.slPrice)}</td>
-                          <td className={`p-2 text-right font-bold ${currentPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{currentPnL >= 0 ? '+' : ''}{formatNumber(currentPnL)} ({currentPnLPercent.toFixed(1)}%)</td
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
           </div>
         )}
 
@@ -585,35 +492,44 @@ const App: React.FC = () => {
 
         {activeTab === 'autotrade' && (
           <div className="space-y-4">
-            <div className="bg-black/40 backdrop-blur rounded-xl p-4 border border-red-500/20">
-              <h3 className="text-lg font-bold text-red-400 mb-3">🤖 УПРАВЛЕНИЕ</h3>
+            <div className="bg-black/40 rounded-xl p-4 border border-red-500/20">
               <div className="flex flex-wrap gap-3">
-                <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2 rounded-lg font-bold transition ${autoTrade ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>
+                <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2 rounded-lg font-bold ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>
                   {autoTrade ? '🔴 ОСТАНОВИТЬ' : '🟢 ЗАПУСТИТЬ'}
                 </button>
-                <button onClick={resetBalance} className="px-4 py-2 bg-yellow-600/50 hover:bg-yellow-600 rounded-lg transition text-sm">🔄 Сбросить счет</button>
+                <button onClick={resetBalance} className="px-4 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄 Сбросить счет</button>
                 {openTrades.length > 0 && (
-                  <button onClick={closeAllPositions} className="px-4 py-2 bg-red-700/80 hover:bg-red-700 rounded-lg transition text-sm">🔒 ЗАКРЫТЬ ВСЕ ({openTrades.length})</button>
+                  <button onClick={closeAllPositions} className="px-4 py-2 bg-red-700/80 rounded-lg text-sm">🔒 ЗАКРЫТЬ ВСЕ ({openTrades.length})</button>
                 )}
               </div>
-              
               {autoTrade && (
-                <div className="mt-3 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-                  <p className="text-green-400 font-bold text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
-                  <p className="text-gray-400 text-xs mt-1">RSI &lt; 30 → BUY | RSI &gt; 70 → SELL | TP 3% / SL 2%</p>
+                <div className="mt-3 p-2 bg-green-500/20 rounded-lg text-center">
+                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
                 </div>
               )}
             </div>
 
-            <div className="bg-black/40 backdrop-blur rounded-xl p-4 border border-red-500/20">
-              <h3 className="text-lg font-bold text-red-400 mb-3">💰 НАСТРОЙКИ РИСКА</h3>
-              <label className="block text-sm text-gray-400 mb-1">Риск на сделку: {riskPercent}%</label>
-              <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={(e) => setRiskPercent(parseFloat(e.target.value))} className="w-full accent-red-500" />
-              <div className="mt-3 p-3 bg-red-950/30 rounded-lg text-sm grid grid-cols-2 gap-2">
-                <div className="flex justify-between"><span className="text-gray-400">Баланс:</span><span className="text-white">${formatNumber(balance)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-400">На сделку:</span><span className="text-yellow-400">${formatNumber(balance * riskPercent / 100)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-400">Stop Loss (2%):</span><span className="text-red-400">${formatNumber(balance * riskPercent / 100 * 0.02)}</span></div>
-                <div className="flex justify-between"><span className="text-gray-400">Take Profit (3%):</span><span className="text-green-400">${formatNumber(balance * riskPercent / 100 * 0.03)}</span></div>
+            <div className="bg-black/40 rounded-xl p-4 border border-red-500/20">
+              <label className="text-sm text-gray-400">Риск на сделку: {riskPercent}%</label>
+              <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={(e) => setRiskPercent(parseFloat(e.target.value))} className="w-full accent-red-500 mt-1" />
+            </div>
+
+            <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
+              <div className="px-4 py-2 bg-red-950/30 border-b border-red-500/30">
+                <h3 className="font-bold text-red-400 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length})</h3>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {openTrades.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500 text-sm">Нет открытых позиций</div>
+                ) : (
+                  openTrades.map(trade => (
+                    <div key={trade.id} className="p-2 text-sm flex justify-between">
+                      <span>{trade.symbol}</span>
+                      <span className={trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}>{trade.side === 'buy' ? 'BUY' : 'SELL'}</span>
+                      <span>${trade.entryPrice}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -622,45 +538,31 @@ const App: React.FC = () => {
         {activeTab === 'signals' && (
           <div className="space-y-2">
             {signals.length === 0 ? (
-              <div className="bg-black/40 backdrop-blur rounded-xl p-8 text-center border border-red-500/20">
+              <div className="bg-black/40 rounded-xl p-8 text-center">
                 <div className="text-5xl mb-3">⏳</div>
-                <div className="text-gray-400 text-sm">Нет сигналов. Ожидаем RSI &lt; 30 или RSI &gt; 70...</div>
-                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnectedCount}/{SYMBOLS.length} | Сигнал раз в 30 сек</div>
+                <div className="text-gray-400">Нет сигналов. Ожидаем RSI &lt; 30 или RSI &gt; 70...</div>
               </div>
             ) : (
-              signals.map((signal, idx) => {
-                const stars = '★'.repeat(signal.strength) + '☆'.repeat(3 - signal.strength);
-                const timeLeft = Math.max(0, 5 - Math.floor((Date.now() - signal.timestamp) / 60000));
-                return (
-                  <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-black/60 to-red-900/20 backdrop-blur rounded-lg p-3 border border-red-500/30 hover:border-red-500/50 cursor-pointer transition">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{signal.action === 'buy' ? '🟢' : '🔴'}</span>
-                        <div>
-                          <div className="font-bold">{signal.symbol}</div>
-                          <div className="text-xs text-gray-500">{formatTime(signal.timestamp)}</div>
-                        </div>
-                      </div>
-                      <div className={`px-3 py-1 rounded-lg text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
-                        {signal.action === 'buy' ? 'BUY' : 'SELL'} @ ${formatPrice(signal.price)}
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <div className="text-yellow-400 text-xs">{stars}</div>
-                        <div className="text-[10px] text-gray-500">живёт {timeLeft} мин</div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.rsi < 30 ? 'text-green-400' : signal.rsi > 70 ? 'text-red-400' : 'text-white'}`}>{signal.rsi}</div></div>
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">MACD</div><div className="font-mono">{signal.macd > 0 ? '+' : ''}{signal.macd.toFixed(4)}</div></div>
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">EMA</div><div className="text-xs">{Math.round(signal.ema20)}/{Math.round(signal.ema50)}</div></div>
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">Сила</div><div className="text-yellow-400">{stars}</div></div>
-                    </div>
-                    <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
-                      {signal.reasons.map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
-                    </div>
+              signals.map((signal, idx) => (
+                <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-black/60 to-red-900/20 rounded-lg p-3 border border-red-500/30 cursor-pointer">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold">{signal.symbol}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
+                      {signal.action === 'buy' ? 'BUY' : 'SELL'} @ ${signal.price}
+                    </span>
+                    <span className="text-yellow-400 text-xs">{'★'.repeat(signal.strength)}{'☆'.repeat(3 - signal.strength)}</span>
                   </div>
-                );
-              })
+                  <div className="grid grid-cols-4 gap-1 mt-2 text-xs">
+                    <div className="bg-black/50 rounded p-1 text-center">RSI: {signal.rsi}</div>
+                    <div className="bg-black/50 rounded p-1 text-center">MACD: {signal.macd.toFixed(4)}</div>
+                    <div className="bg-black/50 rounded p-1 text-center">EMA: {Math.round(signal.ema20)}/{Math.round(signal.ema50)}</div>
+                    <div className="bg-black/50 rounded p-1 text-center">Сила: {signal.strength}</div>
+                  </div>
+                  <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
+                    {signal.reasons.map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
