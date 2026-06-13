@@ -146,18 +146,32 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // ==================== ПРАВИЛЬНЫЙ RSI (КАК НА БИРЖЕ) ====================
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (!prices || prices.length < period + 1) return 50;
-    let gains = 0, losses = 0;
-    for (let i = prices.length - period; i < prices.length; i++) {
-      const change = prices[i] - prices[i - 1];
-      if (change >= 0) gains += change;
-      else losses -= change;
+    
+    const recentPrices = prices.slice(-period - 10);
+    
+    let gains = 0;
+    let losses = 0;
+    
+    for (let i = 1; i < recentPrices.length; i++) {
+      const change = recentPrices[i] - recentPrices[i - 1];
+      if (change >= 0) {
+        gains += change;
+      } else {
+        losses += Math.abs(change);
+      }
     }
-    const avgGain = gains / period;
-    const avgLoss = losses / period;
+    
+    const avgGain = gains / (recentPrices.length - 1);
+    const avgLoss = losses / (recentPrices.length - 1);
+    
     if (avgLoss === 0) return 100;
-    return Math.round(100 - (100 / (1 + avgGain / avgLoss)));
+    const rs = avgGain / avgLoss;
+    const rsi = 100 - (100 / (1 + rs));
+    
+    return Math.round(rsi);
   };
 
   const calculateEMA = (prices: number[], period: number): number => {
@@ -204,6 +218,11 @@ const App: React.FC = () => {
     
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
     const strength = (rsi < 20 || rsi > 80) ? 3 : 2;
+    
+    // Дебаг для BTC
+    if (symbol === 'BTC/USDT') {
+      console.log(`📊 ${symbol} RSI: ${rsi} | MACD: ${macd.toFixed(4)} | Действие: ${action}`);
+    }
     
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
@@ -519,7 +538,15 @@ const App: React.FC = () => {
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-black/40 text-gray-400 text-xs">
-                    <tr><th className="text-left p-2">МОНЕТА</th><th className="text-left p-2">ТИП</th><th className="text-right p-2">ЦЕНА</th><th className="text-right p-2">КОЛ-ВО</th><th className="text-right p-2">TP</th><th className="text-right p-2">SL</th><th className="text-right p-2">P&L</th></tr>
+                    <tr>
+                      <th className="text-left p-2">МОНЕТА</th>
+                      <th className="text-left p-2">ТИП</th>
+                      <th className="text-right p-2">ЦЕНА</th>
+                      <th className="text-right p-2">КОЛ-ВО</th>
+                      <th className="text-right p-2">TP</th>
+                      <th className="text-right p-2">SL</th>
+                      <th className="text-right p-2">P&L</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {openTrades.map(trade => {
@@ -616,7 +643,7 @@ const App: React.FC = () => {
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
-                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">RSI</div><div className="font-bold">{signal.rsi}</div></div>
+                      <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">RSI</div><div className={`font-bold ${signal.rsi < 30 ? 'text-green-400' : signal.rsi > 70 ? 'text-red-400' : 'text-white'}`}>{signal.rsi}</div></div>
                       <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">MACD</div><div className="font-mono">{signal.macd > 0 ? '+' : ''}{signal.macd.toFixed(4)}</div></div>
                       <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">EMA</div><div className="text-xs">{Math.round(signal.ema20)}/{Math.round(signal.ema50)}</div></div>
                       <div className="bg-black/50 rounded-lg p-1.5 text-center"><div className="text-gray-500">Сила</div><div className="text-yellow-400">{stars}</div></div>
