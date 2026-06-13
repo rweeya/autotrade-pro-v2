@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import TradingChart from './components/TradingChart';
-import SignalHistory from './components/SignalHistory';
-import News from './components/News';
-import TopMovers from './components/TopMovers';
-import Watchlist from './components/Watchlist';
 import { createWebSocketManager, PriceData } from './services/websocket';
 
+// ==================== 60+ АКТИВОВ ====================
 const SYMBOLS = [
-  'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT',
-  'DOGE/USDT', 'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT'
+  'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT',
+  'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT', 'LTC/USDT', 'UNI/USDT', 'ATOM/USDT',
+  'ETC/USDT', 'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'NEAR/USDT',
+  'INJ/USDT', 'IMX/USDT', 'HBAR/USDT', 'VET/USDT', 'GRT/USDT', 'RNDR/USDT', 'MKR/USDT',
+  'AAVE/USDT', 'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT', 'AXS/USDT',
+  'CHZ/USDT', 'EOS/USDT', 'KSM/USDT', 'ZEC/USDT', 'COMP/USDT', 'ZIL/USDT', 'BAT/USDT',
+  'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT', 'FLOW/USDT', 'WAVES/USDT',
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT', 'SEI/USDT', 'WLD/USDT'
 ];
 
 interface Signal {
@@ -54,6 +57,7 @@ const App: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [wsConnected, setWsConnected] = useState(false);
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const lastSignalTimeRef = useRef<Map<string, number>>(new Map());
@@ -135,13 +139,22 @@ const App: React.FC = () => {
   };
 
   const executeTrade = (signal: Signal) => {
-    if (!autoTrade) return;
+    if (!autoTrade) {
+      console.log('⏸️ Автоторговля выключена');
+      return;
+    }
     
     const lastTrade = lastTradeTimeRef.current.get(signal.symbol);
-    if (lastTrade && Date.now() - lastTrade < 120000) return;
+    if (lastTrade && Date.now() - lastTrade < 120000) {
+      console.log(`⏸️ Пропуск ${signal.symbol} - интервал 120 сек`);
+      return;
+    }
     
     const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
-    if (openTrade) return;
+    if (openTrade) {
+      console.log(`🚫 Позиция по ${signal.symbol} уже открыта`);
+      return;
+    }
     
     const riskAmount = balance * (riskPercent / 100);
     const amount = riskAmount / signal.price;
@@ -154,7 +167,7 @@ const App: React.FC = () => {
     lastTradeTimeRef.current.set(signal.symbol, Date.now());
     setBalance(prev => prev - riskAmount);
     
-    setTrades(prev => [...prev, {
+    const newTrade: Trade = {
       id: `${signal.symbol}_${Date.now()}`,
       symbol: signal.symbol,
       side: signal.action,
@@ -169,9 +182,13 @@ const App: React.FC = () => {
       status: 'open',
       tpPrice,
       slPrice
-    }]);
+    };
+    
+    setTrades(prev => [...prev, newTrade]);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
   };
 
+  // Мониторинг TP/SL
   useEffect(() => {
     const interval = setInterval(() => {
       trades.forEach(trade => {
@@ -237,20 +254,27 @@ const App: React.FC = () => {
     const signal = generateSignal(symbol, price);
     if (signal) {
       setSignals(prev => [signal, ...prev].slice(0, 100));
-      if (autoTrade) executeTrade(signal);
+      if (autoTrade) {
+        executeTrade(signal);
+      }
     }
   }, [autoTrade]);
 
+  // WebSocket - один на все символы
   useEffect(() => {
     const wsManager = createWebSocketManager();
-    SYMBOLS.forEach(symbol => {
-      wsManager.subscribe(symbol, (data: PriceData) => {
-        updatePrice(symbol, data.price);
-      });
+    
+    wsManager.subscribe(SYMBOLS, (data: PriceData) => {
+      if (!wsConnected) setWsConnected(true);
+      updatePrice(data.symbol, data.price);
     });
-    return () => wsManager.disconnect();
+    
+    return () => {
+      wsManager.disconnect();
+    };
   }, [updatePrice]);
 
+  // Статистика
   useEffect(() => {
     const closed = trades.filter(t => t.status === 'closed' && t.profit !== null);
     const wins = closed.filter(t => (t.profit || 0) > 0).length;
@@ -325,6 +349,10 @@ const App: React.FC = () => {
                 <div className="text-xs text-gray-400">WR</div>
                 <div className="text-xl font-bold text-yellow-400">{winRate.toFixed(0)}%</div>
               </div>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                <span className="text-xs text-gray-400">{wsConnected ? 'Online' : 'Offline'}</span>
+              </div>
               <div className="text-sm text-gray-500 font-mono">{currentTime.toLocaleTimeString()}</div>
             </div>
           </div>
@@ -365,7 +393,7 @@ const App: React.FC = () => {
         {activeTab === 'trading' && (
           <div className="bg-black/40 rounded-xl p-3 border border-red-500/20">
             <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-3 py-1.5 text-sm text-white mb-3 w-full">
-              {SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}
+              {SYMBOLS.slice(0, 20).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <TradingChart symbol={selectedSymbol} />
           </div>
@@ -401,12 +429,55 @@ const App: React.FC = () => {
                 <div className="flex justify-between"><span className="text-gray-400">TP (3%):</span><span className="text-green-400">${formatNumber(balance * riskPercent / 100 * 0.03)}</span></div>
               </div>
             </div>
+
+            <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
+              <div className="px-4 py-2 bg-red-950/30 border-b border-red-500/30">
+                <h3 className="font-bold text-red-400 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length})</h3>
+              </div>
+              <div className="divide-y divide-gray-800">
+                {openTrades.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500 text-sm">Нет открытых позиций</div>
+                ) : (
+                  openTrades.map(trade => (
+                    <div key={trade.id} className="p-3 text-sm">
+                      <div className="flex justify-between">
+                        <span className="font-bold">{trade.symbol}</span>
+                        <span className={trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}>{trade.side === 'buy' ? 'BUY' : 'SELL'}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-gray-400 mt-1">
+                        <span>Вход: ${trade.entryPrice}</span>
+                        <span>TP: ${trade.tpPrice.toFixed(4)}</span>
+                        <span>SL: ${trade.slPrice.toFixed(4)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         )}
 
         {activeTab === 'history' && (
           <div className="bg-black/40 rounded-xl p-4 border border-red-500/20">
-            <div className="text-center text-gray-500 py-4">История сделок</div>
+            <div className="max-h-[400px] overflow-y-auto">
+              {closedTrades.length === 0 ? (
+                <div className="text-center text-gray-500 py-4">Нет закрытых сделок</div>
+              ) : (
+                closedTrades.slice().reverse().map(trade => (
+                  <div key={trade.id} className="border-b border-gray-800 py-2 flex justify-between text-sm">
+                    <span className="w-20">{trade.symbol}</span>
+                    <span className={trade.side === 'buy' ? 'text-green-400 w-12' : 'text-red-400 w-12'}>{trade.side === 'buy' ? 'BUY' : 'SELL'}</span>
+                    <span className="w-32">${trade.entryPrice} → ${trade.exitPrice}</span>
+                    <span className={trade.profit && trade.profit > 0 ? 'text-green-400' : 'text-red-400'}>
+                      {trade.profit && trade.profit > 0 ? '+' : ''}{trade.profit?.toFixed(2)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            {closedTrades.length > 0 && (
+              <button onClick={clearHistory} className="mt-3 text-xs text-red-400 w-full py-2 border-t border-red-500/30">Очистить историю</button>
+            )}
           </div>
         )}
 
@@ -416,6 +487,7 @@ const App: React.FC = () => {
               <div className="bg-black/40 rounded-xl p-8 text-center">
                 <div className="text-5xl mb-3">⏳</div>
                 <div className="text-gray-400 text-sm">Нет сигналов. Ожидаем RSI &lt; 30 или RSI &gt; 70...</div>
+                <div className="text-xs text-gray-600 mt-1">WebSocket: {wsConnected ? '✅ Подключен' : '⏳ Подключение...'}</div>
               </div>
             ) : (
               signals.map((signal, idx) => (
