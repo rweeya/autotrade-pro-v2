@@ -15,7 +15,6 @@ class WebSocketManager {
   private symbols: string[] = [];
   private isConnecting = false;
 
-  // Теперь принимает и string, и string[]
   subscribe(symbols: string | string[], callback: (data: PriceData) => void) {
     const symbolArray = Array.isArray(symbols) ? symbols : [symbols];
     this.symbols = symbolArray;
