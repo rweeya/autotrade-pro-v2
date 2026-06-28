@@ -70,6 +70,16 @@ const App: React.FC = () => {
   const connectedRef = useRef<Set<string>>(new Set());
   const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
   const lastSignalTimeForSymbol = useRef<Map<string, number>>(new Map());
+  const autoTradeRef = useRef(autoTrade);
+  const balanceRef = useRef(balance);
+  const riskPercentRef = useRef(riskPercent);
+  const tradesRef = useRef(trades);
+
+  // Синхронизация ref с state
+  useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
+  useEffect(() => { balanceRef.current = balance; }, [balance]);
+  useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
+  useEffect(() => { tradesRef.current = trades; }, [trades]);
 
   const formatNumber = (num: number) => {
     if (num === undefined || num === null || isNaN(num)) return '0.00';
@@ -179,8 +189,9 @@ const App: React.FC = () => {
     const history = priceHistoryRef.current.get(symbol);
     if (!history || history.length < 50) return null;
 
+    // Кулдаун 1 минута на сигнал
     const lastSignal = lastSignalTimeForSymbol.current.get(symbol);
-    if (lastSignal && Date.now() - lastSignal < 120000) return null;
+    if (lastSignal && Date.now() - lastSignal < 60000) return null;
 
     const rsi = calculateRSI(history);
     const macd = calculateMACD(history);
@@ -225,18 +236,32 @@ const App: React.FC = () => {
   };
 
   // ==================== ТОРГОВЛЯ ====================
-  const executeTrade = (signal: Signal) => {
-    if (!autoTrade) return;
+  const executeTrade = useCallback((signal: Signal) => {
+    if (!autoTradeRef.current) return;
     if (!signal || !signal.price) return;
 
-    const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
-    if (openTrade) return;
+    const currentTrades = tradesRef.current;
+    const currentBalance = balanceRef.current;
+    const currentRiskPercent = riskPercentRef.current;
 
+    const openTrade = currentTrades.find(t => t.symbol === signal.symbol && t.status === 'open');
+    if (openTrade) {
+      console.log(`⏭️ ${signal.symbol} уже в позиции`);
+      return;
+    }
+
+    // Кулдаун на сделку 1 минута
     const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
-    if (lastTrade && Date.now() - lastTrade < 120000) return;
+    if (lastTrade && Date.now() - lastTrade < 60000) {
+      console.log(`⏳ Кулдаун сделки для ${signal.symbol}`);
+      return;
+    }
 
-    const riskAmount = balance * (riskPercent / 100);
-    if (riskAmount <= 0 || riskAmount > balance) return;
+    const riskAmount = currentBalance * (currentRiskPercent / 100);
+    if (riskAmount <= 0 || riskAmount > currentBalance) {
+      console.log(`⏸️ Недостаточно средств: нужно $${riskAmount.toFixed(2)}, есть $${currentBalance.toFixed(2)}`);
+      return;
+    }
 
     const quantity = riskAmount / signal.price;
     const roundedQty = Math.floor(quantity * 1000) / 1000;
@@ -270,10 +295,10 @@ const App: React.FC = () => {
     };
 
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} @ ${signal.price}`);
-  };
+    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
+  }, []);
 
-  const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
+  const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
     if (!trade || !currentPrice) return;
     
     let profit = 0;
@@ -295,28 +320,51 @@ const App: React.FC = () => {
         ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent }
         : t
     ));
-  };
+    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} (${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2)}%)`);
+  }, []);
 
   // Мониторинг TP/SL
   useEffect(() => {
     const checkTPandSL = () => {
-      const openTrades = trades.filter(t => t.status === 'open');
-      for (const trade of openTrades) {
-        const currentPrice = prices.get(trade.symbol);
-        if (!currentPrice) continue;
+      setTrades(prev => {
+        const updated = prev.map(trade => {
+          if (trade.status !== 'open') return trade;
+          const currentPrice = prices.get(trade.symbol);
+          if (!currentPrice) return trade;
 
-        if (trade.side === 'buy') {
-          if (currentPrice >= trade.tpPrice) closeTrade(trade, currentPrice, 'TP');
-          else if (currentPrice <= trade.slPrice) closeTrade(trade, currentPrice, 'SL');
-        } else {
-          if (currentPrice <= trade.tpPrice) closeTrade(trade, currentPrice, 'TP');
-          else if (currentPrice >= trade.slPrice) closeTrade(trade, currentPrice, 'SL');
-        }
-      }
+          if (trade.side === 'buy') {
+            if (currentPrice >= trade.tpPrice) {
+              closeTrade(trade, currentPrice, 'TP');
+              return { ...trade, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(),
+                profit: (currentPrice - trade.entryPrice) * trade.quantity,
+                profitPercent: ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 };
+            } else if (currentPrice <= trade.slPrice) {
+              closeTrade(trade, currentPrice, 'SL');
+              return { ...trade, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(),
+                profit: (currentPrice - trade.entryPrice) * trade.quantity,
+                profitPercent: ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 };
+            }
+          } else {
+            if (currentPrice <= trade.tpPrice) {
+              closeTrade(trade, currentPrice, 'TP');
+              return { ...trade, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(),
+                profit: (trade.entryPrice - currentPrice) * trade.quantity,
+                profitPercent: ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100 };
+            } else if (currentPrice >= trade.slPrice) {
+              closeTrade(trade, currentPrice, 'SL');
+              return { ...trade, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(),
+                profit: (trade.entryPrice - currentPrice) * trade.quantity,
+                profitPercent: ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100 };
+            }
+          }
+          return trade;
+        });
+        return updated;
+      });
     };
     const interval = setInterval(checkTPandSL, 3000);
     return () => clearInterval(interval);
-  }, [trades, prices]);
+  }, [prices, closeTrade]);
 
   const updatePrice = useCallback((symbol: string, price: number) => {
     if (!symbol || !price || price <= 0) return;
@@ -330,9 +378,11 @@ const App: React.FC = () => {
     const signal = generateSignal(symbol, price);
     if (signal) {
       setSignals(prev => [signal, ...prev].slice(0, 100));
-      if (autoTrade) executeTrade(signal);
+      if (autoTradeRef.current) {
+        setTimeout(() => executeTrade(signal), 2000);
+      }
     }
-  }, [autoTrade]);
+  }, [executeTrade]);
 
   // WebSocket
   useEffect(() => {
@@ -349,7 +399,7 @@ const App: React.FC = () => {
       }
     });
     return () => wsManager.disconnect();
-  }, []);
+  }, [updatePrice, wsConnected]);
 
   const closedTrades = trades.filter(t => t.status === 'closed');
   const openTrades = trades.filter(t => t.status === 'open');
