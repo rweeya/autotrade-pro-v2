@@ -29,6 +29,8 @@ interface Signal {
   macd: number;
   ema20: number;
   ema50: number;
+  adx: number;
+  atr: number;
   reasons: string[];
 }
 
@@ -146,6 +148,7 @@ const App: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // ==================== ИНДИКАТОРЫ ====================
   const calculateRSI = (prices: number[], period: number = 14): number => {
     if (!prices || prices.length < period + 1) return 50;
     const recentPrices = prices.slice(-period - 10);
@@ -178,34 +181,92 @@ const App: React.FC = () => {
     return parseFloat((ema12 - ema26).toFixed(4));
   };
 
+  const calculateADX = (prices: number[], period: number = 14): number => {
+    if (!prices || prices.length < period * 2) return 0;
+    const highs = prices.map((p, i, arr) => i > 0 ? Math.max(p, arr[i - 1]) : p);
+    const lows = prices.map((p, i, arr) => i > 0 ? Math.min(p, arr[i - 1]) : p);
+    const tr: number[] = [];
+    const plusDM: number[] = [];
+    const minusDM: number[] = [];
+    for (let i = 1; i < prices.length; i++) {
+      const h = highs[i];
+      const l = lows[i];
+      const pH = highs[i - 1];
+      const pL = lows[i - 1];
+      const pC = prices[i - 1];
+      tr.push(Math.max(h - l, Math.abs(h - pC), Math.abs(l - pC)));
+      const up = h - pH;
+      const down = pL - l;
+      plusDM.push(up > down && up > 0 ? up : 0);
+      minusDM.push(down > up && down > 0 ? down : 0);
+    }
+    const smooth = (d: number[]): number => {
+      const k = 2 / (period + 1);
+      let e = d[0];
+      for (let i = 1; i < d.length; i++) e = d[i] * k + e * (1 - k);
+      return e;
+    };
+    const atrVal = smooth(tr);
+    if (atrVal === 0) return 0;
+    const plusDI = (smooth(plusDM) / atrVal) * 100;
+    const minusDI = (smooth(minusDM) / atrVal) * 100;
+    const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+    return dx;
+  };
+
+  const calculateATR = (prices: number[], period: number = 14): number => {
+    if (!prices || prices.length < period + 1) return prices?.[prices.length - 1] * 0.01 || 1;
+    const tr: number[] = [];
+    for (let i = 1; i < prices.length; i++) {
+      const h = Math.max(prices[i], prices[i - 1]);
+      const l = Math.min(prices[i], prices[i - 1]);
+      tr.push(Math.abs(h - l));
+    }
+    let atr = tr.slice(0, period).reduce((a, b) => a + b, 0) / period;
+    for (let i = period; i < tr.length; i++) {
+      atr = (atr * (period - 1) + tr[i]) / period;
+    }
+    return atr;
+  };
+
+  // ==================== ГЕНЕРАЦИЯ СИГНАЛОВ ====================
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     const history = priceHistoryRef.current.get(symbol);
     if (!history || history.length < 50) return null;
-    
+
+    // Кулдаун 2 минуты
     const lastSignal = lastSignalTimeForSymbol.current.get(symbol);
-    if (lastSignal && Date.now() - lastSignal < 30000) return null;
-    
+    if (lastSignal && Date.now() - lastSignal < 120000) return null;
+
     const rsi = calculateRSI(history);
     const macd = calculateMACD(history);
     const ema20 = calculateEMA(history, 20);
     const ema50 = calculateEMA(history, 50);
-    
+    const adx = calculateADX(history);
+    const atr = calculateATR(history);
+
+    // ADX-фильтр: сигнал только при сильном тренде
+    if (adx < 25) return null;
+
     let action: 'buy' | 'sell' | null = null;
     let reasons: string[] = [];
-    
-    if (rsi < 30 && macd > 0 && ema20 > ema50) {
+
+    // BUY: RSI < 35 + MACD > 0 + EMA20 > EMA50
+    if (rsi < 35 && macd > 0 && ema20 > ema50) {
       action = 'buy';
-      reasons = [`RSI ${rsi} < 30`, `MACD бычий`, `EMA20 > EMA50`];
-    } else if (rsi > 70 && macd < 0 && ema20 < ema50) {
-      action = 'sell';
-      reasons = [`RSI ${rsi} > 70`, `MACD медвежий`, `EMA20 < EMA50`];
+      reasons = [`RSI ${rsi} < 35`, `ADX ${adx.toFixed(0)}`, `MACD бычий`, `EMA20 > EMA50`];
     }
-    
+    // SELL: RSI > 65 + MACD < 0 + EMA20 < EMA50
+    else if (rsi > 65 && macd < 0 && ema20 < ema50) {
+      action = 'sell';
+      reasons = [`RSI ${rsi} > 65`, `ADX ${adx.toFixed(0)}`, `MACD медвежий`, `EMA20 < EMA50`];
+    }
+
     if (!action) return null;
-    
+
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
-    const strength = (rsi < 20 || rsi > 80) ? 3 : 2;
-    
+    const strength = (rsi < 25 || rsi > 75) ? 3 : (rsi < 30 || rsi > 70) ? 2 : 1;
+
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
       symbol,
@@ -217,37 +278,46 @@ const App: React.FC = () => {
       macd,
       ema20,
       ema50,
+      adx,
+      atr,
       reasons
     };
   };
 
+  // ==================== ТОРГОВЛЯ ====================
   const executeTrade = (signal: Signal) => {
     if (!autoTrade) return;
-    
+
     const openTrade = trades.find(t => t.symbol === signal.symbol && t.status === 'open');
     if (openTrade) return;
-    
+
     const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
     if (lastTrade && Date.now() - lastTrade < 120000) return;
-    
+
     const riskAmount = balance * (riskPercent / 100);
-    
-    // Проверка: хватает ли баланса
+
     if (riskAmount <= 0 || riskAmount > balance) {
       console.log(`⏸️ Недостаточно средств для ${signal.symbol}: нужно $${riskAmount.toFixed(2)}, баланс $${balance.toFixed(2)}`);
       return;
     }
-    
+
     const quantity = riskAmount / signal.price;
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     if (roundedQty <= 0) return;
-    
-    const tpPrice = signal.action === 'buy' ? signal.price * 1.03 : signal.price * 0.97;
-    const slPrice = signal.action === 'buy' ? signal.price * 0.98 : signal.price * 1.02;
-    
+
+    // Динамические TP/SL через ATR
+    const tpMultiplier = 2.5;
+    const slMultiplier = 1.5;
+    const tpPrice = signal.action === 'buy'
+      ? signal.price + signal.atr * tpMultiplier
+      : signal.price - signal.atr * tpMultiplier;
+    const slPrice = signal.action === 'buy'
+      ? signal.price - signal.atr * slMultiplier
+      : signal.price + signal.atr * slMultiplier;
+
     lastTradeTimeForSymbol.current.set(signal.symbol, Date.now());
     setBalance(prev => prev - riskAmount);
-    
+
     const newTrade: Trade = {
       id: `${signal.symbol}_${Date.now()}_${Math.random()}`,
       symbol: signal.symbol,
@@ -261,19 +331,19 @@ const App: React.FC = () => {
       profit: null,
       profitPercent: null,
       status: 'open',
-      tpPrice,
-      slPrice
+      tpPrice: Math.round(tpPrice * 10000) / 10000,
+      slPrice: Math.round(slPrice * 10000) / 10000
     };
-    
+
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Сумма: $${riskAmount.toFixed(2)}`);
+    console.log(`✅ ОТКРЫТА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
   };
 
   const closeTrade = (trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
     let profit = 0;
     let profitPercent = 0;
     const investedAmount = trade.entryPrice * trade.quantity;
-    
+
     if (trade.side === 'buy') {
       profit = (currentPrice - trade.entryPrice) * trade.quantity;
       profitPercent = ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100;
@@ -281,15 +351,15 @@ const App: React.FC = () => {
       profit = (trade.entryPrice - currentPrice) * trade.quantity;
       profitPercent = ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
     }
-    
+
     setBalance(prev => prev + investedAmount + profit);
     setTotalProfit(prev => prev + profit);
-    setTrades(prev => prev.map(t => 
-      t.id === trade.id 
+    setTrades(prev => prev.map(t =>
+      t.id === trade.id
         ? { ...t, status: 'closed', exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent }
         : t
     ));
-    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
+    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} (${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2)}%)`);
   };
 
   // Мониторинг TP/SL
@@ -299,7 +369,7 @@ const App: React.FC = () => {
       for (const trade of openTrades) {
         const currentPrice = prices.get(trade.symbol);
         if (!currentPrice) continue;
-        
+
         if (trade.side === 'buy') {
           if (currentPrice >= trade.tpPrice) {
             closeTrade(trade, currentPrice, 'TP');
@@ -315,7 +385,7 @@ const App: React.FC = () => {
         }
       }
     };
-    const interval = setInterval(checkTPandSL, 1000);
+    const interval = setInterval(checkTPandSL, 3000);
     return () => clearInterval(interval);
   }, [trades, prices]);
 
@@ -325,7 +395,7 @@ const App: React.FC = () => {
     history.push(price);
     if (history.length > 200) history = history.slice(-200);
     priceHistoryRef.current.set(symbol, history);
-    
+
     const signal = generateSignal(symbol, price);
     if (signal) {
       setSignals(prev => [signal, ...prev].slice(0, 100));
@@ -413,7 +483,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 30/70</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | ATR TP/SL</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -504,7 +574,7 @@ const App: React.FC = () => {
               </div>
               {autoTrade && (
                 <div className="mt-3 p-2 bg-green-500/20 rounded-lg text-center">
-                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА</p>
+                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА — СКАЛЬПИНГ</p>
                 </div>
               )}
             </div>
@@ -522,13 +592,55 @@ const App: React.FC = () => {
                 {openTrades.length === 0 ? (
                   <div className="p-4 text-center text-gray-500 text-sm">Нет открытых позиций</div>
                 ) : (
-                  openTrades.map(trade => (
-                    <div key={trade.id} className="p-2 text-sm flex justify-between">
-                      <span>{trade.symbol}</span>
-                      <span className={trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}>{trade.side === 'buy' ? 'BUY' : 'SELL'}</span>
-                      <span>${trade.entryPrice}</span>
-                    </div>
-                  ))
+                  openTrades.map(trade => {
+                    const currentPrice = prices.get(trade.symbol) || trade.entryPrice;
+                    const pnl = trade.side === 'buy'
+                      ? (currentPrice - trade.entryPrice) * trade.quantity
+                      : (trade.entryPrice - currentPrice) * trade.quantity;
+                    const pnlPercent = trade.side === 'buy'
+                      ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100
+                      : ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
+
+                    return (
+                      <div key={trade.id} className={`p-3 ${pnl >= 0 ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-sm">
+                            {trade.side === 'buy' ? '🟢' : '🔴'} {trade.symbol}
+                          </span>
+                          <span className={`font-bold text-sm ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {pnl >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1 text-xs">
+                          <span className="text-gray-400">Вход:</span>
+                          <span className="text-right font-mono">${trade.entryPrice.toFixed(4)}</span>
+                          <span className="text-gray-400">Текущая:</span>
+                          <span className="text-right font-mono">${currentPrice.toFixed(4)}</span>
+                          <span className="text-gray-400">TP:</span>
+                          <span className="text-right font-mono text-green-400">${trade.tpPrice.toFixed(4)}</span>
+                          <span className="text-gray-400">SL:</span>
+                          <span className="text-right font-mono text-red-400">${trade.slPrice.toFixed(4)}</span>
+                          <span className="text-gray-400">Время:</span>
+                          <span className="text-right font-mono">{formatTime(trade.entryTime)}</span>
+                        </div>
+                        {/* Прогресс-бар */}
+                        <div className="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${pnl >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{
+                              width: `${Math.min(100, Math.abs((currentPrice - trade.entryPrice) / (trade.tpPrice - trade.entryPrice) * 100))}%`
+                            }}
+                          />
+                        </div>
+                        <button
+                          onClick={() => closeTrade(trade, currentPrice, 'manual')}
+                          className="mt-2 w-full bg-red-700/50 hover:bg-red-600 text-xs py-1 rounded font-medium transition-colors"
+                        >
+                          🔒 Закрыть
+                        </button>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -540,23 +652,24 @@ const App: React.FC = () => {
             {signals.length === 0 ? (
               <div className="bg-black/40 rounded-xl p-8 text-center">
                 <div className="text-5xl mb-3">⏳</div>
-                <div className="text-gray-400">Нет сигналов. Ожидаем RSI &lt; 30 или RSI &gt; 70...</div>
+                <div className="text-gray-400">Нет сигналов. Ожидаем RSI {'<'} 35 или RSI {'>'} 65 с ADX {'>'} 25...</div>
               </div>
             ) : (
               signals.map((signal, idx) => (
-                <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-black/60 to-red-900/20 rounded-lg p-3 border border-red-500/30 cursor-pointer">
+                <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-black/60 to-red-900/20 rounded-lg p-3 border border-red-500/30 cursor-pointer hover:border-red-400/50 transition-colors">
                   <div className="flex justify-between items-center">
                     <span className="font-bold">{signal.symbol}</span>
-                    <span className={`px-2 py-0.5 rounded text-xs ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
-                      {signal.action === 'buy' ? 'BUY' : 'SELL'} @ ${signal.price}
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
+                      {signal.action === 'buy' ? 'BUY' : 'SELL'} @ ${signal.price.toFixed(4)}
                     </span>
                     <span className="text-yellow-400 text-xs">{'★'.repeat(signal.strength)}{'☆'.repeat(3 - signal.strength)}</span>
                   </div>
-                  <div className="grid grid-cols-4 gap-1 mt-2 text-xs">
+                  <div className="grid grid-cols-5 gap-1 mt-2 text-xs">
                     <div className="bg-black/50 rounded p-1 text-center">RSI: {signal.rsi}</div>
+                    <div className="bg-black/50 rounded p-1 text-center">ADX: {signal.adx.toFixed(0)}</div>
                     <div className="bg-black/50 rounded p-1 text-center">MACD: {signal.macd.toFixed(4)}</div>
-                    <div className="bg-black/50 rounded p-1 text-center">EMA: {Math.round(signal.ema20)}/{Math.round(signal.ema50)}</div>
-                    <div className="bg-black/50 rounded p-1 text-center">Сила: {signal.strength}</div>
+                    <div className="bg-black/50 rounded p-1 text-center">EMA: {Math.round(signal.ema20)}</div>
+                    <div className="bg-black/50 rounded p-1 text-center">Сила: {signal.strength}/3</div>
                   </div>
                   <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
                     {signal.reasons.map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
