@@ -169,7 +169,7 @@ const App: React.FC = () => {
   };
 
   const calculateATR = (prices: number[], period: number = 14): number => {
-    if (!prices || prices.length < period + 1) return (prices?.[prices.length - 1] || 1) * 0.01;
+    if (!prices || prices.length < period + 1) return (prices?.[prices.length - 1] || 1) * 0.005;
     const tr: number[] = [];
     for (let i = 1; i < prices.length; i++) {
       tr.push(Math.abs(prices[i] - prices[i - 1]));
@@ -178,7 +178,9 @@ const App: React.FC = () => {
     for (let i = period; i < tr.length; i++) {
       atr = (atr * (period - 1) + tr[i]) / period;
     }
-    return atr;
+    // Минимальный ATR = 0.5% от текущей цены (чтобы TP/SL были не в копейках)
+    const minATR = prices[prices.length - 1] * 0.005;
+    return Math.max(atr, minATR);
   };
 
   // ==================== ГЕНЕРАЦИЯ СИГНАЛОВ ====================
@@ -264,12 +266,17 @@ const App: React.FC = () => {
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     if (roundedQty <= 0) return;
 
+    // ATR с минимальным порогом 0.5% от цены
+    const atr = Math.max(signal.atr, signal.price * 0.005);
+    const tpMultiplier = 2.5;
+    const slMultiplier = 1.5;
+
     const tpPrice = signal.action === 'buy'
-      ? signal.price + signal.atr * 2.5
-      : signal.price - signal.atr * 2.5;
+      ? signal.price + atr * tpMultiplier
+      : signal.price - atr * tpMultiplier;
     const slPrice = signal.action === 'buy'
-      ? signal.price - signal.atr * 1.5
-      : signal.price + signal.atr * 1.5;
+      ? signal.price - atr * slMultiplier
+      : signal.price + atr * slMultiplier;
 
     lastTradeTimeForSymbol.current.set(signal.symbol, Date.now());
     setBalance(prev => prev - riskAmount);
@@ -435,7 +442,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 35/65 | ADX 25+</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | Мин. ATR 0.5%</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
