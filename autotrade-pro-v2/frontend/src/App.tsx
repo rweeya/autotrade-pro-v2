@@ -50,6 +50,10 @@ interface Trade {
   slPrice: number;
 }
 
+// Константы TP/SL
+const TP_PERCENT = 1.5; // TP = +1.5% от цены входа
+const SL_PERCENT = 0.8; // SL = -0.8% от цены входа
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
@@ -86,7 +90,9 @@ const App: React.FC = () => {
   };
   const formatPrice = (price: number) => {
     if (price === undefined || price === null || isNaN(price)) return '0.0000';
-    return price.toFixed(4);
+    if (price >= 100) return price.toFixed(2);
+    if (price >= 1) return price.toFixed(4);
+    return price.toFixed(6);
   };
   const formatTime = (timestamp: number) => {
     if (!timestamp) return '--:--:--';
@@ -169,7 +175,7 @@ const App: React.FC = () => {
   };
 
   const calculateATR = (prices: number[], period: number = 14): number => {
-    if (!prices || prices.length < period + 1) return (prices?.[prices.length - 1] || 1) * 0.005;
+    if (!prices || prices.length < period + 1) return (prices?.[prices.length - 1] || 1) * 0.01;
     const tr: number[] = [];
     for (let i = 1; i < prices.length; i++) {
       tr.push(Math.abs(prices[i] - prices[i - 1]));
@@ -178,8 +184,8 @@ const App: React.FC = () => {
     for (let i = period; i < tr.length; i++) {
       atr = (atr * (period - 1) + tr[i]) / period;
     }
-    // Минимальный ATR = 0.5% от текущей цены (чтобы TP/SL были не в копейках)
-    const minATR = prices[prices.length - 1] * 0.005;
+    // Минимальный ATR = 1% от текущей цены
+    const minATR = prices[prices.length - 1] * 0.01;
     return Math.max(atr, minATR);
   };
 
@@ -266,17 +272,13 @@ const App: React.FC = () => {
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     if (roundedQty <= 0) return;
 
-    // ATR с минимальным порогом 0.5% от цены
-    const atr = Math.max(signal.atr, signal.price * 0.005);
-    const tpMultiplier = 2.5;
-    const slMultiplier = 1.5;
-
+    // ФИКСИРОВАННЫЕ ПРОЦЕНТЫ TP/SL (риск/прибыль ~1:2)
     const tpPrice = signal.action === 'buy'
-      ? signal.price + atr * tpMultiplier
-      : signal.price - atr * tpMultiplier;
+      ? signal.price * (1 + TP_PERCENT / 100)
+      : signal.price * (1 - TP_PERCENT / 100);
     const slPrice = signal.action === 'buy'
-      ? signal.price - atr * slMultiplier
-      : signal.price + atr * slMultiplier;
+      ? signal.price * (1 - SL_PERCENT / 100)
+      : signal.price * (1 + SL_PERCENT / 100);
 
     lastTradeTimeForSymbol.current.set(signal.symbol, Date.now());
     setBalance(prev => prev - riskAmount);
@@ -299,7 +301,7 @@ const App: React.FC = () => {
     };
 
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
+    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP(+${TP_PERCENT}%): $${tpPrice.toFixed(4)} | SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
   }, []);
 
   const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -442,7 +444,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | Мин. ATR 0.5%</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | TP +1.5% / SL -0.8%</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -533,7 +535,7 @@ const App: React.FC = () => {
               </div>
               {autoTrade && (
                 <div className="mt-3 p-2 bg-green-500/20 rounded-lg text-center">
-                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА — СКАЛЬПИНГ</p>
+                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА — СКАЛЬПИНГ | TP +1.5% | SL -0.8%</p>
                 </div>
               )}
             </div>
@@ -559,6 +561,9 @@ const App: React.FC = () => {
                     const pnlPercent = trade.side === 'buy'
                       ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100
                       : ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
+                    const progressToTP = trade.side === 'buy'
+                      ? ((currentPrice - trade.entryPrice) / (trade.tpPrice - trade.entryPrice)) * 100
+                      : ((trade.entryPrice - currentPrice) / (trade.entryPrice - trade.tpPrice)) * 100;
 
                     return (
                       <div key={trade.id} className={`p-3 ${pnl >= 0 ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
@@ -581,6 +586,13 @@ const App: React.FC = () => {
                           <span className="text-right text-red-400">${formatPrice(trade.slPrice)}</span>
                           <span className="text-gray-400">Время:</span>
                           <span className="text-right">{formatTime(trade.entryTime)}</span>
+                        </div>
+                        {/* Прогресс-бар к TP */}
+                        <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 rounded-full ${pnl >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
+                            style={{ width: `${Math.min(100, Math.max(0, progressToTP))}%` }}
+                          />
                         </div>
                         <button
                           onClick={() => closeTrade(trade, currentPrice, 'manual')}
