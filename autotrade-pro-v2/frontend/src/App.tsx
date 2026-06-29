@@ -50,9 +50,8 @@ interface Trade {
   slPrice: number;
 }
 
-// Константы TP/SL
-const TP_PERCENT = 1.5; // TP = +1.5% от цены входа
-const SL_PERCENT = 0.8; // SL = -0.8% от цены входа
+const TP_PERCENT = 1.5;
+const SL_PERCENT = 0.8;
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
@@ -68,6 +67,14 @@ const App: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [wsConnectedCount, setWsConnectedCount] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
+  const [equityHistory, setEquityHistory] = useState<{ time: number; value: number }[]>(() => {
+    const now = Date.now();
+    return [{ time: now, value: 10000 }];
+  });
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? saved === 'true' : true;
+  });
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsRef = useRef<any>(null);
@@ -83,6 +90,27 @@ const App: React.FC = () => {
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
+
+  // Тёмный режим
+  useEffect(() => {
+    localStorage.setItem('darkMode', darkMode.toString());
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // Equity history
+  useEffect(() => {
+    const currentEquity = balance + totalProfit;
+    setEquityHistory(prev => {
+      const last = prev[prev.length - 1];
+      if (last && last.value === currentEquity) return prev;
+      const updated = [...prev, { time: Date.now(), value: currentEquity }];
+      return updated.slice(-100);
+    });
+  }, [balance, totalProfit]);
 
   const formatNumber = (num: number) => {
     if (num === undefined || num === null || isNaN(num)) return '0.00';
@@ -184,7 +212,6 @@ const App: React.FC = () => {
     for (let i = period; i < tr.length; i++) {
       atr = (atr * (period - 1) + tr[i]) / period;
     }
-    // Минимальный ATR = 1% от текущей цены
     const minATR = prices[prices.length - 1] * 0.01;
     return Math.max(atr, minATR);
   };
@@ -272,7 +299,6 @@ const App: React.FC = () => {
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     if (roundedQty <= 0) return;
 
-    // ФИКСИРОВАННЫЕ ПРОЦЕНТЫ TP/SL (риск/прибыль ~1:2)
     const tpPrice = signal.action === 'buy'
       ? signal.price * (1 + TP_PERCENT / 100)
       : signal.price * (1 - TP_PERCENT / 100);
@@ -410,6 +436,7 @@ const App: React.FC = () => {
     setTrades([]);
     setSignals([]);
     setTotalProfit(0);
+    setEquityHistory([{ time: Date.now(), value: balance }]);
     lastTradeTimeForSymbol.current.clear();
     lastSignalTimeForSymbol.current.clear();
   };
@@ -419,6 +446,7 @@ const App: React.FC = () => {
     setTotalProfit(0);
     setTrades([]);
     setSignals([]);
+    setEquityHistory([{ time: Date.now(), value: 10000 }]);
     lastTradeTimeForSymbol.current.clear();
     lastSignalTimeForSymbol.current.clear();
   };
@@ -435,38 +463,91 @@ const App: React.FC = () => {
     window.open(`https://www.bybit.com/trade/spot/${base}/USDT`, '_blank');
   };
 
+  // Equity Chart компонент
+  const EquityChart: React.FC = () => {
+    if (equityHistory.length < 2) return null;
+    
+    const width = 180;
+    const height = 36;
+    const padding = 2;
+    const min = Math.min(...equityHistory.map(d => d.value));
+    const max = Math.max(...equityHistory.map(d => d.value));
+    const range = max - min || 1;
+    
+    const points = equityHistory.map((d, i) => {
+      const x = padding + (i / (equityHistory.length - 1)) * (width - padding * 2);
+      const y = padding + (height - padding * 2) - ((d.value - min) / range) * (height - padding * 2);
+      return `${x},${y}`;
+    }).join(' ');
+    
+    const isUp = equityHistory[equityHistory.length - 1].value >= equityHistory[0].value;
+    
+    return (
+      <svg width={width} height={height} className="opacity-90">
+        <polyline
+          points={points}
+          fill="none"
+          stroke={isUp ? '#22c55e' : '#ef4444'}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {equityHistory.length > 0 && (
+          <circle
+            cx={padding + (width - padding * 2)}
+            cy={padding + (height - padding * 2) - ((equityHistory[equityHistory.length - 1].value - min) / range) * (height - padding * 2)}
+            r="2"
+            fill={isUp ? '#22c55e' : '#ef4444'}
+          />
+        )}
+      </svg>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/30 to-black">
-      <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0">
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gradient-to-br from-gray-900 via-red-900/30 to-black' : 'bg-gradient-to-br from-gray-100 via-red-100/30 to-white'}`}>
+      <header className={`relative z-20 border-b border-red-500/30 backdrop-blur-xl sticky top-0 ${darkMode ? 'bg-black/80' : 'bg-white/80'}`}>
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center flex-wrap gap-3">
             <div className="flex items-center gap-2">
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | TP +1.5% / SL -0.8%</p>
+                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | TP +1.5% / SL -0.8%</p>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-xs text-gray-400">Баланс</div>
-                <div className="text-xl font-bold text-green-400">${formatNumber(balance)}</div>
+            <div className="flex items-center gap-3">
+              {/* Equity Chart */}
+              <div className="hidden lg:block">
+                <EquityChart />
               </div>
               <div className="text-right">
-                <div className="text-xs text-gray-400">PnL</div>
-                <div className={`text-xl font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Баланс</div>
+                <div className="text-lg font-bold text-green-400">${formatNumber(balance)}</div>
+              </div>
+              <div className="text-right">
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>PnL</div>
+                <div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-xs text-gray-400">WR</div>
-                <div className="text-xl font-bold text-yellow-400">{winRate.toFixed(1)}%</div>
+                <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>WR</div>
+                <div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div>
               </div>
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
-                <span className="text-xs text-gray-400">{wsConnectedCount}/{SYMBOLS.length}</span>
+                <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{wsConnectedCount}/{SYMBOLS.length}</span>
               </div>
-              <div className="text-sm text-gray-500 font-mono">{currentTime.toLocaleTimeString()}</div>
+              <div className={`text-sm font-mono ${darkMode ? 'text-gray-500' : 'text-gray-700'}`}>{currentTime.toLocaleTimeString()}</div>
+              {/* Переключатель темы */}
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className={`p-2 rounded-lg text-lg transition-colors ${darkMode ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                title={darkMode ? 'Светлая тема' : 'Тёмная тема'}
+              >
+                {darkMode ? '☀️' : '🌙'}
+              </button>
             </div>
           </div>
         </div>
@@ -474,42 +555,56 @@ const App: React.FC = () => {
 
       <div className="relative z-10 container mx-auto px-4 py-4">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-          <div className="bg-black/60 rounded-xl p-3 border border-red-500/30">
-            <div className="text-gray-400 text-xs">Сигналов</div>
+          <div className={`rounded-xl p-3 border border-red-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}>
+            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Сигналов</div>
             <div className="text-2xl font-bold text-red-400">{signals.length}</div>
           </div>
-          <div className="bg-black/60 rounded-xl p-3 border border-green-500/30">
-            <div className="text-gray-400 text-xs">BUY</div>
+          <div className={`rounded-xl p-3 border border-green-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}>
+            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>BUY</div>
             <div className="text-2xl font-bold text-green-400">{signals.filter(s => s.action === 'buy').length}</div>
           </div>
-          <div className="bg-black/60 rounded-xl p-3 border border-red-500/30">
-            <div className="text-gray-400 text-xs">SELL</div>
+          <div className={`rounded-xl p-3 border border-red-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}>
+            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>SELL</div>
             <div className="text-2xl font-bold text-red-400">{signals.filter(s => s.action === 'sell').length}</div>
           </div>
-          <div className="bg-black/60 rounded-xl p-3 border border-yellow-500/30">
-            <div className="text-gray-400 text-xs">Открыто</div>
+          <div className={`rounded-xl p-3 border border-yellow-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}>
+            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Открыто</div>
             <div className="text-2xl font-bold text-yellow-400">{openTrades.length}</div>
           </div>
-          <div className="bg-black/60 rounded-xl p-3 border border-blue-500/30">
-            <div className="text-gray-400 text-xs">Закрыто</div>
+          <div className={`rounded-xl p-3 border border-blue-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}>
+            <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Закрыто</div>
             <div className="text-2xl font-bold text-blue-400">{totalTrades}</div>
           </div>
         </div>
 
         <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto">
-          <button onClick={() => setActiveTab('signals')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'signals' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>🎯 Сигналы</button>
-          <button onClick={() => setActiveTab('trading')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'trading' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📈 График</button>
-          <button onClick={() => setActiveTab('positions')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'positions' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📊 Позиции</button>
-          <button onClick={() => setActiveTab('history')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'history' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📜 История</button>
-          <button onClick={() => setActiveTab('news')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'news' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📰 Новости</button>
-          <button onClick={() => setActiveTab('topmovers')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'topmovers' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>📊 Топ монет</button>
-          <button onClick={() => setActiveTab('watchlist')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'watchlist' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>⭐ Избранное</button>
-          <button onClick={() => setActiveTab('autotrade')} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === 'autotrade' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>🤖 Автоторговля</button>
+          {[
+            { key: 'signals', icon: '🎯', label: 'Сигналы' },
+            { key: 'trading', icon: '📈', label: 'График' },
+            { key: 'positions', icon: '📊', label: 'Позиции' },
+            { key: 'history', icon: '📜', label: 'История' },
+            { key: 'news', icon: '📰', label: 'Новости' },
+            { key: 'topmovers', icon: '📊', label: 'Топ монет' },
+            { key: 'watchlist', icon: '⭐', label: 'Избранное' },
+            { key: 'autotrade', icon: '🤖', label: 'Автоторговля' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-red-600 text-white'
+                  : darkMode ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-black'
+              }`}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          ))}
         </div>
 
         {activeTab === 'trading' && (
-          <div className="bg-black/40 rounded-xl p-3 border border-red-500/20">
-            <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className="bg-black/60 border border-red-500/50 rounded-lg px-3 py-1.5 text-sm text-white mb-3 w-full">
+          <div className={`rounded-xl p-3 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
+            <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className={`border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full ${darkMode ? 'bg-black/60 text-white' : 'bg-white text-black'}`}>
               {SYMBOLS.slice(0, 30).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <TradingChart symbol={selectedSymbol} />
@@ -523,7 +618,7 @@ const App: React.FC = () => {
 
         {activeTab === 'autotrade' && (
           <div className="space-y-4">
-            <div className="bg-black/40 rounded-xl p-4 border border-red-500/20">
+            <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
               <div className="flex flex-wrap gap-3">
                 <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2 rounded-lg font-bold ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>
                   {autoTrade ? '🔴 ОСТАНОВИТЬ' : '🟢 ЗАПУСТИТЬ'}
@@ -540,18 +635,18 @@ const App: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-black/40 rounded-xl p-4 border border-red-500/20">
-              <label className="text-sm text-gray-400">Риск на сделку: {riskPercent}%</label>
+            <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
+              <label className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Риск на сделку: {riskPercent}%</label>
               <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={(e) => setRiskPercent(parseFloat(e.target.value))} className="w-full accent-red-500 mt-1" />
             </div>
 
-            <div className="bg-black/40 rounded-xl border border-red-500/20 overflow-hidden">
+            <div className={`rounded-xl border border-red-500/20 overflow-hidden ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
               <div className="px-4 py-2 bg-red-950/30 border-b border-red-500/30">
                 <h3 className="font-bold text-red-400 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length})</h3>
               </div>
-              <div className="divide-y divide-gray-800">
+              <div className={`divide-y ${darkMode ? 'divide-gray-800' : 'divide-gray-200'}`}>
                 {openTrades.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500 text-sm">Нет открытых позиций</div>
+                  <div className={`p-4 text-center text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>Нет открытых позиций</div>
                 ) : (
                   openTrades.map(trade => {
                     const currentPrice = prices.get(trade.symbol) || trade.entryPrice;
@@ -576,18 +671,17 @@ const App: React.FC = () => {
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1 text-xs">
-                          <span className="text-gray-400">Вход:</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Вход:</span>
                           <span className="text-right">${formatPrice(trade.entryPrice)}</span>
-                          <span className="text-gray-400">Текущая:</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Текущая:</span>
                           <span className="text-right">${formatPrice(currentPrice)}</span>
-                          <span className="text-gray-400">TP:</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>TP:</span>
                           <span className="text-right text-green-400">${formatPrice(trade.tpPrice)}</span>
-                          <span className="text-gray-400">SL:</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>SL:</span>
                           <span className="text-right text-red-400">${formatPrice(trade.slPrice)}</span>
-                          <span className="text-gray-400">Время:</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Время:</span>
                           <span className="text-right">{formatTime(trade.entryTime)}</span>
                         </div>
-                        {/* Прогресс-бар к TP */}
                         <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                           <div
                             className={`h-full transition-all duration-500 rounded-full ${pnl >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
@@ -612,13 +706,13 @@ const App: React.FC = () => {
         {activeTab === 'signals' && (
           <div className="space-y-2">
             {signals.length === 0 ? (
-              <div className="bg-black/40 rounded-xl p-8 text-center">
+              <div className={`rounded-xl p-8 text-center ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
                 <div className="text-5xl mb-3">⏳</div>
-                <div className="text-gray-400">Нет сигналов. Ожидаем RSI &lt; 35 или RSI &gt; 65 с ADX &gt; 25...</div>
+                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Нет сигналов. Ожидаем RSI &lt; 35 или RSI &gt; 65 с ADX &gt; 25...</div>
               </div>
             ) : (
               signals.filter(s => s && s.price).map((signal, idx) => (
-                <div key={idx} onClick={() => openBybit(signal.symbol)} className="bg-gradient-to-r from-black/60 to-red-900/20 rounded-lg p-3 border border-red-500/30 cursor-pointer hover:border-red-400/50">
+                <div key={idx} onClick={() => openBybit(signal.symbol)} className={`rounded-lg p-3 border border-red-500/30 cursor-pointer hover:border-red-400/50 transition-colors ${darkMode ? 'bg-gradient-to-r from-black/60 to-red-900/20' : 'bg-gradient-to-r from-white to-red-100/50'}`}>
                   <div className="flex justify-between items-center">
                     <span className="font-bold">{signal.symbol}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>
@@ -627,11 +721,11 @@ const App: React.FC = () => {
                     <span className="text-yellow-400 text-xs">{'★'.repeat(signal.strength)}{'☆'.repeat(3 - signal.strength)}</span>
                   </div>
                   <div className="grid grid-cols-5 gap-1 mt-2 text-xs">
-                    <div className="bg-black/50 rounded p-1 text-center">RSI: {signal.rsi}</div>
-                    <div className="bg-black/50 rounded p-1 text-center">ADX: {signal.adx?.toFixed(0) || '--'}</div>
-                    <div className="bg-black/50 rounded p-1 text-center">MACD: {signal.macd?.toFixed(4) || '--'}</div>
-                    <div className="bg-black/50 rounded p-1 text-center">EMA: {Math.round(signal.ema20)}</div>
-                    <div className="bg-black/50 rounded p-1 text-center">Сила: {signal.strength}/3</div>
+                    <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>RSI: {signal.rsi}</div>
+                    <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>ADX: {signal.adx?.toFixed(0) || '--'}</div>
+                    <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>MACD: {signal.macd?.toFixed(4) || '--'}</div>
+                    <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>EMA: {Math.round(signal.ema20)}</div>
+                    <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>Сила: {signal.strength}/3</div>
                   </div>
                   <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
                     {(signal.reasons || []).map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
