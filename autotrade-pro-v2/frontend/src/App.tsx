@@ -51,10 +51,6 @@ interface Trade {
   breakevenActivated: boolean;
 }
 
-const TP_PERCENT = 1.5;
-const SL_PERCENT = 0.8;
-const BREAKEVEN_TRIGGER = 1.0;
-
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
@@ -63,6 +59,10 @@ const App: React.FC = () => {
   const [winRate, setWinRate] = useState(0);
   const [autoTrade, setAutoTrade] = useState(false);
   const [riskPercent, setRiskPercent] = useState(5);
+  const [aggressiveMode, setAggressiveMode] = useState(() => {
+    const saved = localStorage.getItem('aggressiveMode');
+    return saved === 'true';
+  });
   const [signals, setSignals] = useState<Signal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
@@ -78,6 +78,16 @@ const App: React.FC = () => {
     return saved ? saved === 'true' : true;
   });
 
+  // Агрессивные/обычные параметры
+  const TP_PERCENT = aggressiveMode ? 3.0 : 1.5;
+  const SL_PERCENT = aggressiveMode ? 1.5 : 0.8;
+  const BREAKEVEN_TRIGGER = aggressiveMode ? 1.5 : 1.0;
+  const RSI_BUY_MAX = aggressiveMode ? 30 : 35;
+  const RSI_SELL_MIN = aggressiveMode ? 70 : 65;
+  const ADX_MIN = aggressiveMode ? 20 : 25;
+  const COOLDOWN_MS = aggressiveMode ? 30000 : 60000;
+  const DEFAULT_RISK = aggressiveMode ? 10 : 5;
+
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
@@ -87,11 +97,20 @@ const App: React.FC = () => {
   const balanceRef = useRef(balance);
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
+  const aggressiveRef = useRef(aggressiveMode);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
+  useEffect(() => { aggressiveRef.current = aggressiveMode; }, [aggressiveMode]);
+
+  useEffect(() => {
+    localStorage.setItem('aggressiveMode', aggressiveMode.toString());
+    if (aggressiveMode) {
+      setRiskPercent(DEFAULT_RISK);
+    }
+  }, [aggressiveMode]);
 
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode.toString());
@@ -224,7 +243,7 @@ const App: React.FC = () => {
     if (!history || history.length < 50) return null;
 
     const lastSignal = lastSignalTimeForSymbol.current.get(symbol);
-    if (lastSignal && Date.now() - lastSignal < 60000) return null;
+    if (lastSignal && Date.now() - lastSignal < COOLDOWN_MS) return null;
 
     const rsi = calculateRSI(history);
     const macd = calculateMACD(history);
@@ -233,23 +252,23 @@ const App: React.FC = () => {
     const adx = calculateADX(history);
     const atr = calculateATR(history);
 
-    if (adx < 25) return null;
+    if (adx < ADX_MIN) return null;
 
     let action: 'buy' | 'sell' | null = null;
     let reasons: string[] = [];
 
-    if (rsi < 35 && macd > 0 && ema20 > ema50) {
+    if (rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50) {
       action = 'buy';
-      reasons = [`RSI ${rsi} < 35`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
-    } else if (rsi > 65 && macd < 0 && ema20 < ema50) {
+      reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
+    } else if (rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50) {
       action = 'sell';
-      reasons = [`RSI ${rsi} > 65`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`];
+      reasons = [`RSI ${rsi} > ${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`];
     }
 
     if (!action) return null;
 
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
-    const strength = (rsi < 25 || rsi > 75) ? 3 : (rsi < 30 || rsi > 70) ? 2 : 1;
+    const strength = (rsi < 20 || rsi > 80) ? 3 : (rsi < 25 || rsi > 75) ? 2 : 1;
 
     return {
       id: `${symbol}_${Date.now()}_${Math.random()}`,
@@ -284,7 +303,7 @@ const App: React.FC = () => {
     }
 
     const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
-    if (lastTrade && Date.now() - lastTrade < 60000) {
+    if (lastTrade && Date.now() - lastTrade < COOLDOWN_MS) {
       console.log(`⏳ Кулдаун сделки для ${signal.symbol}`);
       return;
     }
@@ -329,7 +348,7 @@ const App: React.FC = () => {
 
     setTrades(prev => [...prev, newTrade]);
     console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP(+${TP_PERCENT}%): $${tpPrice.toFixed(4)} | SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
-  }, []);
+  }, [TP_PERCENT, SL_PERCENT, COOLDOWN_MS]);
 
   const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
     if (!trade || !currentPrice) return;
@@ -365,7 +384,6 @@ const App: React.FC = () => {
         const currentPrice = prices.get(trade.symbol);
         if (!currentPrice) continue;
 
-        // Проверка TP
         let tpHit = false;
         if (trade.side === 'buy' && currentPrice >= trade.tpPrice) tpHit = true;
         if (trade.side === 'sell' && currentPrice <= trade.tpPrice) tpHit = true;
@@ -374,7 +392,6 @@ const App: React.FC = () => {
           continue;
         }
 
-        // Проверка SL
         let slHit = false;
         if (trade.side === 'buy' && currentPrice <= trade.slPrice) slHit = true;
         if (trade.side === 'sell' && currentPrice >= trade.slPrice) slHit = true;
@@ -383,7 +400,6 @@ const App: React.FC = () => {
           continue;
         }
 
-        // Безубыток: если цена прошла +1.0%, подтягиваем SL к цене входа
         if (!trade.breakevenActivated) {
           const profitPercent = trade.side === 'buy'
             ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100
@@ -402,7 +418,7 @@ const App: React.FC = () => {
     };
     const interval = setInterval(checkTPSL, 3000);
     return () => clearInterval(interval);
-  }, [trades, prices, closeTrade]);
+  }, [trades, prices, closeTrade, BREAKEVEN_TRIGGER]);
 
   const updatePrice = useCallback((symbol: string, price: number) => {
     if (!symbol || !price || price <= 0) return;
@@ -520,10 +536,14 @@ const App: React.FC = () => {
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center flex-wrap gap-3">
             <div className="flex items-center gap-2">
-              <div className="text-2xl">💀</div>
+              <div className="text-2xl">{aggressiveMode ? '⚡' : '💀'}</div>
               <div>
-                <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | TP +1.5% | SL -0.8% | BE +1%</p>
+                <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">
+                  AUTO TRADE PRO V2 {aggressiveMode && '⚡AGGRESSIVE'}
+                </h1>
+                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
+                  {SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | BE +{BREAKEVEN_TRIGGER}%
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -627,9 +647,22 @@ const App: React.FC = () => {
         {activeTab === 'autotrade' && (
           <div className="space-y-4">
             <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 items-center">
                 <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2 rounded-lg font-bold ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>
                   {autoTrade ? '🔴 ОСТАНОВИТЬ' : '🟢 ЗАПУСТИТЬ'}
+                </button>
+                <button
+                  onClick={() => {
+                    setAggressiveMode(!aggressiveMode);
+                    if (!aggressiveMode) {
+                      setRiskPercent(10);
+                    } else {
+                      setRiskPercent(5);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${aggressiveMode ? 'bg-orange-600 animate-pulse' : 'bg-gray-600'}`}
+                >
+                  {aggressiveMode ? '⚡ АГРЕССИВНЫЙ' : '🐢 ОБЫЧНЫЙ'}
                 </button>
                 <button onClick={resetBalance} className="px-4 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄 Сбросить счет</button>
                 {openTrades.length > 0 && (
@@ -637,15 +670,20 @@ const App: React.FC = () => {
                 )}
               </div>
               {autoTrade && (
-                <div className="mt-3 p-2 bg-green-500/20 rounded-lg text-center">
-                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ | TP +1.5% | SL -0.8% | Безубыток +1%</p>
+                <div className={`mt-3 p-2 rounded-lg text-center ${aggressiveMode ? 'bg-orange-500/20' : 'bg-green-500/20'}`}>
+                  <p className={`text-sm ${aggressiveMode ? 'text-orange-400' : 'text-green-400'}`}>
+                    ✅ АВТОТОРГОВЛЯ {aggressiveMode ? '⚡АГРЕССИВНАЯ' : 'ОБЫЧНАЯ'} | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | BE +{BREAKEVEN_TRIGGER}%
+                  </p>
                 </div>
               )}
             </div>
 
             <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
               <label className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Риск на сделку: {riskPercent}%</label>
-              <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={(e) => setRiskPercent(parseFloat(e.target.value))} className="w-full accent-red-500 mt-1" />
+              <input type="range" min="1" max={aggressiveMode ? "20" : "10"} step="0.5" value={riskPercent} onChange={(e) => setRiskPercent(parseFloat(e.target.value))} className="w-full accent-red-500 mt-1" />
+              {aggressiveMode && (
+                <p className="text-xs text-orange-400 mt-1">⚡ Агрессивный режим: риск до 20%</p>
+              )}
             </div>
 
             <div className={`rounded-xl border border-red-500/20 overflow-hidden ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
@@ -683,7 +721,7 @@ const App: React.FC = () => {
                           <span className="text-right">${formatPrice(currentPrice)}</span>
                           <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>TP:</span>
                           <span className="text-right text-green-400">${formatPrice(trade.tpPrice)}</span>
-                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>SL{ trade.breakevenActivated ? ' (BE)' : ''}:</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>SL{trade.breakevenActivated ? ' (BE)' : ''}:</span>
                           <span className={`text-right ${trade.breakevenActivated ? 'text-blue-400' : 'text-red-400'}`}>${formatPrice(trade.slPrice)}</span>
                           <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Время:</span>
                           <span className="text-right">{formatTime(trade.entryTime)}</span>
@@ -708,7 +746,7 @@ const App: React.FC = () => {
             {signals.length === 0 ? (
               <div className={`rounded-xl p-8 text-center ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
                 <div className="text-5xl mb-3">⏳</div>
-                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Нет сигналов. Ожидаем RSI &lt; 35 или RSI &gt; 65 с ADX &gt; 25...</div>
+                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Нет сигналов. Ожидаем RSI {'<'} {RSI_BUY_MAX} или RSI {'>'} {RSI_SELL_MIN} с ADX {'>'} {ADX_MIN}...</div>
               </div>
             ) : (
               signals.filter(s => s && s.price).map((signal, idx) => (
