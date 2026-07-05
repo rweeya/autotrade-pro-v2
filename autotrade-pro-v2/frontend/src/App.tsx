@@ -48,9 +48,12 @@ interface Trade {
   status: 'open' | 'closed';
   tpPrice: number;
   slPrice: number;
+  breakevenActivated: boolean;
 }
 
+const TP_PERCENT = 1.5;
 const SL_PERCENT = 0.8;
+const BREAKEVEN_TRIGGER = 1.0;
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
@@ -296,12 +299,12 @@ const App: React.FC = () => {
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     if (roundedQty <= 0) return;
 
+    const tpPrice = signal.action === 'buy'
+      ? signal.price * (1 + TP_PERCENT / 100)
+      : signal.price * (1 - TP_PERCENT / 100);
     const slPrice = signal.action === 'buy'
       ? signal.price * (1 - SL_PERCENT / 100)
       : signal.price * (1 + SL_PERCENT / 100);
-    const tpPrice = signal.action === 'buy'
-      ? signal.price * 999
-      : signal.price * 0.001;
 
     lastTradeTimeForSymbol.current.set(signal.symbol, Date.now());
     setBalance(prev => prev - riskAmount);
@@ -320,11 +323,12 @@ const App: React.FC = () => {
       profitPercent: null,
       status: 'open' as const,
       tpPrice: Math.round(tpPrice * 10000) / 10000,
-      slPrice: Math.round(slPrice * 10000) / 10000
+      slPrice: Math.round(slPrice * 10000) / 10000,
+      breakevenActivated: false
     };
 
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | Нач.SL: $${slPrice.toFixed(4)} | Трейлинг | Сумма: $${riskAmount.toFixed(2)}`);
+    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP(+${TP_PERCENT}%): $${tpPrice.toFixed(4)} | SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
   }, []);
 
   const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -352,45 +356,51 @@ const App: React.FC = () => {
     console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} (${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2)}%)`);
   }, []);
 
-  // Трейлинг-стоп мониторинг
+  // Мониторинг TP/SL с безубытком
   useEffect(() => {
-    const checkTrailingStop = () => {
+    const checkTPSL = () => {
       const openTrades = trades.filter(t => t.status === 'open');
       
       for (const trade of openTrades) {
         const currentPrice = prices.get(trade.symbol);
         if (!currentPrice) continue;
 
-        let newSl = trade.slPrice;
-
-        if (trade.side === 'buy') {
-          const trailingSl = currentPrice * (1 - SL_PERCENT / 100);
-          if (trailingSl > trade.slPrice) {
-            newSl = trailingSl;
-          }
-        } else {
-          const trailingSl = currentPrice * (1 + SL_PERCENT / 100);
-          if (trailingSl < trade.slPrice) {
-            newSl = trailingSl;
-          }
+        // Проверка TP
+        let tpHit = false;
+        if (trade.side === 'buy' && currentPrice >= trade.tpPrice) tpHit = true;
+        if (trade.side === 'sell' && currentPrice <= trade.tpPrice) tpHit = true;
+        if (tpHit) {
+          closeTrade(trade, currentPrice, 'TP');
+          continue;
         }
 
-        if (newSl !== trade.slPrice) {
-          setTrades(prev => prev.map(t =>
-            t.id === trade.id ? { ...t, slPrice: Math.round(newSl * 10000) / 10000 } : t
-          ));
-        }
-
-        let shouldClose = false;
-        if (trade.side === 'buy' && currentPrice <= newSl) shouldClose = true;
-        if (trade.side === 'sell' && currentPrice >= newSl) shouldClose = true;
-
-        if (shouldClose) {
+        // Проверка SL
+        let slHit = false;
+        if (trade.side === 'buy' && currentPrice <= trade.slPrice) slHit = true;
+        if (trade.side === 'sell' && currentPrice >= trade.slPrice) slHit = true;
+        if (slHit) {
           closeTrade(trade, currentPrice, 'SL');
+          continue;
+        }
+
+        // Безубыток: если цена прошла +1.0%, подтягиваем SL к цене входа
+        if (!trade.breakevenActivated) {
+          const profitPercent = trade.side === 'buy'
+            ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100
+            : ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
+
+          if (profitPercent >= BREAKEVEN_TRIGGER) {
+            setTrades(prev => prev.map(t =>
+              t.id === trade.id
+                ? { ...t, slPrice: t.entryPrice, breakevenActivated: true }
+                : t
+            ));
+            console.log(`🔒 Безубыток: ${trade.symbol} | SL подтянут к цене входа`);
+          }
         }
       }
     };
-    const interval = setInterval(checkTrailingStop, 3000);
+    const interval = setInterval(checkTPSL, 3000);
     return () => clearInterval(interval);
   }, [trades, prices, closeTrade]);
 
@@ -513,7 +523,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | Трейлинг-стоп</p>
+                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>{SYMBOLS.length} активов | RSI 35/65 | ADX 25+ | TP +1.5% | SL -0.8% | BE +1%</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -628,7 +638,7 @@ const App: React.FC = () => {
               </div>
               {autoTrade && (
                 <div className="mt-3 p-2 bg-green-500/20 rounded-lg text-center">
-                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ — ТРЕЙЛИНГ-СТОП -0.8%</p>
+                  <p className="text-green-400 text-sm">✅ АВТОТОРГОВЛЯ | TP +1.5% | SL -0.8% | Безубыток +1%</p>
                 </div>
               )}
             </div>
@@ -660,6 +670,7 @@ const App: React.FC = () => {
                         <div className="flex justify-between items-center">
                           <span className="font-bold text-sm">
                             {trade.side === 'buy' ? '🟢' : '🔴'} {trade.symbol}
+                            {trade.breakevenActivated && <span className="ml-1 text-xs text-blue-400">🔒BE</span>}
                           </span>
                           <span className={`font-bold text-sm ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {pnl >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
@@ -670,40 +681,13 @@ const App: React.FC = () => {
                           <span className="text-right">${formatPrice(trade.entryPrice)}</span>
                           <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Текущая:</span>
                           <span className="text-right">${formatPrice(currentPrice)}</span>
-                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>SL (трейлинг):</span>
-                          <span className="text-right text-yellow-400">${formatPrice(trade.slPrice)}</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>TP:</span>
+                          <span className="text-right text-green-400">${formatPrice(trade.tpPrice)}</span>
+                          <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>SL{ trade.breakevenActivated ? ' (BE)' : ''}:</span>
+                          <span className={`text-right ${trade.breakevenActivated ? 'text-blue-400' : 'text-red-400'}`}>${formatPrice(trade.slPrice)}</span>
                           <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Время:</span>
                           <span className="text-right">{formatTime(trade.entryTime)}</span>
                         </div>
-                        {(() => {
-                          const slDistance = trade.side === 'buy'
-                            ? ((trade.entryPrice - trade.slPrice) / trade.entryPrice) * 100
-                            : ((trade.slPrice - trade.entryPrice) / trade.entryPrice) * 100;
-                          
-                          const progressToSL = slDistance > 0 ? Math.min(100, Math.max(0, 100 - (pnlPercent / slDistance) * 100)) : 50;
-                          
-                          let barColor = 'bg-green-500';
-                          if (pnlPercent < 0) {
-                            barColor = 'bg-red-500';
-                          } else if (progressToSL > 60) {
-                            barColor = 'bg-yellow-500';
-                          }
-                          
-                          return (
-                            <>
-                              <div className="flex justify-between text-xs mt-2 mb-0.5">
-                                <span className="text-red-400">SL</span>
-                                <span className="text-green-400">Вход</span>
-                              </div>
-                              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full transition-all duration-500 rounded-full ${barColor}`}
-                                  style={{ width: `${progressToSL}%` }}
-                                />
-                              </div>
-                            </>
-                          );
-                        })()}
                         <button
                           onClick={() => closeTrade(trade, currentPrice, 'manual')}
                           className="mt-2 w-full bg-red-700/50 hover:bg-red-600 text-xs py-1 rounded"
