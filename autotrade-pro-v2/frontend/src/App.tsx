@@ -7,6 +7,7 @@ import Watchlist from './components/Watchlist';
 import { createWebSocketManager, PriceData } from './services/websocket';
 
 const SYMBOLS = [
+  // Топ-крипта
   'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT',
   'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT', 'LTC/USDT', 'UNI/USDT', 'ATOM/USDT',
   'ETC/USDT', 'FIL/USDT', 'APT/USDT', 'ARB/USDT', 'OP/USDT', 'SUI/USDT', 'NEAR/USDT',
@@ -14,7 +15,22 @@ const SYMBOLS = [
   'AAVE/USDT', 'ALGO/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT', 'GALA/USDT', 'AXS/USDT',
   'CHZ/USDT', 'EOS/USDT', 'KSM/USDT', 'ZEC/USDT', 'COMP/USDT', 'ZIL/USDT', 'BAT/USDT',
   'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT', 'FLOW/USDT', 'WAVES/USDT',
-  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT', 'SEI/USDT', 'WLD/USDT'
+  // Мемкоины
+  'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
+  // DeFi и L2
+  'SEI/USDT', 'WLD/USDT', 'STRK/USDT', 'TIA/USDT', 'JUP/USDT', 'PYTH/USDT',
+  'ENA/USDT', 'ETHFI/USDT', 'REZ/USDT', 'OMNI/USDT', 'TAO/USDT', 'SUPER/USDT',
+  // Ещё альты
+  'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'BEAM/USDT', 'AXL/USDT', 'W/USDT',
+  'BLUR/USDT', 'ORDI/USDT', 'SATS/USDT', 'RATS/USDT', 'MOG/USDT', 'POPCAT/USDT',
+  'RAY/USDT', 'JTO/USDT', 'HNT/USDT', 'IOTA/USDT', 'NEO/USDT', 'GAS/USDT',
+  'ONG/USDT', 'CKB/USDT', 'YGG/USDT', 'PENDLE/USDT', 'SNX/USDT', 'CRV/USDT',
+  '1INCH/USDT', 'DYDX/USDT', 'CAKE/USDT', 'XLM/USDT', 'TRX/USDT', 'XTZ/USDT',
+  'MINA/USDT', 'ROSE/USDT', 'CFX/USDT', 'MASK/USDT', 'BAND/USDT', 'CELO/USDT',
+  'ENS/USDT', 'LDO/USDT', 'GMX/USDT', 'DYDX/USDT', 'FXS/USDT', 'CVX/USDT',
+  'ZRO/USDT', 'ZK/USDT', 'ALT/USDT', 'PORTAL/USDT', 'XAI/USDT', 'ACE/USDT',
+  'NFP/USDT', 'AI/USDT', 'XEC/USDT', 'BOME/USDT', 'SLERF/USDT', 'MYRO/USDT',
+  'WEN/USDT', 'SAMO/USDT', 'BODEN/USDT', 'TRUMP/USDT'
 ];
 
 interface Signal {
@@ -31,6 +47,7 @@ interface Signal {
   adx: number;
   atr: number;
   reasons: string[];
+  candlePattern?: string;
 }
 
 interface Trade {
@@ -51,6 +68,13 @@ interface Trade {
   breakevenActivated: boolean;
 }
 
+interface Candle {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
@@ -59,6 +83,10 @@ const App: React.FC = () => {
   const [winRate, setWinRate] = useState(0);
   const [autoTrade, setAutoTrade] = useState(false);
   const [riskPercent, setRiskPercent] = useState(5);
+  const [useCandlePatterns, setUseCandlePatterns] = useState(() => {
+    const saved = localStorage.getItem('useCandlePatterns');
+    return saved ? saved === 'true' : true;
+  });
   const [aggressiveMode, setAggressiveMode] = useState(() => {
     const saved = localStorage.getItem('aggressiveMode');
     return saved === 'true';
@@ -78,7 +106,6 @@ const App: React.FC = () => {
     return saved ? saved === 'true' : true;
   });
 
-  // Агрессивные/обычные параметры
   const TP_PERCENT = aggressiveMode ? 3.0 : 1.5;
   const SL_PERCENT = aggressiveMode ? 1.5 : 0.8;
   const BREAKEVEN_TRIGGER = aggressiveMode ? 1.5 : 1.0;
@@ -89,6 +116,7 @@ const App: React.FC = () => {
   const DEFAULT_RISK = aggressiveMode ? 10 : 5;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
+  const candleHistoryRef = useRef<Map<string, Candle[]>>(new Map());
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
   const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
@@ -98,19 +126,23 @@ const App: React.FC = () => {
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
   const aggressiveRef = useRef(aggressiveMode);
+  const candlePatternsRef = useRef(useCandlePatterns);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
   useEffect(() => { aggressiveRef.current = aggressiveMode; }, [aggressiveMode]);
+  useEffect(() => { candlePatternsRef.current = useCandlePatterns; }, [useCandlePatterns]);
 
   useEffect(() => {
     localStorage.setItem('aggressiveMode', aggressiveMode.toString());
-    if (aggressiveMode) {
-      setRiskPercent(DEFAULT_RISK);
-    }
+    if (aggressiveMode) setRiskPercent(DEFAULT_RISK);
   }, [aggressiveMode]);
+
+  useEffect(() => {
+    localStorage.setItem('useCandlePatterns', useCandlePatterns.toString());
+  }, [useCandlePatterns]);
 
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode.toString());
@@ -235,6 +267,54 @@ const App: React.FC = () => {
     return Math.max(atr, minATR);
   };
 
+  // ==================== СВЕЧНЫЕ ПАТТЕРНЫ ====================
+  const detectCandlePatterns = (candles: Candle[]): { pattern: string; action: 'buy' | 'sell' | null } => {
+    if (!candles || candles.length < 3) return { pattern: '', action: null };
+    
+    const last = candles[candles.length - 1];
+    const prev = candles[candles.length - 2];
+    const prev2 = candles[candles.length - 3];
+    
+    const body = Math.abs(last.close - last.open);
+    const upperWick = last.high - Math.max(last.open, last.close);
+    const lowerWick = Math.min(last.open, last.close) - last.low;
+    const totalRange = last.high - last.low || 0.0001;
+    const prevBody = Math.abs(prev.close - prev.open);
+    const prevRange = prev.high - prev.low || 0.0001;
+
+    // Молот (Hammer) — BUY
+    if (lowerWick > body * 2 && upperWick < body * 0.5 && body > 0 && body / totalRange < 0.4) {
+      return { pattern: '🔨 Молот', action: 'buy' };
+    }
+
+    // Перевёрнутый молот — BUY (после падения)
+    if (upperWick > body * 2 && lowerWick < body * 0.5 && body > 0 && body / totalRange < 0.4 && prev.close < prev.open) {
+      return { pattern: '🔄 Перевёрнутый молот', action: 'buy' };
+    }
+
+    // Падающая звезда — SELL
+    if (upperWick > body * 2 && lowerWick < body * 0.5 && body > 0 && body / totalRange < 0.4 && prev.close > prev.open) {
+      return { pattern: '⭐ Падающая звезда', action: 'sell' };
+    }
+
+    // Бычье поглощение (Bullish Engulfing)
+    if (last.close > last.open && prev.close < prev.open && last.open < prev.close && last.close > prev.open && body > prevBody * 1.2) {
+      return { pattern: '📈 Бычье поглощение', action: 'buy' };
+    }
+
+    // Медвежье поглощение (Bearish Engulfing)
+    if (last.close < last.open && prev.close > prev.open && last.open > prev.close && last.close < prev.open && body > prevBody * 1.2) {
+      return { pattern: '📉 Медвежье поглощение', action: 'sell' };
+    }
+
+    // Доджи (нерешительность — пропускаем)
+    if (body / totalRange < 0.1) {
+      return { pattern: '➖ Доджи', action: null };
+    }
+
+    return { pattern: '', action: null };
+  };
+
   // ==================== ГЕНЕРАЦИЯ СИГНАЛОВ ====================
   const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
     if (!currentPrice || currentPrice <= 0) return null;
@@ -254,15 +334,43 @@ const App: React.FC = () => {
 
     if (adx < ADX_MIN) return null;
 
+    // Свечные паттерны
+    const candles = candleHistoryRef.current.get(symbol) || [];
+    const candleResult = detectCandlePatterns(candles);
+    
+    if (useCandlePatterns && !candleResult.pattern) {
+      return null; // Если паттерны включены, но их нет — нет сигнала
+    }
+    if (useCandlePatterns && candleResult.action === null) {
+      return null; // Доджи — нет направления
+    }
+
     let action: 'buy' | 'sell' | null = null;
     let reasons: string[] = [];
 
-    if (rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50) {
-      action = 'buy';
-      reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
-    } else if (rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50) {
-      action = 'sell';
-      reasons = [`RSI ${rsi} > ${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`];
+    // BUY условия
+    const buyIndicator = rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50;
+    // SELL условия
+    const sellIndicator = rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50;
+
+    if (useCandlePatterns) {
+      // С паттернами: индикаторы + паттерн должны совпадать
+      if (buyIndicator && candleResult.action === 'buy') {
+        action = 'buy';
+        reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`, candleResult.pattern];
+      } else if (sellIndicator && candleResult.action === 'sell') {
+        action = 'sell';
+        reasons = [`RSI ${rsi} > ${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`, candleResult.pattern];
+      }
+    } else {
+      // Без паттернов: только индикаторы
+      if (buyIndicator) {
+        action = 'buy';
+        reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
+      } else if (sellIndicator) {
+        action = 'sell';
+        reasons = [`RSI ${rsi} > ${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`];
+      }
     }
 
     if (!action) return null;
@@ -283,7 +391,8 @@ const App: React.FC = () => {
       ema50,
       adx,
       atr,
-      reasons
+      reasons,
+      candlePattern: candleResult.pattern || undefined
     };
   };
 
@@ -347,7 +456,7 @@ const App: React.FC = () => {
     };
 
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP(+${TP_PERCENT}%): $${tpPrice.toFixed(4)} | SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
+    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP(+${TP_PERCENT}%): $${tpPrice.toFixed(4)} | SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Паттерн: ${signal.candlePattern || 'нет'} | Сумма: $${riskAmount.toFixed(2)}`);
   }, [TP_PERCENT, SL_PERCENT, COOLDOWN_MS]);
 
   const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -411,7 +520,7 @@ const App: React.FC = () => {
                 ? { ...t, slPrice: t.entryPrice, breakevenActivated: true }
                 : t
             ));
-            console.log(`🔒 Безубыток: ${trade.symbol} | SL подтянут к цене входа`);
+            console.log(`🔒 Безубыток: ${trade.symbol}`);
           }
         }
       }
@@ -428,6 +537,25 @@ const App: React.FC = () => {
     history.push(price);
     if (history.length > 200) history = history.slice(-200);
     priceHistoryRef.current.set(symbol, history);
+
+    // Формируем свечи (используем цену как OHLC для простоты)
+    let candles = candleHistoryRef.current.get(symbol) || [];
+    const newCandle: Candle = {
+      open: candles.length > 0 ? candles[candles.length - 1].close : price,
+      high: price,
+      low: price,
+      close: price
+    };
+    candles.push(newCandle);
+    if (candles.length > 100) candles = candles.slice(-100);
+    // Обновляем high/low последней свечи
+    if (candles.length > 0) {
+      const lastCandle = candles[candles.length - 1];
+      lastCandle.high = Math.max(lastCandle.high, price);
+      lastCandle.low = Math.min(lastCandle.low, price);
+      lastCandle.close = price;
+    }
+    candleHistoryRef.current.set(symbol, candles);
 
     const signal = generateSignal(symbol, price);
     if (signal) {
@@ -542,7 +670,7 @@ const App: React.FC = () => {
                   AUTO TRADE PRO V2 {aggressiveMode && '⚡AGGRESSIVE'}
                 </h1>
                 <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
-                  {SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | BE +{BREAKEVEN_TRIGGER}%
+                  {SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | Свечи: {useCandlePatterns ? '✅' : '❌'}
                 </p>
               </div>
             </div>
@@ -572,7 +700,6 @@ const App: React.FC = () => {
               <button
                 onClick={() => setDarkMode(!darkMode)}
                 className={`p-2 rounded-lg text-lg transition-colors ${darkMode ? 'bg-gray-800 text-yellow-400 hover:bg-gray-700' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-                title={darkMode ? 'Светлая тема' : 'Тёмная тема'}
               >
                 {darkMode ? '☀️' : '🌙'}
               </button>
@@ -633,7 +760,7 @@ const App: React.FC = () => {
         {activeTab === 'trading' && (
           <div className={`rounded-xl p-3 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
             <select value={selectedSymbol} onChange={(e) => setSelectedSymbol(e.target.value)} className={`border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full ${darkMode ? 'bg-black/60 text-white' : 'bg-white text-black'}`}>
-              {SYMBOLS.slice(0, 30).map(s => <option key={s} value={s}>{s}</option>)}
+              {SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}
             </select>
             <TradingChart symbol={selectedSymbol} />
           </div>
@@ -654,17 +781,20 @@ const App: React.FC = () => {
                 <button
                   onClick={() => {
                     setAggressiveMode(!aggressiveMode);
-                    if (!aggressiveMode) {
-                      setRiskPercent(10);
-                    } else {
-                      setRiskPercent(5);
-                    }
+                    if (!aggressiveMode) setRiskPercent(10);
+                    else setRiskPercent(5);
                   }}
                   className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${aggressiveMode ? 'bg-orange-600 animate-pulse' : 'bg-gray-600'}`}
                 >
                   {aggressiveMode ? '⚡ АГРЕССИВНЫЙ' : '🐢 ОБЫЧНЫЙ'}
                 </button>
-                <button onClick={resetBalance} className="px-4 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄 Сбросить счет</button>
+                <button
+                  onClick={() => setUseCandlePatterns(!useCandlePatterns)}
+                  className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${useCandlePatterns ? 'bg-purple-600' : 'bg-gray-600'}`}
+                >
+                  {useCandlePatterns ? '🕯️ СВЕЧИ: ВКЛ' : '🕯️ СВЕЧИ: ВЫКЛ'}
+                </button>
+                <button onClick={resetBalance} className="px-4 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄 Сбросить</button>
                 {openTrades.length > 0 && (
                   <button onClick={closeAllPositions} className="px-4 py-2 bg-red-700/80 rounded-lg text-sm">🔒 ЗАКРЫТЬ ВСЕ ({openTrades.length})</button>
                 )}
@@ -672,7 +802,7 @@ const App: React.FC = () => {
               {autoTrade && (
                 <div className={`mt-3 p-2 rounded-lg text-center ${aggressiveMode ? 'bg-orange-500/20' : 'bg-green-500/20'}`}>
                   <p className={`text-sm ${aggressiveMode ? 'text-orange-400' : 'text-green-400'}`}>
-                    ✅ АВТОТОРГОВЛЯ {aggressiveMode ? '⚡АГРЕССИВНАЯ' : 'ОБЫЧНАЯ'} | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | BE +{BREAKEVEN_TRIGGER}%
+                    ✅ АВТОТОРГОВЛЯ {aggressiveMode ? '⚡АГРЕССИВНАЯ' : 'ОБЫЧНАЯ'} | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | BE +{BREAKEVEN_TRIGGER}% | Свечи: {useCandlePatterns ? '✅' : '❌'}
                   </p>
                 </div>
               )}
@@ -681,9 +811,6 @@ const App: React.FC = () => {
             <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
               <label className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Риск на сделку: {riskPercent}%</label>
               <input type="range" min="1" max={aggressiveMode ? "20" : "10"} step="0.5" value={riskPercent} onChange={(e) => setRiskPercent(parseFloat(e.target.value))} className="w-full accent-red-500 mt-1" />
-              {aggressiveMode && (
-                <p className="text-xs text-orange-400 mt-1">⚡ Агрессивный режим: риск до 20%</p>
-              )}
             </div>
 
             <div className={`rounded-xl border border-red-500/20 overflow-hidden ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
@@ -746,7 +873,10 @@ const App: React.FC = () => {
             {signals.length === 0 ? (
               <div className={`rounded-xl p-8 text-center ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
                 <div className="text-5xl mb-3">⏳</div>
-                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Нет сигналов. Ожидаем RSI {'<'} {RSI_BUY_MAX} или RSI {'>'} {RSI_SELL_MIN} с ADX {'>'} {ADX_MIN}...</div>
+                <div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                  Нет сигналов. Ожидаем RSI {'<'} {RSI_BUY_MAX} или RSI {'>'} {RSI_SELL_MIN} с ADX {'>'} {ADX_MIN}...
+                  {useCandlePatterns && ' + свечные паттерны'}
+                </div>
               </div>
             ) : (
               signals.filter(s => s && s.price).map((signal, idx) => (
@@ -768,6 +898,11 @@ const App: React.FC = () => {
                   <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">
                     {(signal.reasons || []).map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}
                   </div>
+                  {signal.candlePattern && (
+                    <div className="mt-1 text-xs text-purple-400">
+                      🕯️ {signal.candlePattern}
+                    </div>
+                  )}
                 </div>
               ))
             )}
