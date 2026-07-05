@@ -296,7 +296,6 @@ const App: React.FC = () => {
     const roundedQty = Math.floor(quantity * 1000) / 1000;
     if (roundedQty <= 0) return;
 
-    // Трейлинг-стоп: только начальный SL, TP далеко (по сути отключён)
     const slPrice = signal.action === 'buy'
       ? signal.price * (1 - SL_PERCENT / 100)
       : signal.price * (1 + SL_PERCENT / 100);
@@ -325,7 +324,7 @@ const App: React.FC = () => {
     };
 
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | Нач.SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Трейлинг | Сумма: $${riskAmount.toFixed(2)}`);
+    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | Нач.SL: $${slPrice.toFixed(4)} | Трейлинг | Сумма: $${riskAmount.toFixed(2)}`);
   }, []);
 
   const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -356,65 +355,44 @@ const App: React.FC = () => {
   // Трейлинг-стоп мониторинг
   useEffect(() => {
     const checkTrailingStop = () => {
-      setTrades(prev => {
-        let changed = false;
-        const updated = prev.map(trade => {
-          if (trade.status !== 'open') return trade;
-          
-          const currentPrice = prices.get(trade.symbol);
-          if (!currentPrice) return trade;
+      const openTrades = trades.filter(t => t.status === 'open');
+      
+      for (const trade of openTrades) {
+        const currentPrice = prices.get(trade.symbol);
+        if (!currentPrice) continue;
 
-          let newSl = trade.slPrice;
-          let shouldClose = false;
+        let newSl = trade.slPrice;
 
-          if (trade.side === 'buy') {
-            const trailingSl = currentPrice * (1 - SL_PERCENT / 100);
-            if (trailingSl > trade.slPrice) {
-              newSl = trailingSl;
-              changed = true;
-            }
-            if (currentPrice <= newSl) {
-              shouldClose = true;
-            }
-          } else {
-            const trailingSl = currentPrice * (1 + SL_PERCENT / 100);
-            if (trailingSl < trade.slPrice) {
-              newSl = trailingSl;
-              changed = true;
-            }
-            if (currentPrice >= newSl) {
-              shouldClose = true;
-            }
+        if (trade.side === 'buy') {
+          const trailingSl = currentPrice * (1 - SL_PERCENT / 100);
+          if (trailingSl > trade.slPrice) {
+            newSl = trailingSl;
           }
-
-          if (shouldClose) {
-            const profit = trade.side === 'buy'
-              ? (currentPrice - trade.entryPrice) * trade.quantity
-              : (trade.entryPrice - currentPrice) * trade.quantity;
-            const profitPercent = trade.side === 'buy'
-              ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100
-              : ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
-
-            setBalance(prev => prev + trade.entryPrice * trade.quantity + profit);
-            setTotalProfit(prev => prev + profit);
-            console.log(`📉 ТРЕЙЛИНГ-СТОП: ${trade.symbol} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)} (${profitPercent >= 0 ? '+' : ''}${profitPercent.toFixed(2)}%)`);
-            
-            changed = true;
-            return { ...trade, status: 'closed' as const, exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent, slPrice: newSl };
+        } else {
+          const trailingSl = currentPrice * (1 + SL_PERCENT / 100);
+          if (trailingSl < trade.slPrice) {
+            newSl = trailingSl;
           }
+        }
 
-          if (newSl !== trade.slPrice) {
-            return { ...trade, slPrice: Math.round(newSl * 10000) / 10000 };
-          }
+        if (newSl !== trade.slPrice) {
+          setTrades(prev => prev.map(t =>
+            t.id === trade.id ? { ...t, slPrice: Math.round(newSl * 10000) / 10000 } : t
+          ));
+        }
 
-          return trade;
-        });
-        return changed ? updated : prev;
-      });
+        let shouldClose = false;
+        if (trade.side === 'buy' && currentPrice <= newSl) shouldClose = true;
+        if (trade.side === 'sell' && currentPrice >= newSl) shouldClose = true;
+
+        if (shouldClose) {
+          closeTrade(trade, currentPrice, 'SL');
+        }
+      }
     };
     const interval = setInterval(checkTrailingStop, 3000);
     return () => clearInterval(interval);
-  }, [prices]);
+  }, [trades, prices, closeTrade]);
 
   const updatePrice = useCallback((symbol: string, price: number) => {
     if (!symbol || !price || price <= 0) return;
@@ -486,7 +464,6 @@ const App: React.FC = () => {
     window.open(`https://www.bybit.com/trade/spot/${base}/USDT`, '_blank');
   };
 
-  // Equity Chart
   const EquityChart: React.FC = () => {
     if (equityHistory.length < 2) return null;
     
