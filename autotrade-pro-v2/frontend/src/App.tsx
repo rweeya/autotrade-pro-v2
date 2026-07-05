@@ -85,7 +85,7 @@ const App: React.FC = () => {
   const [riskPercent, setRiskPercent] = useState(5);
   const [useCandlePatterns, setUseCandlePatterns] = useState(() => {
     const saved = localStorage.getItem('useCandlePatterns');
-    return saved ? saved === 'true' : true;
+    return saved ? saved === 'true' : false;
   });
   const [aggressiveMode, setAggressiveMode] = useState(() => {
     const saved = localStorage.getItem('aggressiveMode');
@@ -273,21 +273,19 @@ const App: React.FC = () => {
     
     const last = candles[candles.length - 1];
     const prev = candles[candles.length - 2];
-    const prev2 = candles[candles.length - 3];
     
     const body = Math.abs(last.close - last.open);
     const upperWick = last.high - Math.max(last.open, last.close);
     const lowerWick = Math.min(last.open, last.close) - last.low;
     const totalRange = last.high - last.low || 0.0001;
     const prevBody = Math.abs(prev.close - prev.open);
-    const prevRange = prev.high - prev.low || 0.0001;
 
     // Молот (Hammer) — BUY
     if (lowerWick > body * 2 && upperWick < body * 0.5 && body > 0 && body / totalRange < 0.4) {
       return { pattern: '🔨 Молот', action: 'buy' };
     }
 
-    // Перевёрнутый молот — BUY (после падения)
+    // Перевёрнутый молот — BUY
     if (upperWick > body * 2 && lowerWick < body * 0.5 && body > 0 && body / totalRange < 0.4 && prev.close < prev.open) {
       return { pattern: '🔄 Перевёрнутый молот', action: 'buy' };
     }
@@ -297,17 +295,17 @@ const App: React.FC = () => {
       return { pattern: '⭐ Падающая звезда', action: 'sell' };
     }
 
-    // Бычье поглощение (Bullish Engulfing)
+    // Бычье поглощение
     if (last.close > last.open && prev.close < prev.open && last.open < prev.close && last.close > prev.open && body > prevBody * 1.2) {
       return { pattern: '📈 Бычье поглощение', action: 'buy' };
     }
 
-    // Медвежье поглощение (Bearish Engulfing)
+    // Медвежье поглощение
     if (last.close < last.open && prev.close > prev.open && last.open > prev.close && last.close < prev.open && body > prevBody * 1.2) {
       return { pattern: '📉 Медвежье поглощение', action: 'sell' };
     }
 
-    // Доджи (нерешительность — пропускаем)
+    // Доджи
     if (body / totalRange < 0.1) {
       return { pattern: '➖ Доджи', action: null };
     }
@@ -339,22 +337,19 @@ const App: React.FC = () => {
     const candleResult = detectCandlePatterns(candles);
     
     if (useCandlePatterns && !candleResult.pattern) {
-      return null; // Если паттерны включены, но их нет — нет сигнала
+      return null;
     }
     if (useCandlePatterns && candleResult.action === null) {
-      return null; // Доджи — нет направления
+      return null;
     }
 
     let action: 'buy' | 'sell' | null = null;
     let reasons: string[] = [];
 
-    // BUY условия
     const buyIndicator = rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50;
-    // SELL условия
     const sellIndicator = rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50;
 
     if (useCandlePatterns) {
-      // С паттернами: индикаторы + паттерн должны совпадать
       if (buyIndicator && candleResult.action === 'buy') {
         action = 'buy';
         reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`, candleResult.pattern];
@@ -363,7 +358,6 @@ const App: React.FC = () => {
         reasons = [`RSI ${rsi} > ${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`, candleResult.pattern];
       }
     } else {
-      // Без паттернов: только индикаторы
       if (buyIndicator) {
         action = 'buy';
         reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
@@ -456,7 +450,7 @@ const App: React.FC = () => {
     };
 
     setTrades(prev => [...prev, newTrade]);
-    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP(+${TP_PERCENT}%): $${tpPrice.toFixed(4)} | SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Паттерн: ${signal.candlePattern || 'нет'} | Сумма: $${riskAmount.toFixed(2)}`);
+    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP(+${TP_PERCENT}%): $${tpPrice.toFixed(4)} | SL(-${SL_PERCENT}%): $${slPrice.toFixed(4)} | Сумма: $${riskAmount.toFixed(2)}`);
   }, [TP_PERCENT, SL_PERCENT, COOLDOWN_MS]);
 
   const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
@@ -538,18 +532,18 @@ const App: React.FC = () => {
     if (history.length > 200) history = history.slice(-200);
     priceHistoryRef.current.set(symbol, history);
 
-    // Формируем свечи (используем цену как OHLC для простоты)
+    // Свечи
     let candles = candleHistoryRef.current.get(symbol) || [];
-    const newCandle: Candle = {
-      open: candles.length > 0 ? candles[candles.length - 1].close : price,
-      high: price,
-      low: price,
-      close: price
-    };
-    candles.push(newCandle);
-    if (candles.length > 100) candles = candles.slice(-100);
-    // Обновляем high/low последней свечи
-    if (candles.length > 0) {
+    if (candles.length === 0 || candles[candles.length - 1].close !== price) {
+      const newCandle: Candle = {
+        open: candles.length > 0 ? candles[candles.length - 1].close : price,
+        high: price,
+        low: price,
+        close: price
+      };
+      candles.push(newCandle);
+      if (candles.length > 100) candles = candles.slice(-100);
+    } else {
       const lastCandle = candles[candles.length - 1];
       lastCandle.high = Math.max(lastCandle.high, price);
       lastCandle.low = Math.min(lastCandle.low, price);
@@ -670,7 +664,7 @@ const App: React.FC = () => {
                   AUTO TRADE PRO V2 {aggressiveMode && '⚡AGGRESSIVE'}
                 </h1>
                 <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>
-                  {SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | Свечи: {useCandlePatterns ? '✅' : '❌'}
+                  {SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | Свечи: {useCandlePatterns ? '✅' : '❌'}
                 </p>
               </div>
             </div>
