@@ -675,12 +675,35 @@ const App: React.FC = () => {
                           <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Время:</span>
                           <span className="text-right">{formatTime(trade.entryTime)}</span>
                         </div>
-                        <div className="mt-2 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-500 rounded-full ${pnl >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
-                            style={{ width: `${Math.min(100, Math.max(0, pnlPercent * 5))}%` }}
-                          />
-                        </div>
+                        {(() => {
+                          const slDistance = trade.side === 'buy'
+                            ? ((trade.entryPrice - trade.slPrice) / trade.entryPrice) * 100
+                            : ((trade.slPrice - trade.entryPrice) / trade.entryPrice) * 100;
+                          
+                          const progressToSL = slDistance > 0 ? Math.min(100, Math.max(0, 100 - (pnlPercent / slDistance) * 100)) : 50;
+                          
+                          let barColor = 'bg-green-500';
+                          if (pnlPercent < 0) {
+                            barColor = 'bg-red-500';
+                          } else if (progressToSL > 60) {
+                            barColor = 'bg-yellow-500';
+                          }
+                          
+                          return (
+                            <>
+                              <div className="flex justify-between text-xs mt-2 mb-0.5">
+                                <span className="text-red-400">SL</span>
+                                <span className="text-green-400">Вход</span>
+                              </div>
+                              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full transition-all duration-500 rounded-full ${barColor}`}
+                                  style={{ width: `${progressToSL}%` }}
+                                />
+                              </div>
+                            </>
+                          );
+                        })()}
                         <button
                           onClick={() => closeTrade(trade, currentPrice, 'manual')}
                           className="mt-2 w-full bg-red-700/50 hover:bg-red-600 text-xs py-1 rounded"
