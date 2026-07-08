@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 * {
   margin: 0;
@@ -12,80 +12,8 @@
 
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #0a0a0a;
-  color: #ffffff;
-}
-
-/* ===== КРОВАВЫЙ ФОН ===== */
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(139, 0, 0, 0.08) 0px,
-    rgba(139, 0, 0, 0.08) 2px,
-    transparent 2px,
-    transparent 10px
-  );
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Анимированные капли */
-.blood-drop {
-  position: fixed;
-  top: -20px;
-  background: rgba(180, 0, 0, 0.7);
-  width: 3px;
-  height: 12px;
-  border-radius: 0 0 3px 3px;
-  animation: fall linear infinite;
-  z-index: 2;
-  pointer-events: none;
-}
-
-@keyframes fall {
-  0% {
-    top: -20px;
-    opacity: 0.8;
-  }
-  100% {
-    top: 100vh;
-    opacity: 0;
-  }
-}
-
-/* Красные акценты вместо фиолетовых */
-.border-purple-500 {
-  border-color: #b91c1c !important;
-}
-
-.border-purple-500\/30 {
-  border-color: rgba(185, 28, 28, 0.3) !important;
-}
-
-.bg-purple-600 {
-  background-color: #b91c1c !important;
-}
-
-.text-purple-400 {
-  color: #ef4444 !important;
-}
-
-.from-purple-500 {
-  --tw-gradient-from: #b91c1c !important;
-}
-
-.to-cyan-500 {
-  --tw-gradient-to: #ef4444 !important;
-}
-
-.bg-purple-500\/20 {
-  background-color: rgba(185, 28, 28, 0.2) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 ::-webkit-scrollbar {
@@ -94,14 +22,14 @@ body::before {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #b91c1c;
-  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.3);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #ef4444;
+  background: rgba(239, 68, 68, 0.5);
 }
