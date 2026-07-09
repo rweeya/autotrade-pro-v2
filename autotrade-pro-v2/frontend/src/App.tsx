@@ -81,36 +81,24 @@ const App: React.FC = () => {
   const [winRate, setWinRate] = useState(0);
   const [autoTrade, setAutoTrade] = useState(false);
   const [riskPercent, setRiskPercent] = useState(5);
-  const [useCandlePatterns, setUseCandlePatterns] = useState(() => {
-    const saved = localStorage.getItem('useCandlePatterns');
-    return saved ? saved === 'true' : false;
-  });
-  const [useVolumeFilter, setUseVolumeFilter] = useState(() => {
-    const saved = localStorage.getItem('useVolumeFilter');
-    return saved ? saved === 'true' : false;
-  });
-  const [aggressiveMode, setAggressiveMode] = useState(() => {
-    const saved = localStorage.getItem('aggressiveMode');
-    return saved === 'true';
-  });
+  const [useCandlePatterns, setUseCandlePatterns] = useState(() => localStorage.getItem('useCandlePatterns') === 'true');
+  const [useVolumeFilter, setUseVolumeFilter] = useState(() => localStorage.getItem('useVolumeFilter') === 'true');
+  const [useBollinger, setUseBollinger] = useState(() => localStorage.getItem('useBollinger') === 'true');
+  const [useStochastic, setUseStochastic] = useState(() => localStorage.getItem('useStochastic') === 'true');
+  const [aggressiveMode, setAggressiveMode] = useState(() => localStorage.getItem('aggressiveMode') === 'true');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
   const [currentTime, setCurrentTime] = useState(new Date());
   const [wsConnectedCount, setWsConnectedCount] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
-  const [equityHistory, setEquityHistory] = useState<{ time: number; value: number }[]>(() => {
-    const now = Date.now();
-    return [{ time: now, value: 10000 }];
-  });
-  const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('darkMode');
-    return saved ? saved === 'true' : true;
-  });
+  const [equityHistory, setEquityHistory] = useState<{ time: number; value: number }[]>(() => [{ time: Date.now(), value: 10000 }]);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
 
-  const TP_PERCENT = aggressiveMode ? 3.0 : 1.5;
-  const SL_PERCENT = aggressiveMode ? 1.5 : 0.8;
-  const BREAKEVEN_TRIGGER = aggressiveMode ? 1.5 : 1.0;
+  // Агрессивный: TP +2%, SL -1%, BE +1%
+  const TP_PERCENT = aggressiveMode ? 2.0 : 1.5;
+  const SL_PERCENT = aggressiveMode ? 1.0 : 0.8;
+  const BREAKEVEN_TRIGGER = aggressiveMode ? 1.0 : 1.0;
   const RSI_BUY_MAX = aggressiveMode ? 30 : 35;
   const RSI_SELL_MIN = aggressiveMode ? 70 : 65;
   const ADX_MIN = aggressiveMode ? 20 : 25;
@@ -129,322 +117,260 @@ const App: React.FC = () => {
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
   const aggressiveRef = useRef(aggressiveMode);
-  const candlePatternsRef = useRef(useCandlePatterns);
-  const volumeFilterRef = useRef(useVolumeFilter);
+  const candleRef = useRef(useCandlePatterns);
+  const volumeRef = useRef(useVolumeFilter);
+  const bollingerRef = useRef(useBollinger);
+  const stochRef = useRef(useStochastic);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
   useEffect(() => { aggressiveRef.current = aggressiveMode; }, [aggressiveMode]);
-  useEffect(() => { candlePatternsRef.current = useCandlePatterns; }, [useCandlePatterns]);
-  useEffect(() => { volumeFilterRef.current = useVolumeFilter; }, [useVolumeFilter]);
+  useEffect(() => { candleRef.current = useCandlePatterns; }, [useCandlePatterns]);
+  useEffect(() => { volumeRef.current = useVolumeFilter; }, [useVolumeFilter]);
+  useEffect(() => { bollingerRef.current = useBollinger; }, [useBollinger]);
+  useEffect(() => { stochRef.current = useStochastic; }, [useStochastic]);
 
-  useEffect(() => {
-    localStorage.setItem('aggressiveMode', aggressiveMode.toString());
-    if (aggressiveMode) setRiskPercent(DEFAULT_RISK);
-  }, [aggressiveMode]);
+  useEffect(() => { localStorage.setItem('aggressiveMode', aggressiveMode.toString()); if (aggressiveMode) setRiskPercent(DEFAULT_RISK); }, [aggressiveMode]);
   useEffect(() => { localStorage.setItem('useCandlePatterns', useCandlePatterns.toString()); }, [useCandlePatterns]);
   useEffect(() => { localStorage.setItem('useVolumeFilter', useVolumeFilter.toString()); }, [useVolumeFilter]);
-  useEffect(() => {
-    localStorage.setItem('darkMode', darkMode.toString());
-    if (darkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }, [darkMode]);
+  useEffect(() => { localStorage.setItem('useBollinger', useBollinger.toString()); }, [useBollinger]);
+  useEffect(() => { localStorage.setItem('useStochastic', useStochastic.toString()); }, [useStochastic]);
+  useEffect(() => { localStorage.setItem('darkMode', darkMode.toString()); document.documentElement.classList.toggle('dark', darkMode); }, [darkMode]);
 
   useEffect(() => {
-    const currentEquity = balance + totalProfit;
+    const eq = balance + totalProfit;
     setEquityHistory(prev => {
-      const last = prev[prev.length - 1];
-      if (last && last.value === currentEquity) return prev;
-      const updated = [...prev, { time: Date.now(), value: currentEquity }];
-      return updated.slice(-100);
+      if (prev[prev.length - 1]?.value === eq) return prev;
+      return [...prev, { time: Date.now(), value: eq }].slice(-100);
     });
   }, [balance, totalProfit]);
 
-  const formatNumber = (num: number) => {
-    if (num === undefined || num === null || isNaN(num)) return '0.00';
-    return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-  const formatPrice = (price: number) => {
-    if (price === undefined || price === null || isNaN(price)) return '0.0000';
-    if (price >= 100) return price.toFixed(2);
-    if (price >= 1) return price.toFixed(4);
-    return price.toFixed(6);
-  };
-  const formatTime = (timestamp: number) => {
-    if (!timestamp) return '--:--:--';
-    return new Date(timestamp).toLocaleTimeString();
-  };
+  const formatNumber = (n: number) => n?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00';
+  const formatPrice = (p: number) => p ? (p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toFixed(6)) : '0.0000';
+  const formatTime = (t: number) => t ? new Date(t).toLocaleTimeString() : '--:--:--';
 
+  useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    const closedTrades = trades.filter(t => t.status === 'closed' && t.profit !== null);
-    if (closedTrades.length === 0) { setWinRate(0); return; }
-    const wins = closedTrades.filter(t => (t.profit || 0) > 0).length;
-    setWinRate((wins / closedTrades.length) * 100);
+    const closed = trades.filter(t => t.status === 'closed' && t.profit !== null);
+    setWinRate(closed.length ? (closed.filter(t => (t.profit || 0) > 0).length / closed.length) * 100 : 0);
   }, [trades]);
 
   // ==================== ИНДИКАТОРЫ ====================
-  const calculateRSI = (prices: number[], period: number = 14): number => {
-    if (!prices || prices.length < period + 1) return 50;
-    let gains = 0, losses = 0;
-    for (let i = prices.length - period; i < prices.length; i++) {
-      const diff = prices[i] - prices[i - 1];
-      if (diff >= 0) gains += diff; else losses -= diff;
+  const calcRSI = (p: number[], per = 14) => {
+    if (!p || p.length < per + 1) return 50;
+    let g = 0, l = 0;
+    for (let i = p.length - per; i < p.length; i++) { const d = p[i] - p[i - 1]; if (d >= 0) g += d; else l -= d; }
+    if (l === 0) return 100;
+    return Math.round(100 - 100 / (1 + (g / per) / (l / per)));
+  };
+  const calcEMA = (p: number[], per: number) => {
+    if (!p || p.length < per) return p?.[p.length - 1] || 0;
+    const k = 2 / (per + 1); let e = p[0];
+    for (let i = 1; i < p.length; i++) e = (p[i] - e) * k + e;
+    return e;
+  };
+  const calcMACD = (p: number[]) => p?.length >= 35 ? parseFloat((calcEMA(p, 12) - calcEMA(p, 26)).toFixed(4)) : 0;
+  const calcADX = (p: number[], per = 14) => {
+    if (!p || p.length < per * 2) return 0;
+    const tr: number[] = [], pDM: number[] = [], mDM: number[] = [];
+    for (let i = 1; i < p.length; i++) {
+      const h = Math.max(p[i], p[i - 1]), l = Math.min(p[i], p[i - 1]);
+      const pH = Math.max(p[i - 1], p[i - 2] || p[i - 1]), pL = Math.min(p[i - 1], p[i - 2] || p[i - 1]);
+      tr.push(Math.max(h - l, Math.abs(h - p[i - 1]), Math.abs(l - p[i - 1])));
+      pDM.push(h - pH > 0 && h - pH > pL - l ? h - pH : 0);
+      mDM.push(pL - l > 0 && pL - l > h - pH ? pL - l : 0);
     }
-    const avgGain = gains / period, avgLoss = losses / period;
-    if (avgLoss === 0) return 100;
-    return Math.round(100 - (100 / (1 + avgGain / avgLoss)));
+    const smooth = (d: number[]) => { const k = 2 / (per + 1); let e = d[0]; for (let i = 1; i < d.length; i++) e = d[i] * k + e * (1 - k); return e; };
+    const atr = smooth(tr); if (!atr) return 0;
+    return Math.abs(smooth(pDM) - smooth(mDM)) / (smooth(pDM) + smooth(mDM)) * 100;
+  };
+  const calcATR = (p: number[], per = 14) => {
+    if (!p || p.length < per + 1) return (p?.[p.length - 1] || 1) * 0.01;
+    const tr = p.slice(1).map((v, i) => Math.abs(v - p[i]));
+    let atr = tr.slice(0, per).reduce((a, b) => a + b, 0) / per;
+    for (let i = per; i < tr.length; i++) atr = (atr * (per - 1) + tr[i]) / per;
+    return Math.max(atr, p[p.length - 1] * 0.01);
   };
 
-  const calculateEMA = (prices: number[], period: number): number => {
-    if (!prices || prices.length < period) return prices?.[prices.length - 1] || 0;
-    const multiplier = 2 / (period + 1);
-    let ema = prices[0];
-    for (let i = 1; i < prices.length; i++) ema = (prices[i] - ema) * multiplier + ema;
-    return ema;
+  // Bollinger Bands
+  const calcBollinger = (p: number[], per = 20, mult = 2) => {
+    if (!p || p.length < per) return { upper: 0, middle: 0, lower: 0, position: 'middle' as const };
+    const slice = p.slice(-per);
+    const ma = slice.reduce((a, b) => a + b, 0) / per;
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b - ma) ** 2, 0) / per);
+    const upper = ma + mult * std, lower = ma - mult * std;
+    const price = p[p.length - 1];
+    const position = price >= upper ? 'upper' : price <= lower ? 'lower' : 'middle';
+    return { upper, middle: ma, lower, position: position as 'upper' | 'middle' | 'lower' };
   };
 
-  const calculateMACD = (prices: number[]): number => {
-    if (!prices || prices.length < 35) return 0;
-    return parseFloat((calculateEMA(prices, 12) - calculateEMA(prices, 26)).toFixed(4));
+  // Stochastic
+  const calcStochastic = (p: number[], per = 14, kPer = 3) => {
+    if (!p || p.length < per) return { k: 50, d: 50 };
+    const slice = p.slice(-per);
+    const h = Math.max(...slice), l = Math.min(...slice);
+    const k = h === l ? 50 : ((p[p.length - 1] - l) / (h - l)) * 100;
+    return { k: Math.round(k * 10) / 10, d: Math.round(k * 10) / 10 };
   };
 
-  const calculateADX = (prices: number[], period: number = 14): number => {
-    if (!prices || prices.length < period * 2) return 0;
-    const tr: number[] = [], plusDM: number[] = [], minusDM: number[] = [];
-    for (let i = 1; i < prices.length; i++) {
-      const h = Math.max(prices[i], prices[i - 1]), l = Math.min(prices[i], prices[i - 1]);
-      const pH = Math.max(prices[i - 1], prices[i - 2] || prices[i - 1]);
-      const pL = Math.min(prices[i - 1], prices[i - 2] || prices[i - 1]);
-      const pC = prices[i - 1];
-      tr.push(Math.max(h - l, Math.abs(h - pC), Math.abs(l - pC)));
-      const up = h - pH, down = pL - l;
-      plusDM.push(up > down && up > 0 ? up : 0);
-      minusDM.push(down > up && down > 0 ? down : 0);
-    }
-    const smooth = (d: number[]): number => {
-      const k = 2 / (period + 1); let e = d[0];
-      for (let i = 1; i < d.length; i++) e = d[i] * k + e * (1 - k);
-      return e;
-    };
-    const atrVal = smooth(tr);
-    if (atrVal === 0) return 0;
-    return Math.abs(smooth(plusDM) - smooth(minusDM)) / (smooth(plusDM) + smooth(minusDM)) * 100;
-  };
-
-  const calculateATR = (prices: number[], period: number = 14): number => {
-    if (!prices || prices.length < period + 1) return (prices?.[prices.length - 1] || 1) * 0.01;
-    const tr: number[] = [];
-    for (let i = 1; i < prices.length; i++) tr.push(Math.abs(prices[i] - prices[i - 1]));
-    let atr = tr.slice(0, period).reduce((a, b) => a + b, 0) / period;
-    for (let i = period; i < tr.length; i++) atr = (atr * (period - 1) + tr[i]) / period;
-    return Math.max(atr, prices[prices.length - 1] * 0.01);
-  };
-
-  const detectCandlePatterns = (candles: Candle[]): { pattern: string; action: 'buy' | 'sell' | null } => {
+  // Свечи
+  const detectCandles = (candles: Candle[]): { pattern: string; action: 'buy' | 'sell' | null } => {
     if (!candles || candles.length < 3) return { pattern: '', action: null };
     const last = candles[candles.length - 1], prev = candles[candles.length - 2];
     const body = Math.abs(last.close - last.open);
-    const upperWick = last.high - Math.max(last.open, last.close);
-    const lowerWick = Math.min(last.open, last.close) - last.low;
-    const totalRange = last.high - last.low || 0.0001;
-    const prevBody = Math.abs(prev.close - prev.open);
-    if (lowerWick > body * 2 && upperWick < body * 0.5 && body > 0 && body / totalRange < 0.4) return { pattern: '🔨 Молот', action: 'buy' };
-    if (upperWick > body * 2 && lowerWick < body * 0.5 && body > 0 && body / totalRange < 0.4 && prev.close < prev.open) return { pattern: '🔄 Перевёрнутый молот', action: 'buy' };
-    if (upperWick > body * 2 && lowerWick < body * 0.5 && body > 0 && body / totalRange < 0.4 && prev.close > prev.open) return { pattern: '⭐ Падающая звезда', action: 'sell' };
-    if (last.close > last.open && prev.close < prev.open && last.open < prev.close && last.close > prev.open && body > prevBody * 1.2) return { pattern: '📈 Бычье поглощение', action: 'buy' };
-    if (last.close < last.open && prev.close > prev.open && last.open > prev.close && last.close < prev.open && body > prevBody * 1.2) return { pattern: '📉 Медвежье поглощение', action: 'sell' };
-    if (body / totalRange < 0.1) return { pattern: '➖ Доджи', action: null };
+    const upW = last.high - Math.max(last.open, last.close), loW = Math.min(last.open, last.close) - last.low;
+    const tr = last.high - last.low || 0.0001;
+    if (loW > body * 2 && upW < body * 0.5 && body / tr < 0.4) return { pattern: '🔨 Молот', action: 'buy' };
+    if (upW > body * 2 && loW < body * 0.5 && body / tr < 0.4 && prev.close < prev.open) return { pattern: '🔄 Перевёрнутый молот', action: 'buy' };
+    if (upW > body * 2 && loW < body * 0.5 && body / tr < 0.4 && prev.close > prev.open) return { pattern: '⭐ Падающая звезда', action: 'sell' };
+    if (last.close > last.open && prev.close < prev.open && last.open < prev.close && last.close > prev.open && body > Math.abs(prev.close - prev.open) * 1.2) return { pattern: '📈 Бычье поглощение', action: 'buy' };
+    if (last.close < last.open && prev.close > prev.open && last.open > prev.close && last.close < prev.open && body > Math.abs(prev.close - prev.open) * 1.2) return { pattern: '📉 Медвежье поглощение', action: 'sell' };
+    if (body / tr < 0.1) return { pattern: '➖ Доджи', action: null };
     return { pattern: '', action: null };
   };
 
-  // ==================== ГЕНЕРАЦИЯ СИГНАЛОВ ====================
-  const generateSignal = (symbol: string, currentPrice: number): Signal | null => {
-    if (!currentPrice || currentPrice <= 0) return null;
-    const history = priceHistoryRef.current.get(symbol);
-    if (!history || history.length < 50) return null;
-    const lastSignal = lastSignalTimeForSymbol.current.get(symbol);
-    if (lastSignal && Date.now() - lastSignal < COOLDOWN_MS) return null;
+  // ==================== СИГНАЛЫ ====================
+  const generateSignal = (symbol: string, price: number): Signal | null => {
+    if (!price || price <= 0) return null;
+    const h = priceHistoryRef.current.get(symbol);
+    if (!h || h.length < 50) return null;
+    if (lastSignalTimeForSymbol.current.get(symbol) && Date.now() - lastSignalTimeForSymbol.current.get(symbol)! < COOLDOWN_MS) return null;
 
-    const rsi = calculateRSI(history);
-    const macd = calculateMACD(history);
-    const ema20 = calculateEMA(history, 20);
-    const ema50 = calculateEMA(history, 50);
-    const adx = calculateADX(history);
-    const atr = calculateATR(history);
-
+    const rsi = calcRSI(h), macd = calcMACD(h), ema20 = calcEMA(h, 20), ema50 = calcEMA(h, 50);
+    const adx = calcADX(h), atr = calcATR(h);
     if (adx < ADX_MIN) return null;
 
-    // Volume фильтр
-    if (useVolumeFilter) {
-      const volumes = volumeHistoryRef.current.get(symbol) || [];
-      if (volumes.length >= 20) {
-        const avgVolume = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-        const currentVolume = volumes[volumes.length - 1];
-        if (currentVolume < avgVolume * VOLUME_SPIKE_MULTIPLIER) {
-          return null;
-        }
-      }
+    // Volume
+    if (volumeRef.current) {
+      const vols = volumeHistoryRef.current.get(symbol) || [];
+      if (vols.length >= 20 && vols[vols.length - 1] < vols.slice(-20).reduce((a, b) => a + b, 0) / 20 * VOLUME_SPIKE_MULTIPLIER) return null;
     }
 
+    // Bollinger
+    if (bollingerRef.current) {
+      const bb = calcBollinger(h);
+      if (bb.position === 'middle') return null;
+    }
+
+    // Stochastic
+    if (stochRef.current) {
+      const stoch = calcStochastic(h);
+      if (stoch.k > 20 && stoch.k < 80) return null;
+    }
+
+    // Candles
     const candles = candleHistoryRef.current.get(symbol) || [];
-    const candleResult = detectCandlePatterns(candles);
-    if (useCandlePatterns && !candleResult.pattern) return null;
-    if (useCandlePatterns && candleResult.action === null) return null;
+    const candleRes = detectCandles(candles);
+    if (candleRef.current && (!candleRes.pattern || !candleRes.action)) return null;
 
-    let action: 'buy' | 'sell' | null = null;
-    let reasons: string[] = [];
-    const buyIndicator = rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50;
-    const sellIndicator = rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50;
+    const buy = rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50;
+    const sell = rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50;
 
-    if (useCandlePatterns) {
-      if (buyIndicator && candleResult.action === 'buy') { action = 'buy'; reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`, candleResult.pattern]; }
-      else if (sellIndicator && candleResult.action === 'sell') { action = 'sell'; reasons = [`RSI ${rsi} > ${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`, candleResult.pattern]; }
-    } else {
-      if (buyIndicator) { action = 'buy'; reasons = [`RSI ${rsi} < ${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`]; }
-      else if (sellIndicator) { action = 'sell'; reasons = [`RSI ${rsi} > ${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`]; }
+    let action: 'buy' | 'sell' | null = null, reasons: string[] = [];
+
+    // Bollinger filter
+    const bb = calcBollinger(h);
+    const stoch = calcStochastic(h);
+
+    if (buy) {
+      if (bollingerRef.current && bb.position !== 'lower') return null;
+      if (stochRef.current && stoch.k > 20) return null;
+      if (candleRef.current && candleRes.action !== 'buy') return null;
+      action = 'buy';
+      reasons = [`RSI ${rsi}<${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
+      if (bollingerRef.current) reasons.push(`BB:${bb.position}`);
+      if (stochRef.current) reasons.push(`Stoch:${stoch.k}`);
+      if (candleRef.current) reasons.push(candleRes.pattern);
+    } else if (sell) {
+      if (bollingerRef.current && bb.position !== 'upper') return null;
+      if (stochRef.current && stoch.k < 80) return null;
+      if (candleRef.current && candleRes.action !== 'sell') return null;
+      action = 'sell';
+      reasons = [`RSI ${rsi}>${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`];
+      if (bollingerRef.current) reasons.push(`BB:${bb.position}`);
+      if (stochRef.current) reasons.push(`Stoch:${stoch.k}`);
+      if (candleRef.current) reasons.push(candleRes.pattern);
     }
     if (!action) return null;
 
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
-    return {
-      id: `${symbol}_${Date.now()}_${Math.random()}`, symbol, action, price: currentPrice,
-      timestamp: Date.now(), strength: ((rsi < 20 || rsi > 80) ? 3 : (rsi < 25 || rsi > 75) ? 2 : 1) as 1 | 2 | 3,
-      rsi, macd, ema20, ema50, adx, atr, reasons, candlePattern: candleResult.pattern || undefined
-    };
+    return { id: `${symbol}_${Date.now()}`, symbol, action, price, timestamp: Date.now(), strength: (rsi < 20 || rsi > 80 ? 3 : rsi < 25 || rsi > 75 ? 2 : 1) as 1 | 2 | 3, rsi, macd, ema20, ema50, adx, atr, reasons, candlePattern: candleRes.pattern || undefined };
   };
 
   // ==================== ТОРГОВЛЯ ====================
-  const executeTrade = useCallback((signal: Signal) => {
-    if (!autoTradeRef.current || !signal || !signal.price) return;
-    const currentTrades = tradesRef.current;
-    if (currentTrades.find(t => t.symbol === signal.symbol && t.status === 'open')) { console.log(`⏭️ ${signal.symbol} уже в позиции`); return; }
-    const lastTrade = lastTradeTimeForSymbol.current.get(signal.symbol);
-    if (lastTrade && Date.now() - lastTrade < COOLDOWN_MS) { console.log(`⏳ Кулдаун сделки для ${signal.symbol}`); return; }
-
-    const riskAmount = balanceRef.current * (riskPercentRef.current / 100);
-    if (riskAmount <= 0 || riskAmount > balanceRef.current) { console.log(`⏸️ Недостаточно средств`); return; }
-    const quantity = Math.floor((riskAmount / signal.price) * 1000) / 1000;
-    if (quantity <= 0) return;
-
-    const tpPrice = signal.action === 'buy' ? signal.price * (1 + TP_PERCENT / 100) : signal.price * (1 - TP_PERCENT / 100);
-    const slPrice = signal.action === 'buy' ? signal.price * (1 - SL_PERCENT / 100) : signal.price * (1 + SL_PERCENT / 100);
-
-    lastTradeTimeForSymbol.current.set(signal.symbol, Date.now());
-    setBalance(prev => prev - riskAmount);
-    setTrades(prev => [...prev, {
-      id: `${signal.symbol}_${Date.now()}_${Math.random()}`, symbol: signal.symbol, side: signal.action,
-      entryPrice: signal.price, exitPrice: null, quantity, invested: riskAmount,
-      entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null, status: 'open' as const,
-      tpPrice: Math.round(tpPrice * 10000) / 10000, slPrice: Math.round(slPrice * 10000) / 10000, breakevenActivated: false
-    }]);
-    console.log(`✅ СДЕЛКА: ${signal.action.toUpperCase()} ${signal.symbol} | Цена: $${signal.price.toFixed(4)} | TP: $${tpPrice.toFixed(4)} | SL: $${slPrice.toFixed(4)}`);
+  const executeTrade = useCallback((s: Signal) => {
+    if (!autoTradeRef.current || !s?.price) return;
+    if (tradesRef.current.find(t => t.symbol === s.symbol && t.status === 'open')) return;
+    if (lastTradeTimeForSymbol.current.get(s.symbol) && Date.now() - lastTradeTimeForSymbol.current.get(s.symbol)! < COOLDOWN_MS) return;
+    const amt = balanceRef.current * riskPercentRef.current / 100;
+    if (amt <= 0 || amt > balanceRef.current) return;
+    const qty = Math.floor(amt / s.price * 1000) / 1000;
+    if (!qty) return;
+    const tp = s.action === 'buy' ? s.price * (1 + TP_PERCENT / 100) : s.price * (1 - TP_PERCENT / 100);
+    const sl = s.action === 'buy' ? s.price * (1 - SL_PERCENT / 100) : s.price * (1 + SL_PERCENT / 100);
+    lastTradeTimeForSymbol.current.set(s.symbol, Date.now());
+    setBalance(p => p - amt);
+    setTrades(p => [...p, { id: `${s.symbol}_${Date.now()}`, symbol: s.symbol, side: s.action, entryPrice: s.price, exitPrice: null, quantity: qty, invested: amt, entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null, status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4), breakevenActivated: false }]);
   }, [TP_PERCENT, SL_PERCENT, COOLDOWN_MS]);
 
-  const closeTrade = useCallback((trade: Trade, currentPrice: number, reason: 'TP' | 'SL' | 'manual') => {
-    if (!trade || !currentPrice) return;
-    const investedAmount = trade.entryPrice * trade.quantity;
-    const profit = trade.side === 'buy' ? (currentPrice - trade.entryPrice) * trade.quantity : (trade.entryPrice - currentPrice) * trade.quantity;
-    const profitPercent = trade.side === 'buy' ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 : ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
-    setBalance(prev => prev + investedAmount + profit);
-    setTotalProfit(prev => prev + profit);
-    setTrades(prev => prev.map(t => t.id === trade.id ? { ...t, status: 'closed' as const, exitPrice: currentPrice, exitTime: Date.now(), profit, profitPercent } : t));
-    console.log(`📉 ЗАКРЫТА: ${trade.symbol} | ${reason} | PnL: ${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`);
+  const closeTrade = useCallback((t: Trade, cp: number, reason: string) => {
+    if (!t || !cp) return;
+    const inv = t.entryPrice * t.quantity;
+    const prof = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
+    const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
+    setBalance(p => p + inv + prof);
+    setTotalProfit(p => p + prof);
+    setTrades(p => p.map(x => x.id === t.id ? { ...x, status: 'closed' as const, exitPrice: cp, exitTime: Date.now(), profit: prof, profitPercent: pPct } : x));
   }, []);
 
   useEffect(() => {
-    const checkTPSL = () => {
-      for (const trade of trades.filter(t => t.status === 'open')) {
-        const currentPrice = prices.get(trade.symbol);
-        if (!currentPrice) continue;
-        if ((trade.side === 'buy' && currentPrice >= trade.tpPrice) || (trade.side === 'sell' && currentPrice <= trade.tpPrice)) { closeTrade(trade, currentPrice, 'TP'); continue; }
-        if ((trade.side === 'buy' && currentPrice <= trade.slPrice) || (trade.side === 'sell' && currentPrice >= trade.slPrice)) { closeTrade(trade, currentPrice, 'SL'); continue; }
-        if (!trade.breakevenActivated) {
-          const profitPercent = trade.side === 'buy' ? ((currentPrice - trade.entryPrice) / trade.entryPrice) * 100 : ((trade.entryPrice - currentPrice) / trade.entryPrice) * 100;
-          if (profitPercent >= BREAKEVEN_TRIGGER) {
-            setTrades(prev => prev.map(t => t.id === trade.id ? { ...t, slPrice: t.entryPrice, breakevenActivated: true } : t));
-            console.log(`🔒 Безубыток: ${trade.symbol}`);
-          }
+    const check = () => {
+      for (const t of trades.filter(t => t.status === 'open')) {
+        const cp = prices.get(t.symbol); if (!cp) continue;
+        if ((t.side === 'buy' && cp >= t.tpPrice) || (t.side === 'sell' && cp <= t.tpPrice)) { closeTrade(t, cp, 'TP'); continue; }
+        if ((t.side === 'buy' && cp <= t.slPrice) || (t.side === 'sell' && cp >= t.slPrice)) { closeTrade(t, cp, 'SL'); continue; }
+        if (!t.breakevenActivated) {
+          const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
+          if (pPct >= BREAKEVEN_TRIGGER) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
         }
       }
     };
-    const interval = setInterval(checkTPSL, 3000);
-    return () => clearInterval(interval);
+    const i = setInterval(check, 3000); return () => clearInterval(i);
   }, [trades, prices, closeTrade, BREAKEVEN_TRIGGER]);
 
   const updatePrice = useCallback((data: PriceData) => {
-    if (!data || !data.symbol || !data.price || data.price <= 0) return;
+    if (!data?.symbol || !data.price || data.price <= 0) return;
     const { symbol, price, volume24h } = data;
-    
-    setPrices(prev => new Map(prev).set(symbol, price));
-    let history = priceHistoryRef.current.get(symbol) || [];
-    history.push(price);
-    if (history.length > 200) history = history.slice(-200);
-    priceHistoryRef.current.set(symbol, history);
-
-    if (volume24h) {
-      let volumes = volumeHistoryRef.current.get(symbol) || [];
-      volumes.push(volume24h);
-      if (volumes.length > 50) volumes = volumes.slice(-50);
-      volumeHistoryRef.current.set(symbol, volumes);
-    }
-
-    let candles = candleHistoryRef.current.get(symbol) || [];
-    if (candles.length === 0 || candles[candles.length - 1].close !== price) {
-      candles.push({ open: candles.length > 0 ? candles[candles.length - 1].close : price, high: price, low: price, close: price });
-      if (candles.length > 100) candles = candles.slice(-100);
-    } else {
-      const lc = candles[candles.length - 1];
-      lc.high = Math.max(lc.high, price); lc.low = Math.min(lc.low, price); lc.close = price;
-    }
-    candleHistoryRef.current.set(symbol, candles);
-
-    const signal = generateSignal(symbol, price);
-    if (signal) {
-      setSignals(prev => [signal, ...prev].slice(0, 100));
-      if (autoTradeRef.current) executeTrade(signal);
-    }
+    setPrices(p => new Map(p).set(symbol, price));
+    let h = priceHistoryRef.current.get(symbol) || []; h.push(price); if (h.length > 200) h = h.slice(-200);
+    priceHistoryRef.current.set(symbol, h);
+    if (volume24h) { let v = volumeHistoryRef.current.get(symbol) || []; v.push(volume24h); if (v.length > 50) v = v.slice(-50); volumeHistoryRef.current.set(symbol, v); }
+    let c = candleHistoryRef.current.get(symbol) || [];
+    if (!c.length || c[c.length - 1].close !== price) {
+      c.push({ open: c.length ? c[c.length - 1].close : price, high: price, low: price, close: price });
+      if (c.length > 100) c = c.slice(-100);
+    } else { const lc = c[c.length - 1]; lc.high = Math.max(lc.high, price); lc.low = Math.min(lc.low, price); lc.close = price; }
+    candleHistoryRef.current.set(symbol, c);
+    const sig = generateSignal(symbol, price);
+    if (sig) { setSignals(p => [sig, ...p].slice(0, 100)); if (autoTradeRef.current) executeTrade(sig); }
   }, [executeTrade]);
 
   useEffect(() => {
-    const wsManager = createWebSocketManager();
-    wsRef.current = wsManager;
-    wsManager.subscribe(SYMBOLS, (data: PriceData) => {
-      if (data?.symbol && data.price) {
-        if (!connectedRef.current.has(data.symbol)) { connectedRef.current.add(data.symbol); setWsConnectedCount(prev => prev + 1); }
+    const w = createWebSocketManager(); wsRef.current = w;
+    w.subscribe(SYMBOLS, (d: PriceData) => {
+      if (d?.symbol && d.price) {
+        if (!connectedRef.current.has(d.symbol)) { connectedRef.current.add(d.symbol); setWsConnectedCount(p => p + 1); }
         if (!wsConnected) setWsConnected(true);
-        updatePrice(data);
+        updatePrice(d);
       }
     });
-    return () => wsManager.disconnect();
+    return () => w.disconnect();
   }, [updatePrice, wsConnected]);
 
-  const closedTrades = trades.filter(t => t.status === 'closed');
   const openTrades = trades.filter(t => t.status === 'open');
-  const clearHistory = () => { setTrades([]); setSignals([]); setTotalProfit(0); setEquityHistory([{ time: Date.now(), value: balance }]); lastTradeTimeForSymbol.current.clear(); lastSignalTimeForSymbol.current.clear(); };
-  const resetBalance = () => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); setEquityHistory([{ time: Date.now(), value: 10000 }]); lastTradeTimeForSymbol.current.clear(); lastSignalTimeForSymbol.current.clear(); };
-  const closeAllPositions = () => openTrades.forEach(t => closeTrade(t, prices.get(t.symbol) || t.entryPrice, 'manual'));
-  const openBybit = (s: string) => window.open(`https://www.bybit.com/trade/spot/${s.split('/')[0]}/USDT`, '_blank');
-
-  const EquityChart: React.FC = () => {
-    if (equityHistory.length < 2) return null;
-    const w = 180, h = 36, p = 2;
-    const min = Math.min(...equityHistory.map(d => d.value)), max = Math.max(...equityHistory.map(d => d.value)), range = max - min || 1;
-    const points = equityHistory.map((d, i) => `${p + (i / (equityHistory.length - 1)) * (w - p * 2)},${p + (h - p * 2) - ((d.value - min) / range) * (h - p * 2)}`).join(' ');
-    const isUp = equityHistory[equityHistory.length - 1].value >= equityHistory[0].value;
-    return (
-      <svg width={w} height={h} className="opacity-90">
-        <polyline points={points} fill="none" stroke={isUp ? '#22c55e' : '#ef4444'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={p + (w - p * 2)} cy={p + (h - p * 2) - ((equityHistory[equityHistory.length - 1].value - min) / range) * (h - p * 2)} r="2" fill={isUp ? '#22c55e' : '#ef4444'} />
-      </svg>
-    );
-  };
+  const closedTrades = trades.filter(t => t.status === 'closed');
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gradient-to-br from-gray-900 via-red-900/30 to-black' : 'bg-gradient-to-br from-gray-100 via-red-100/30 to-white'}`}>
@@ -454,36 +380,32 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <div className="text-2xl">{aggressiveMode ? '⚡' : '💀'}</div>
               <div>
-                <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2 {aggressiveMode && '⚡AGGRESSIVE'}</h1>
-                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>{SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | V:{useVolumeFilter ? '✅' : '❌'} C:{useCandlePatterns ? '✅' : '❌'}</p>
+                <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2{aggressiveMode && '⚡'}</h1>
+                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>{SYMBOLS.length} акт. | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | V:{useVolumeFilter ? '✅' : '❌'} B:{useBollinger ? '✅' : '❌'} S:{useStochastic ? '✅' : '❌'} C:{useCandlePatterns ? '✅' : '❌'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="hidden lg:block"><EquityChart /></div>
               <div className="text-right"><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Баланс</div><div className="text-lg font-bold text-green-400">${formatNumber(balance)}</div></div>
               <div className="text-right"><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>PnL</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
               <div className="text-right"><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>WR</div><div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
-              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{wsConnectedCount}/{SYMBOLS.length}</span></div>
-              <div className={`text-sm font-mono ${darkMode ? 'text-gray-500' : 'text-gray-700'}`}>{currentTime.toLocaleTimeString()}</div>
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-lg text-lg ${darkMode ? 'bg-gray-800 text-yellow-400' : 'bg-gray-200 text-gray-700'}`}>{darkMode ? '☀️' : '🌙'}</button>
+              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs">{wsConnectedCount}/{SYMBOLS.length}</span></div>
+              <span className="text-sm">{currentTime.toLocaleTimeString()}</span>
+              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-yellow-400' : 'bg-gray-200 text-gray-700'}`}>{darkMode ? '☀️' : '🌙'}</button>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="relative z-10 container mx-auto px-4 py-4">
+      <div className="container mx-auto px-4 py-4">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {[{ l: 'Сигналов', v: signals.length, c: 'red' }, { l: 'BUY', v: signals.filter(s => s.action === 'buy').length, c: 'green' }, { l: 'SELL', v: signals.filter(s => s.action === 'sell').length, c: 'red' }, { l: 'Открыто', v: openTrades.length, c: 'yellow' }, { l: 'Закрыто', v: closedTrades.length, c: 'blue' }].map((s, i) => (
-            <div key={i} className={`rounded-xl p-3 border border-${s.c}-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}>
-              <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{s.l}</div>
-              <div className={`text-2xl font-bold text-${s.c}-400`}>{s.v}</div>
-            </div>
+            <div key={i} className={`rounded-xl p-3 border border-${s.c}-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{s.l}</div><div className={`text-2xl font-bold text-${s.c}-400`}>{s.v}</div></div>
           ))}
         </div>
 
         <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto">
-          {[{ k: 'signals', i: '🎯', l: 'Сигналы' }, { k: 'trading', i: '📈', l: 'График' }, { k: 'positions', i: '📊', l: 'Позиции' }, { k: 'history', i: '📜', l: 'История' }, { k: 'news', i: '📰', l: 'Новости' }, { k: 'topmovers', i: '📊', l: 'Топ монет' }, { k: 'watchlist', i: '⭐', l: 'Избранное' }, { k: 'autotrade', i: '🤖', l: 'Автоторговля' }].map(t => (
-            <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm font-medium rounded-t-lg ${activeTab === t.k ? 'bg-red-600 text-white' : darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t.i} {t.l}</button>
+          {[{ k: 'signals', i: '🎯', l: 'Сигналы' }, { k: 'trading', i: '📈', l: 'График' }, { k: 'autotrade', i: '🤖', l: 'Автоторговля' }, { k: 'news', i: '📰', l: 'Новости' }, { k: 'history', i: '📜', l: 'История' }].map(t => (
+            <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm rounded-t-lg ${activeTab === t.k ? 'bg-red-600 text-white' : darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t.i} {t.l}</button>
           ))}
         </div>
 
@@ -495,51 +417,42 @@ const App: React.FC = () => {
         )}
         {activeTab === 'history' && <SignalHistory />}
         {activeTab === 'news' && <News />}
-        {activeTab === 'topmovers' && <TopMovers />}
-        {activeTab === 'watchlist' && <Watchlist />}
 
         {activeTab === 'autotrade' && (
           <div className="space-y-4">
             <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
-              <div className="flex flex-wrap gap-3 items-center">
-                <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2 rounded-lg font-bold ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 ОСТАНОВИТЬ' : '🟢 ЗАПУСТИТЬ'}</button>
-                <button onClick={() => { setAggressiveMode(!aggressiveMode); setRiskPercent(!aggressiveMode ? 10 : 5); }} className={`px-4 py-2 rounded-lg font-bold text-sm ${aggressiveMode ? 'bg-orange-600 animate-pulse' : 'bg-gray-600'}`}>{aggressiveMode ? '⚡ АГРЕССИВНЫЙ' : '🐢 ОБЫЧНЫЙ'}</button>
-                <button onClick={() => setUseCandlePatterns(!useCandlePatterns)} className={`px-4 py-2 rounded-lg font-bold text-sm ${useCandlePatterns ? 'bg-purple-600' : 'bg-gray-600'}`}>{useCandlePatterns ? '🕯️ СВЕЧИ: ВКЛ' : '🕯️ СВЕЧИ: ВЫКЛ'}</button>
-                <button onClick={() => setUseVolumeFilter(!useVolumeFilter)} className={`px-4 py-2 rounded-lg font-bold text-sm ${useVolumeFilter ? 'bg-blue-600' : 'bg-gray-600'}`}>{useVolumeFilter ? '📊 ОБЪЁМ: ВКЛ' : '📊 ОБЪЁМ: ВЫКЛ'}</button>
-                <button onClick={resetBalance} className="px-4 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄 Сбросить</button>
-                {openTrades.length > 0 && <button onClick={closeAllPositions} className="px-4 py-2 bg-red-700/80 rounded-lg text-sm">🔒 ЗАКРЫТЬ ВСЕ ({openTrades.length})</button>}
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => setAutoTrade(!autoTrade)} className={`px-4 py-2 rounded-lg font-bold ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
+                <button onClick={() => { setAggressiveMode(!aggressiveMode); setRiskPercent(!aggressiveMode ? 10 : 5); }} className={`px-3 py-2 rounded-lg text-sm font-bold ${aggressiveMode ? 'bg-orange-600 animate-pulse' : 'bg-gray-600'}`}>{aggressiveMode ? '⚡АГРО' : '🐢НОРМ'}</button>
+                <button onClick={() => setUseVolumeFilter(!useVolumeFilter)} className={`px-3 py-2 rounded-lg text-sm ${useVolumeFilter ? 'bg-blue-600' : 'bg-gray-600'}`}>📊V</button>
+                <button onClick={() => setUseBollinger(!useBollinger)} className={`px-3 py-2 rounded-lg text-sm ${useBollinger ? 'bg-cyan-600' : 'bg-gray-600'}`}>📈BB</button>
+                <button onClick={() => setUseStochastic(!useStochastic)} className={`px-3 py-2 rounded-lg text-sm ${useStochastic ? 'bg-teal-600' : 'bg-gray-600'}`}>📉ST</button>
+                <button onClick={() => setUseCandlePatterns(!useCandlePatterns)} className={`px-3 py-2 rounded-lg text-sm ${useCandlePatterns ? 'bg-purple-600' : 'bg-gray-600'}`}>🕯️C</button>
+                <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-3 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄</button>
+                {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-3 py-2 bg-red-700/80 rounded-lg text-sm">🔒Все({openTrades.length})</button>}
               </div>
-              {autoTrade && (
-                <div className={`mt-3 p-2 rounded-lg text-center ${aggressiveMode ? 'bg-orange-500/20' : 'bg-green-500/20'}`}>
-                  <p className={`text-sm ${aggressiveMode ? 'text-orange-400' : 'text-green-400'}`}>✅ АВТОТОРГОВЛЯ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | BE +{BREAKEVEN_TRIGGER}% | V:{useVolumeFilter ? '✅' : '❌'} C:{useCandlePatterns ? '✅' : '❌'}</p>
-                </div>
-              )}
+              {autoTrade && <div className={`mt-2 p-2 rounded-lg text-center text-sm ${aggressiveMode ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>✅ АВТО | TP +{TP_PERCENT}% SL -{SL_PERCENT}% BE +{BREAKEVEN_TRIGGER}%</div>}
             </div>
             <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
-              <label className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Риск на сделку: {riskPercent}%</label>
-              <input type="range" min="1" max={aggressiveMode ? "20" : "10"} step="0.5" value={riskPercent} onChange={e => setRiskPercent(parseFloat(e.target.value))} className="w-full accent-red-500 mt-1" />
+              <label className="text-sm">Риск: {riskPercent}%</label>
+              <input type="range" min="1" max={aggressiveMode ? "20" : "10"} step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-red-500 mt-1" />
             </div>
             <div className={`rounded-xl border border-red-500/20 overflow-hidden ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
-              <div className="px-4 py-2 bg-red-950/30 border-b border-red-500/30"><h3 className="font-bold text-red-400 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length})</h3></div>
+              <div className="px-4 py-2 bg-red-950/30 border-b border-red-500/30"><h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length})</h3></div>
               <div className={`divide-y ${darkMode ? 'divide-gray-800' : 'divide-gray-200'}`}>
-                {openTrades.length === 0 ? <div className={`p-4 text-center text-sm ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>Нет открытых позиций</div> : openTrades.map(trade => {
-                  const cp = prices.get(trade.symbol) || trade.entryPrice;
-                  const pnl = trade.side === 'buy' ? (cp - trade.entryPrice) * trade.quantity : (trade.entryPrice - cp) * trade.quantity;
-                  const pnlP = trade.side === 'buy' ? ((cp - trade.entryPrice) / trade.entryPrice) * 100 : ((trade.entryPrice - cp) / trade.entryPrice) * 100;
+                {!openTrades.length ? <div className="p-4 text-center text-sm text-gray-500">Нет позиций</div> : openTrades.map(t => {
+                  const cp = prices.get(t.symbol) || t.entryPrice;
+                  const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
                   return (
-                    <div key={trade.id} className={`p-3 ${pnl >= 0 ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-sm">{trade.side === 'buy' ? '🟢' : '🔴'} {trade.symbol}{trade.breakevenActivated && <span className="ml-1 text-xs text-blue-400">🔒BE</span>}</span>
-                        <span className={`font-bold text-sm ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>{pnl >= 0 ? '+' : ''}{pnlP.toFixed(2)}%</span>
-                      </div>
+                    <div key={t.id} className={`p-3 ${pPct >= 0 ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
+                      <div className="flex justify-between text-sm font-bold"><span>{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol}{t.breakevenActivated && ' 🔒BE'}</span><span className={pPct >= 0 ? 'text-green-400' : 'text-red-400'}>{pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%</span></div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1 text-xs">
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Вход:</span><span className="text-right">${formatPrice(trade.entryPrice)}</span>
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Текущая:</span><span className="text-right">${formatPrice(cp)}</span>
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>TP:</span><span className="text-right text-green-400">${formatPrice(trade.tpPrice)}</span>
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>SL{trade.breakevenActivated ? ' (BE)' : ''}:</span><span className={`text-right ${trade.breakevenActivated ? 'text-blue-400' : 'text-red-400'}`}>${formatPrice(trade.slPrice)}</span>
-                        <span className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Время:</span><span className="text-right">{formatTime(trade.entryTime)}</span>
+                        <span>Вход:</span><span className="text-right">${formatPrice(t.entryPrice)}</span>
+                        <span>Тек:</span><span className="text-right">${formatPrice(cp)}</span>
+                        <span>TP:</span><span className="text-right text-green-400">${formatPrice(t.tpPrice)}</span>
+                        <span>SL:</span><span className={`text-right ${t.breakevenActivated ? 'text-blue-400' : 'text-red-400'}`}>${formatPrice(t.slPrice)}</span>
                       </div>
-                      <button onClick={() => closeTrade(trade, cp, 'manual')} className="mt-2 w-full bg-red-700/50 hover:bg-red-600 text-xs py-1 rounded">🔒 Закрыть</button>
+                      <button onClick={() => closeTrade(t, cp, 'manual')} className="mt-2 w-full bg-red-700/50 hover:bg-red-600 text-xs py-1 rounded">🔒 Закрыть</button>
                     </div>
                   );
                 })}
@@ -550,26 +463,18 @@ const App: React.FC = () => {
 
         {activeTab === 'signals' && (
           <div className="space-y-2">
-            {signals.length === 0 ? (
-              <div className={`rounded-xl p-8 text-center ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}><div className="text-5xl mb-3">⏳</div><div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Нет сигналов. Ожидаем RSI {'<'} {RSI_BUY_MAX} или RSI {'>'} {RSI_SELL_MIN} с ADX {'>'} {ADX_MIN}...</div></div>
-            ) : signals.filter(s => s?.price).map((signal, idx) => (
-              <div key={idx} onClick={() => openBybit(signal.symbol)} className={`rounded-lg p-3 border border-red-500/30 cursor-pointer ${darkMode ? 'bg-gradient-to-r from-black/60 to-red-900/20' : 'bg-gradient-to-r from-white to-red-100/50'}`}>
-                <div className="flex justify-between items-center">
-                  <span className="font-bold">{signal.symbol}</span>
-                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${signal.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{signal.action === 'buy' ? 'BUY' : 'SELL'} @ ${formatPrice(signal.price)}</span>
-                  <span className="text-yellow-400 text-xs">{'★'.repeat(signal.strength)}{'☆'.repeat(3 - signal.strength)}</span>
+            {!signals.length ? <div className={`rounded-xl p-8 text-center ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}><div className="text-5xl mb-3">⏳</div><div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Ждём сигналы...</div></div> :
+              signals.filter(s => s?.price).map((s, i) => (
+                <div key={i} className={`rounded-lg p-3 border border-red-500/30 cursor-pointer ${darkMode ? 'bg-gradient-to-r from-black/60 to-red-900/20' : 'bg-gradient-to-r from-white to-red-100/50'}`}>
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold">{s.symbol}</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
+                    <span className="text-yellow-400 text-xs">{'★'.repeat(s.strength)}</span>
+                  </div>
+                  <div className="flex gap-1 mt-1 flex-wrap text-xs text-red-400">{(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}</div>
                 </div>
-                <div className="grid grid-cols-5 gap-1 mt-2 text-xs">
-                  <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>RSI: {signal.rsi}</div>
-                  <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>ADX: {signal.adx?.toFixed(0) || '--'}</div>
-                  <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>MACD: {signal.macd?.toFixed(4) || '--'}</div>
-                  <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>EMA: {Math.round(signal.ema20)}</div>
-                  <div className={`rounded p-1 text-center ${darkMode ? 'bg-black/50' : 'bg-gray-100'}`}>Сила: {signal.strength}/3</div>
-                </div>
-                <div className="mt-1 text-xs text-red-400 flex gap-1 flex-wrap">{(signal.reasons || []).map((r, i) => <span key={i} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}</div>
-                {signal.candlePattern && <div className="mt-1 text-xs text-purple-400">🕯️ {signal.candlePattern}</div>}
-              </div>
-            ))}
+              ))
+            }
           </div>
         )}
       </div>
