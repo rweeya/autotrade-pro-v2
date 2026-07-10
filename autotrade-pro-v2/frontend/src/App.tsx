@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import TradingChart from './components/TradingChart';
 import SignalHistory from './components/SignalHistory';
 import News from './components/News';
-import { createWebSocketManager, PriceData } from './services/websocket';
+import { createPriceManager, PriceData } from './services/api';
 
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT',
@@ -30,9 +30,7 @@ interface Signal {
   rsi: number;
   stochK: number;
   macd: number;
-  ema20: number;
   adx: number;
-  atr: number;
   reasons: string[];
 }
 
@@ -54,6 +52,8 @@ interface Trade {
   breakevenActivated: boolean;
 }
 
+const MAX_POSITIONS = 5;
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('autotrade');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
@@ -63,26 +63,23 @@ const App: React.FC = () => {
   const [autoTrade, setAutoTrade] = useState(false);
   const [riskPercent, setRiskPercent] = useState(() => {
     const saved = localStorage.getItem('riskPercent');
-    return saved ? parseFloat(saved) : 5;
+    return saved ? parseFloat(saved) : 3;
   });
   const [aggressiveMode, setAggressiveMode] = useState(() => localStorage.getItem('aggressiveMode') === 'true');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [wsConnected, setWsConnected] = useState(false);
   const [wsConnectedCount, setWsConnectedCount] = useState(0);
   const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
 
-  const TP_PERCENT = aggressiveMode ? 2.5 : 1.8;
-  const SL_PERCENT = aggressiveMode ? 1.0 : 0.7;
-  const RSI_BUY_MAX = aggressiveMode ? 22 : 28;
-  const RSI_SELL_MIN = aggressiveMode ? 78 : 72;
-  const STOCH_BUY_MAX = aggressiveMode ? 12 : 18;
-  const STOCH_SELL_MIN = aggressiveMode ? 88 : 82;
-  const ADX_MIN = aggressiveMode ? 30 : 25;
-  const ATR_MIN_PERCENT = 0.25;
-  const COOLDOWN_MS = aggressiveMode ? 45000 : 90000;
+  const TP_PERCENT = aggressiveMode ? 2.5 : 2.0;
+  const SL_PERCENT = aggressiveMode ? 0.5 : 0.4;
+  const RSI_BUY_MAX = aggressiveMode ? 18 : 22;
+  const RSI_SELL_MIN = aggressiveMode ? 82 : 78;
+  const STOCH_BUY_MAX = aggressiveMode ? 8 : 12;
+  const STOCH_SELL_MIN = aggressiveMode ? 92 : 88;
+  const ADX_MIN = aggressiveMode ? 35 : 30;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsRef = useRef<any>(null);
@@ -98,7 +95,6 @@ const App: React.FC = () => {
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
-
   useEffect(() => { localStorage.setItem('aggressiveMode', aggressiveMode.toString()); }, [aggressiveMode]);
   useEffect(() => { localStorage.setItem('riskPercent', riskPercent.toString()); }, [riskPercent]);
 
@@ -107,8 +103,7 @@ const App: React.FC = () => {
       let totalPnl = 0;
       for (const t of trades.filter(t => t.status === 'open')) {
         const cp = prices.get(t.symbol) || t.entryPrice;
-        const pnl = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
-        totalPnl += pnl;
+        totalPnl += t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
       }
       setTotalUnrealizedPnL(totalPnl);
     }, 1000);
@@ -153,66 +148,43 @@ const App: React.FC = () => {
     const atr = smooth(tr); if (!atr) return 0;
     return Math.abs(smooth(pDM) - smooth(mDM)) / (smooth(pDM) + smooth(mDM)) * 100;
   };
-  const calcATR = (p: number[], per = 14) => {
-    if (!p || p.length < per + 1) return (p?.[p.length - 1] || 1) * 0.01;
-    const tr = p.slice(1).map((v, i) => Math.abs(v - p[i]));
-    let atr = tr.slice(0, per).reduce((a, b) => a + b, 0) / per;
-    for (let i = per; i < tr.length; i++) atr = (atr * (per - 1) + tr[i]) / per;
-    return atr;
-  };
   const calcStochastic = (p: number[], per = 14) => {
     if (!p || p.length < per) return 50;
     const slice = p.slice(-per);
     const h = Math.max(...slice), l = Math.min(...slice);
-    if (h === l) return 50;
-    return ((p[p.length - 1] - l) / (h - l)) * 100;
+    return h === l ? 50 : ((p[p.length - 1] - l) / (h - l)) * 100;
   };
 
   const generateSignal = (symbol: string, price: number): Signal | null => {
     if (!price || price <= 0) return null;
     const h = priceHistoryRef.current.get(symbol);
-    if (!h || h.length < 60) return null;
+    if (!h || h.length < 70) return null;
     
-    const lastSig = lastSignalTimeForSymbol.current.get(symbol);
-    if (lastSig && Date.now() - lastSig < COOLDOWN_MS) return null;
+    if (lastSignalTimeForSymbol.current.get(symbol) && Date.now() - lastSignalTimeForSymbol.current.get(symbol)! < 120000) return null;
 
-    const rsi = calcRSI(h);
-    const stoch = calcStochastic(h);
-    const macd = calcMACD(h);
-    const ema20 = calcEMA(h, 20);
-    const adx = calcADX(h);
-    const atr = calcATR(h);
-
-    if (atr / price * 100 < ATR_MIN_PERCENT) return null;
+    const rsi = calcRSI(h), stoch = calcStochastic(h), macd = calcMACD(h), ema20 = calcEMA(h, 20), adx = calcADX(h);
     if (adx < ADX_MIN) return null;
 
     const buyCondition = rsi < RSI_BUY_MAX && stoch < STOCH_BUY_MAX && macd > 0 && price > ema20;
     const sellCondition = rsi > RSI_SELL_MIN && stoch > STOCH_SELL_MIN && macd < 0 && price < ema20;
-
     if (!buyCondition && !sellCondition) return null;
 
     const action = buyCondition ? 'buy' : 'sell';
-    const reasons = [
-      `RSI:${rsi}`, `Stoch:${stoch.toFixed(0)}`, `ADX:${adx.toFixed(0)}`,
-      `MACD:${macd > 0 ? '↑' : '↓'}`, `ATR:${(atr / price * 100).toFixed(2)}%`
-    ];
-
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
-    const strength = (rsi < 15 || rsi > 85) ? 3 : (rsi < 20 || rsi > 80) ? 2 : 1;
-
+    
     return {
       id: `${symbol}_${Date.now()}`, symbol, action: action as 'buy' | 'sell', price,
-      timestamp: Date.now(), strength: strength as 1 | 2 | 3,
-      rsi, stochK: stoch, macd, ema20, adx, atr, reasons
+      timestamp: Date.now(), strength: (rsi < 12 || rsi > 88) ? 3 : 2 as 1 | 2 | 3,
+      rsi, stochK: stoch, macd, adx, reasons: [`RSI:${rsi}`, `Stoch:${stoch.toFixed(0)}`, `ADX:${adx.toFixed(0)}`, `MACD:${macd > 0 ? '↑' : '↓'}`]
     };
   };
 
   const executeTrade = useCallback((s: Signal) => {
     if (!autoTradeRef.current || !s?.price) return;
-    if (tradesRef.current.find(t => t.symbol === s.symbol && t.status === 'open')) return;
-    
-    const lastTrade = lastTradeTimeForSymbol.current.get(s.symbol);
-    if (lastTrade && Date.now() - lastTrade < COOLDOWN_MS) return;
+    const currentTrades = tradesRef.current.filter(t => t.status === 'open');
+    if (currentTrades.length >= MAX_POSITIONS) return;
+    if (currentTrades.find(t => t.symbol === s.symbol)) return;
+    if (lastTradeTimeForSymbol.current.get(s.symbol) && Date.now() - lastTradeTimeForSymbol.current.get(s.symbol)! < 180000) return;
 
     const amt = balanceRef.current * riskPercentRef.current / 100;
     if (amt <= 0 || amt > balanceRef.current) return;
@@ -228,19 +200,18 @@ const App: React.FC = () => {
       id: `${s.symbol}_${Date.now()}`, symbol: s.symbol, side: s.action,
       entryPrice: s.price, exitPrice: null, quantity: qty, invested: amt,
       entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null,
-      status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4),
-      breakevenActivated: false
+      status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4), breakevenActivated: false
     }]);
-  }, [TP_PERCENT, SL_PERCENT, COOLDOWN_MS]);
+    console.log(`✅ ${s.action.toUpperCase()} ${s.symbol} | TP:${tp.toFixed(4)} SL:${sl.toFixed(4)}`);
+  }, [TP_PERCENT, SL_PERCENT]);
 
   const closeTrade = useCallback((t: Trade, cp: number, reason: string) => {
     if (!t || !cp) return;
     const inv = t.entryPrice * t.quantity;
     const prof = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
-    const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
     setBalance(p => p + inv + prof);
     setTotalProfit(p => p + prof);
-    setTrades(p => p.map(x => x.id === t.id ? { ...x, status: 'closed' as const, exitPrice: cp, exitTime: Date.now(), profit: prof, profitPercent: pPct } : x));
+    setTrades(p => p.map(x => x.id === t.id ? { ...x, status: 'closed' as const, exitPrice: cp, exitTime: Date.now(), profit: prof, profitPercent: t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100 } : x));
   }, []);
 
   useEffect(() => {
@@ -252,9 +223,7 @@ const App: React.FC = () => {
         if ((t.side === 'buy' && cp <= t.slPrice) || (t.side === 'sell' && cp >= t.slPrice)) { closeTrade(t, cp, 'SL'); continue; }
         if (!t.breakevenActivated) {
           const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
-          if (pPct >= TP_PERCENT * 0.6) {
-            setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
-          }
+          if (pPct >= TP_PERCENT * 0.5) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
         }
       }
     };
@@ -270,29 +239,21 @@ const App: React.FC = () => {
     h.push(price);
     if (h.length > 200) h = h.slice(-200);
     priceHistoryRef.current.set(symbol, h);
-
     const sig = generateSignal(symbol, price);
-    if (sig) {
-      setSignals(p => [sig, ...p].slice(0, 100));
-      if (autoTradeRef.current) executeTrade(sig);
-    }
+    if (sig) { setSignals(p => [sig, ...p].slice(0, 100)); if (autoTradeRef.current) executeTrade(sig); }
   }, [executeTrade]);
 
   useEffect(() => {
-    const w = createWebSocketManager();
-    wsRef.current = w;
-    w.subscribe(SYMBOLS, (d: PriceData) => {
+    const manager = createPriceManager();
+    wsRef.current = manager;
+    manager.subscribe(SYMBOLS, (d: PriceData) => {
       if (d?.symbol && d.price) {
-        if (!connectedRef.current.has(d.symbol)) {
-          connectedRef.current.add(d.symbol);
-          setWsConnectedCount(p => p + 1);
-        }
-        if (!wsConnected) setWsConnected(true);
+        if (!connectedRef.current.has(d.symbol)) { connectedRef.current.add(d.symbol); setWsConnectedCount(p => p + 1); }
         updatePrice(d);
       }
     });
-    return () => w.disconnect();
-  }, [updatePrice, wsConnected]);
+    return () => manager.disconnect();
+  }, [updatePrice]);
 
   const openTrades = trades.filter(t => t.status === 'open');
   const closedTrades = trades.filter(t => t.status === 'closed');
@@ -315,13 +276,14 @@ const App: React.FC = () => {
               <div className="text-2xl">🌌</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | Макс {MAX_POSITIONS} поз.</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right"><div className="text-xs text-gray-500">Баланс</div><div className="text-lg font-bold text-green-400">${formatNumber(balance)}</div></div>
               <div className="text-right"><div className="text-xs text-gray-500">Equity</div><div className={`text-lg font-bold ${equity >= 10000 ? 'text-green-400' : 'text-red-400'}`}>${formatNumber(equity)}</div></div>
               <div className="text-right"><div className="text-xs text-gray-500">Общий P&L</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
+              <div className="text-right"><div className="text-xs text-gray-500">Винрейт</div><div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
               <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs text-gray-500">{wsConnectedCount}/{SYMBOLS.length}</span></div>
               <span className="text-sm text-gray-600">{currentTime.toLocaleTimeString()}</span>
             </div>
@@ -336,7 +298,7 @@ const App: React.FC = () => {
             <span className={`text-xl font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
           </div>
           <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-gray-500">
-            <div>Открыто: <span className="text-yellow-400 font-bold">{openTrades.length}</span></div>
+            <div>Открыто: <span className="text-yellow-400 font-bold">{openTrades.length}/{MAX_POSITIONS}</span></div>
             <div>Закрыто: <span className="text-blue-400 font-bold">{closedTrades.length}</span></div>
             <div>Винрейт: <span className="text-green-400 font-bold">{winRate.toFixed(1)}%</span></div>
             <div>Режим: <span className={aggressiveMode ? 'text-orange-400 font-bold' : 'text-gray-400 font-bold'}>{aggressiveMode ? '⚡АГРО' : '🐢НОРМ'}</span></div>
@@ -363,28 +325,25 @@ const App: React.FC = () => {
             <div className="rounded-xl p-4 border border-purple-500/20 bg-black/40">
               <div className="flex flex-wrap gap-3 items-center">
                 <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${autoTrade ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ЗАПУСТИТЬ'}</button>
-                <button onClick={() => { setAggressiveMode(!aggressiveMode); setRiskPercent(!aggressiveMode ? 10 : 5); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${aggressiveMode ? 'bg-orange-600' : 'bg-gray-700'}`}>{aggressiveMode ? '⚡ АГРЕССИВНЫЙ' : '🐢 ОБЫЧНЫЙ'}</button>
+                <button onClick={() => { setAggressiveMode(!aggressiveMode); setRiskPercent(!aggressiveMode ? 5 : 3); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${aggressiveMode ? 'bg-orange-600' : 'bg-gray-700'}`}>{aggressiveMode ? '⚡ АГРЕССИВНЫЙ' : '🐢 ОБЫЧНЫЙ'}</button>
                 <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition-all">🔄 Сбросить</button>
                 {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-4 py-2 bg-red-800 hover:bg-red-700 rounded-lg text-sm transition-all">🔒 Закрыть всё ({openTrades.length})</button>}
               </div>
               {autoTrade && (
                 <div className="mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30 text-center">
-                  <p className="text-purple-300 text-sm">✅ АВТОТОРГОВЛЯ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | {aggressiveMode ? '⚡АГРО' : '🐢НОРМ'}</p>
+                  <p className="text-purple-300 text-sm">✅ АВТОТОРГОВЛЯ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | {aggressiveMode ? '⚡АГРО' : '🐢НОРМ'} | Макс {MAX_POSITIONS} поз.</p>
                 </div>
               )}
             </div>
 
             <div className="rounded-xl p-4 border border-purple-500/20 bg-black/40">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-400">Риск на сделку</span>
-                <span className="text-white font-bold">{riskPercent}%</span>
-              </div>
-              <input type="range" min="1" max={aggressiveMode ? "15" : "10"} step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-purple-500 mt-2" />
+              <div className="flex justify-between text-sm"><span className="text-gray-400">Риск на сделку</span><span className="text-white font-bold">{riskPercent}%</span></div>
+              <input type="range" min="1" max="5" step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-purple-500 mt-2" />
             </div>
 
             <div className="rounded-xl border border-purple-500/20 overflow-hidden bg-black/40">
               <div className="px-4 py-3 bg-purple-950/30 border-b border-purple-500/30 flex justify-between items-center">
-                <h3 className="font-bold text-purple-300 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length})</h3>
+                <h3 className="font-bold text-purple-300 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length}/{MAX_POSITIONS})</h3>
                 <span className={`text-sm font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
               </div>
               <div className="divide-y divide-gray-800 max-h-96 overflow-y-auto">
