@@ -70,7 +70,7 @@ const App: React.FC = () => {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [wsConnectedCount, setWsConnectedCount] = useState(0);
+  const [apiConnectedCount, setApiConnectedCount] = useState(0);
   const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
 
   const TP_PERCENT = aggressiveMode ? 2.5 : 2.0;
@@ -82,7 +82,7 @@ const App: React.FC = () => {
   const ADX_MIN = aggressiveMode ? 35 : 30;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
-  const wsRef = useRef<any>(null);
+  const apiRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
   const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
   const lastSignalTimeForSymbol = useRef<Map<string, number>>(new Map());
@@ -202,7 +202,6 @@ const App: React.FC = () => {
       entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null,
       status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4), breakevenActivated: false
     }]);
-    console.log(`✅ ${s.action.toUpperCase()} ${s.symbol} | TP:${tp.toFixed(4)} SL:${sl.toFixed(4)}`);
   }, [TP_PERCENT, SL_PERCENT]);
 
   const closeTrade = useCallback((t: Trade, cp: number, reason: string) => {
@@ -245,10 +244,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const manager = createPriceManager();
-    wsRef.current = manager;
+    apiRef.current = manager;
     manager.subscribe(SYMBOLS, (d: PriceData) => {
       if (d?.symbol && d.price) {
-        if (!connectedRef.current.has(d.symbol)) { connectedRef.current.add(d.symbol); setWsConnectedCount(p => p + 1); }
+        if (!connectedRef.current.has(d.symbol)) { connectedRef.current.add(d.symbol); setApiConnectedCount(p => p + 1); }
         updatePrice(d);
       }
     });
@@ -284,7 +283,7 @@ const App: React.FC = () => {
               <div className="text-right"><div className="text-xs text-gray-500">Equity</div><div className={`text-lg font-bold ${equity >= 10000 ? 'text-green-400' : 'text-red-400'}`}>${formatNumber(equity)}</div></div>
               <div className="text-right"><div className="text-xs text-gray-500">Общий P&L</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
               <div className="text-right"><div className="text-xs text-gray-500">Винрейт</div><div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
-              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs text-gray-500">{wsConnectedCount}/{SYMBOLS.length}</span></div>
+              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${apiConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs text-gray-500">{apiConnectedCount}/{SYMBOLS.length}</span></div>
               <span className="text-sm text-gray-600">{currentTime.toLocaleTimeString()}</span>
             </div>
           </div>
