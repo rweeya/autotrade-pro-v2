@@ -14,26 +14,13 @@ const SYMBOLS = [
   'ICP/USDT', 'STX/USDT', 'KAS/USDT', 'RUNE/USDT', 'EGLD/USDT', 'FLOW/USDT', 'WAVES/USDT',
   'PEPE/USDT', 'WIF/USDT', 'BONK/USDT', 'FLOKI/USDT', 'SHIB/USDT',
   'SEI/USDT', 'WLD/USDT', 'STRK/USDT', 'TIA/USDT', 'JUP/USDT', 'PYTH/USDT',
-  'ENA/USDT', 'ETHFI/USDT', 'REZ/USDT', 'OMNI/USDT', 'TAO/USDT', 'SUPER/USDT',
-  'FET/USDT', 'AGIX/USDT', 'OCEAN/USDT', 'BEAM/USDT', 'AXL/USDT', 'W/USDT',
-  'BLUR/USDT', 'ORDI/USDT', 'SATS/USDT', 'RATS/USDT', 'MOG/USDT', 'POPCAT/USDT',
-  'RAY/USDT', 'JTO/USDT', 'HNT/USDT', 'IOTA/USDT', 'NEO/USDT', 'GAS/USDT',
-  'ONG/USDT', 'CKB/USDT', 'YGG/USDT', 'PENDLE/USDT', 'SNX/USDT', 'CRV/USDT',
-  '1INCH/USDT', 'DYDX/USDT', 'CAKE/USDT', 'XLM/USDT', 'TRX/USDT', 'XTZ/USDT',
-  'MINA/USDT', 'ROSE/USDT', 'CFX/USDT', 'MASK/USDT', 'BAND/USDT', 'CELO/USDT',
-  'ENS/USDT', 'LDO/USDT', 'GMX/USDT', 'FXS/USDT', 'CVX/USDT',
+  'ENA/USDT', 'FET/USDT', 'BEAM/USDT', 'BLUR/USDT', 'ORDI/USDT', 'PENDLE/USDT',
+  'ENS/USDT', 'LDO/USDT', 'GMX/USDT', 'MINA/USDT', 'ROSE/USDT', 'CFX/USDT',
+  'TON/USDT', 'NOT/USDT', 'TURBO/USDT', 'MEW/USDT', 'BRETT/USDT', 'POPCAT/USDT',
+  'RAY/USDT', 'JTO/USDT', 'HNT/USDT', 'IOTA/USDT', 'NEO/USDT', 'TRX/USDT',
+  'XLM/USDT', 'XTZ/USDT', 'CAKE/USDT', '1INCH/USDT', 'SNX/USDT', 'CRV/USDT',
   'ZRO/USDT', 'ZK/USDT', 'ALT/USDT', 'PORTAL/USDT', 'XAI/USDT', 'ACE/USDT',
-  'NFP/USDT', 'AI/USDT', 'XEC/USDT', 'BOME/USDT', 'SLERF/USDT', 'MYRO/USDT',
-  'WEN/USDT', 'SAMO/USDT', 'BODEN/USDT', 'TRUMP/USDT',
-  'NOT/USDT', 'DOGS/USDT', 'TON/USDT', 'HMSTR/USDT', 'CATI/USDT', 'NEIRO/USDT',
-  'TURBO/USDT', 'MEW/USDT', 'BRETT/USDT', 'DEGEN/USDT', 'ANDY/USDT', 'WOLF/USDT',
-  'SPX/USDT', 'GIGA/USDT', 'MICHI/USDT', 'KEYCAT/USDT', 'MOTHER/USDT', 'BOB/USDT',
-  'PONKE/USDT', 'MANEKI/USDT', 'BUBBLE/USDT', 'NPC/USDT', 'MAGA/USDT', 'TRUMPWIN/USDT',
-  'OMNI/USDT', 'EZETH/USDT', 'WEETH/USDT', 'RSWETH/USDT', 'USDE/USDT', 'SUSDE/USDT',
-  'ENA/USDT', 'ETHFI/USDT', 'REZ/USDT', 'ZRO/USDT', 'ZK/USDT', 'ALT/USDT',
-  'PORTAL/USDT', 'XAI/USDT', 'ACE/USDT', 'NFP/USDT', 'AI/USDT', 'PIXEL/USDT',
-  'MANTA/USDT', 'ALTLAYER/USDT', 'MAVIA/USDT', 'DYM/USDT', 'SAGA/USDT', 'TNSR/USDT',
-  'W/USDT', 'BOME/USDT', 'SLERF/USDT', 'MYRO/USDT', 'WEN/USDT', 'SAMO/USDT'
+  'NFP/USDT', 'AI/USDT', 'PIXEL/USDT', 'SAGA/USDT', 'DYM/USDT', 'BOME/USDT'
 ];
 
 interface Signal {
@@ -70,8 +57,6 @@ interface Trade {
   breakevenActivated: boolean;
 }
 
-const VOLUME_SPIKE_MULTIPLIER = 1.5;
-
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
@@ -80,16 +65,14 @@ const App: React.FC = () => {
   const [winRate, setWinRate] = useState(0);
   const [autoTrade, setAutoTrade] = useState(false);
   const [riskPercent, setRiskPercent] = useState(5);
-  const [useVolumeFilter, setUseVolumeFilter] = useState(() => localStorage.getItem('useVolumeFilter') === 'true');
   const [aggressiveMode, setAggressiveMode] = useState(() => localStorage.getItem('aggressiveMode') === 'true');
+  const [useHTFFilter, setUseHTFFilter] = useState(() => localStorage.getItem('useHTFFilter') === 'true');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
   const [currentTime, setCurrentTime] = useState(new Date());
   const [wsConnectedCount, setWsConnectedCount] = useState(0);
   const [wsConnected, setWsConnected] = useState(false);
-  const [equityHistory, setEquityHistory] = useState<{ time: number; value: number }[]>(() => [{ time: Date.now(), value: 10000 }]);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
 
   const TP_PERCENT = aggressiveMode ? 2.0 : 1.5;
   const SL_PERCENT = aggressiveMode ? 1.0 : 0.8;
@@ -98,10 +81,8 @@ const App: React.FC = () => {
   const RSI_SELL_MIN = aggressiveMode ? 70 : 65;
   const ADX_MIN = aggressiveMode ? 20 : 25;
   const COOLDOWN_MS = aggressiveMode ? 30000 : 60000;
-  const DEFAULT_RISK = aggressiveMode ? 10 : 5;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
-  const volumeHistoryRef = useRef<Map<string, number[]>>(new Map());
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
   const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
@@ -110,27 +91,16 @@ const App: React.FC = () => {
   const balanceRef = useRef(balance);
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
-  const volumeRef = useRef(useVolumeFilter);
-  const aggressiveRef = useRef(aggressiveMode);
+  const htfRef = useRef(useHTFFilter);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
-  useEffect(() => { volumeRef.current = useVolumeFilter; }, [useVolumeFilter]);
-  useEffect(() => { aggressiveRef.current = aggressiveMode; }, [aggressiveMode]);
+  useEffect(() => { htfRef.current = useHTFFilter; }, [useHTFFilter]);
 
-  useEffect(() => { localStorage.setItem('aggressiveMode', aggressiveMode.toString()); if (aggressiveMode) setRiskPercent(DEFAULT_RISK); }, [aggressiveMode]);
-  useEffect(() => { localStorage.setItem('useVolumeFilter', useVolumeFilter.toString()); }, [useVolumeFilter]);
-  useEffect(() => { localStorage.setItem('darkMode', darkMode.toString()); document.documentElement.classList.toggle('dark', darkMode); }, [darkMode]);
-
-  useEffect(() => {
-    const eq = balance + totalProfit;
-    setEquityHistory(prev => {
-      if (prev[prev.length - 1]?.value === eq) return prev;
-      return [...prev, { time: Date.now(), value: eq }].slice(-100);
-    });
-  }, [balance, totalProfit]);
+  useEffect(() => { localStorage.setItem('aggressiveMode', aggressiveMode.toString()); }, [aggressiveMode]);
+  useEffect(() => { localStorage.setItem('useHTFFilter', useHTFFilter.toString()); }, [useHTFFilter]);
 
   const formatNumber = (n: number) => n?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00';
   const formatPrice = (p: number) => p ? (p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toFixed(6)) : '0.0000';
@@ -171,13 +141,6 @@ const App: React.FC = () => {
     const atr = smooth(tr); if (!atr) return 0;
     return Math.abs(smooth(pDM) - smooth(mDM)) / (smooth(pDM) + smooth(mDM)) * 100;
   };
-  const calcATR = (p: number[], per = 14) => {
-    if (!p || p.length < per + 1) return (p?.[p.length - 1] || 1) * 0.01;
-    const tr = p.slice(1).map((v, i) => Math.abs(v - p[i]));
-    let atr = tr.slice(0, per).reduce((a, b) => a + b, 0) / per;
-    for (let i = per; i < tr.length; i++) atr = (atr * (per - 1) + tr[i]) / per;
-    return Math.max(atr, p[p.length - 1] * 0.01);
-  };
 
   // ==================== СИГНАЛЫ ====================
   const generateSignal = (symbol: string, price: number): Signal | null => {
@@ -187,17 +150,8 @@ const App: React.FC = () => {
     if (lastSignalTimeForSymbol.current.get(symbol) && Date.now() - lastSignalTimeForSymbol.current.get(symbol)! < COOLDOWN_MS) return null;
 
     const rsi = calcRSI(h), macd = calcMACD(h), ema20 = calcEMA(h, 20), ema50 = calcEMA(h, 50);
-    const adx = calcADX(h), atr = calcATR(h);
+    const adx = calcADX(h);
     if (adx < ADX_MIN) return null;
-
-    // Volume filter
-    if (volumeRef.current) {
-      const vols = volumeHistoryRef.current.get(symbol) || [];
-      if (vols.length >= 20) {
-        const avgVol = vols.slice(-20).reduce((a, b) => a + b, 0) / 20;
-        if (vols[vols.length - 1] < avgVol * VOLUME_SPIKE_MULTIPLIER) return null;
-      }
-    }
 
     const buy = rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50;
     const sell = rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50;
@@ -206,9 +160,18 @@ const App: React.FC = () => {
     let reasons: string[] = [];
 
     if (buy) {
+      // HTF фильтр (5m тренд)
+      if (htfRef.current) {
+        const ema50_5m = calcEMA(h.slice(-75), 50);
+        if (price < ema50_5m) return null;
+      }
       action = 'buy';
       reasons = [`RSI ${rsi}<${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
     } else if (sell) {
+      if (htfRef.current) {
+        const ema50_5m = calcEMA(h.slice(-75), 50);
+        if (price > ema50_5m) return null;
+      }
       action = 'sell';
       reasons = [`RSI ${rsi}>${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`];
     }
@@ -216,7 +179,7 @@ const App: React.FC = () => {
 
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
     const strength = (rsi < 20 || rsi > 80) ? 3 : (rsi < 25 || rsi > 75) ? 2 : 1;
-    return { id: `${symbol}_${Date.now()}`, symbol, action, price, timestamp: Date.now(), strength: strength as 1 | 2 | 3, rsi, macd, ema20, ema50, adx, atr, reasons };
+    return { id: `${symbol}_${Date.now()}`, symbol, action, price, timestamp: Date.now(), strength: strength as 1 | 2 | 3, rsi, macd, ema20, ema50, adx, atr: 0, reasons };
   };
 
   // ==================== ТОРГОВЛЯ ====================
@@ -262,11 +225,10 @@ const App: React.FC = () => {
 
   const updatePrice = useCallback((data: PriceData) => {
     if (!data?.symbol || !data.price || data.price <= 0) return;
-    const { symbol, price, volume24h } = data;
+    const { symbol, price } = data;
     setPrices(p => new Map(p).set(symbol, price));
     let h = priceHistoryRef.current.get(symbol) || []; h.push(price); if (h.length > 200) h = h.slice(-200);
     priceHistoryRef.current.set(symbol, h);
-    if (volume24h) { let v = volumeHistoryRef.current.get(symbol) || []; v.push(volume24h); if (v.length > 50) v = v.slice(-50); volumeHistoryRef.current.set(symbol, v); }
     const sig = generateSignal(symbol, price);
     if (sig) { setSignals(p => [sig, ...p].slice(0, 100)); if (autoTradeRef.current) executeTrade(sig); }
   }, [executeTrade]);
@@ -287,33 +249,40 @@ const App: React.FC = () => {
   const closedTrades = trades.filter(t => t.status === 'closed');
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-gradient-to-br from-gray-900 via-red-900/30 to-black' : 'bg-gradient-to-br from-gray-100 via-red-100/30 to-white'}`}>
-      <header className={`relative z-20 border-b border-red-500/30 backdrop-blur-xl sticky top-0 ${darkMode ? 'bg-black/80' : 'bg-white/80'}`}>
+    <div className="min-h-screen bg-black text-white relative">
+      {/* Чёрная дыра фон */}
+      <div className="black-hole-container">
+        <div className="black-hole" />
+        <div className="accretion-disk" />
+        <div className="accretion-disk-2" />
+        <div className="particles" />
+      </div>
+
+      <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center flex-wrap gap-3">
             <div className="flex items-center gap-2">
               <div className="text-2xl">{aggressiveMode ? '⚡' : '💀'}</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2{aggressiveMode && '⚡'}</h1>
-                <p className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-600'}`}>{SYMBOLS.length} акт. | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | V:{useVolumeFilter ? '✅' : '❌'}</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} акт. | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | HTF:{useHTFFilter ? '✅' : '❌'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-right"><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>Баланс</div><div className="text-lg font-bold text-green-400">${formatNumber(balance)}</div></div>
-              <div className="text-right"><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>PnL</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
-              <div className="text-right"><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>WR</div><div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
-              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs">{wsConnectedCount}/{SYMBOLS.length}</span></div>
-              <span className="text-sm">{currentTime.toLocaleTimeString()}</span>
-              <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-lg ${darkMode ? 'bg-gray-800 text-yellow-400' : 'bg-gray-200 text-gray-700'}`}>{darkMode ? '☀️' : '🌙'}</button>
+              <div className="text-right"><div className="text-xs text-gray-400">Баланс</div><div className="text-lg font-bold text-green-400">${formatNumber(balance)}</div></div>
+              <div className="text-right"><div className="text-xs text-gray-400">PnL</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
+              <div className="text-right"><div className="text-xs text-gray-400">WR</div><div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
+              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs text-gray-400">{wsConnectedCount}/{SYMBOLS.length}</span></div>
+              <span className="text-sm text-gray-500">{currentTime.toLocaleTimeString()}</span>
             </div>
           </div>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-4">
+      <div className="relative z-10 container mx-auto px-4 py-4">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
           {[{ l: 'Сигналов', v: signals.length, c: 'red' }, { l: 'BUY', v: signals.filter(s => s.action === 'buy').length, c: 'green' }, { l: 'SELL', v: signals.filter(s => s.action === 'sell').length, c: 'red' }, { l: 'Открыто', v: openTrades.length, c: 'yellow' }, { l: 'Закрыто', v: closedTrades.length, c: 'blue' }].map((s, i) => (
-            <div key={i} className={`rounded-xl p-3 border border-${s.c}-500/30 ${darkMode ? 'bg-black/60' : 'bg-white/60'}`}><div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{s.l}</div><div className={`text-2xl font-bold text-${s.c}-400`}>{s.v}</div></div>
+            <div key={i} className="rounded-xl p-3 border border-red-500/30 bg-black/60"><div className="text-xs text-gray-400">{s.l}</div><div className={`text-2xl font-bold text-${s.c}-400`}>{s.v}</div></div>
           ))}
         </div>
 
@@ -325,13 +294,13 @@ const App: React.FC = () => {
             { k: 'news', i: '📰', l: 'Новости' },
             { k: 'history', i: '📜', l: 'История' }
           ].map(t => (
-            <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm rounded-t-lg ${activeTab === t.k ? 'bg-red-600 text-white' : darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t.i} {t.l}</button>
+            <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm rounded-t-lg ${activeTab === t.k ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t.i} {t.l}</button>
           ))}
         </div>
 
         {activeTab === 'trading' && (
-          <div className={`rounded-xl p-3 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
-            <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className={`border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full ${darkMode ? 'bg-black/60 text-white' : 'bg-white text-black'}`}>{SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+          <div className="rounded-xl p-3 border border-red-500/20 bg-black/40">
+            <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}</select>
             <TradingChart symbol={selectedSymbol} />
           </div>
         )}
@@ -341,23 +310,23 @@ const App: React.FC = () => {
 
         {activeTab === 'autotrade' && (
           <div className="space-y-4">
-            <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
+            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => setAutoTrade(!autoTrade)} className={`px-4 py-2 rounded-lg font-bold ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
                 <button onClick={() => { setAggressiveMode(!aggressiveMode); setRiskPercent(!aggressiveMode ? 10 : 5); }} className={`px-3 py-2 rounded-lg text-sm font-bold ${aggressiveMode ? 'bg-orange-600 animate-pulse' : 'bg-gray-600'}`}>{aggressiveMode ? '⚡АГРО' : '🐢НОРМ'}</button>
-                <button onClick={() => setUseVolumeFilter(!useVolumeFilter)} className={`px-3 py-2 rounded-lg text-sm ${useVolumeFilter ? 'bg-blue-600' : 'bg-gray-600'}`}>📊V</button>
+                <button onClick={() => setUseHTFFilter(!useHTFFilter)} className={`px-3 py-2 rounded-lg text-sm ${useHTFFilter ? 'bg-cyan-600' : 'bg-gray-600'}`}>📈HTF</button>
                 <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-3 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄</button>
                 {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-3 py-2 bg-red-700/80 rounded-lg text-sm">🔒Все({openTrades.length})</button>}
               </div>
-              {autoTrade && <div className={`mt-2 p-2 rounded-lg text-center text-sm ${aggressiveMode ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>✅ АВТО | TP +{TP_PERCENT}% SL -{SL_PERCENT}% BE +{BREAKEVEN_TRIGGER}%</div>}
+              {autoTrade && <div className={`mt-2 p-2 rounded-lg text-center text-sm ${aggressiveMode ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>✅ АВТО | TP +{TP_PERCENT}% SL -{SL_PERCENT}% BE +{BREAKEVEN_TRIGGER}% | HTF:{useHTFFilter ? '✅' : '❌'}</div>}
             </div>
-            <div className={`rounded-xl p-4 border border-red-500/20 ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
-              <label className="text-sm">Риск: {riskPercent}%</label>
+            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
+              <label className="text-sm text-gray-400">Риск: {riskPercent}%</label>
               <input type="range" min="1" max={aggressiveMode ? "20" : "10"} step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-red-500 mt-1" />
             </div>
-            <div className={`rounded-xl border border-red-500/20 overflow-hidden ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}>
+            <div className="rounded-xl border border-red-500/20 overflow-hidden bg-black/40">
               <div className="px-4 py-2 bg-red-950/30 border-b border-red-500/30"><h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length})</h3></div>
-              <div className={`divide-y ${darkMode ? 'divide-gray-800' : 'divide-gray-200'}`}>
+              <div className="divide-y divide-gray-800">
                 {!openTrades.length ? <div className="p-4 text-center text-sm text-gray-500">Нет позиций</div> : openTrades.map(t => {
                   const cp = prices.get(t.symbol) || t.entryPrice;
                   const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
@@ -365,10 +334,10 @@ const App: React.FC = () => {
                     <div key={t.id} className={`p-3 ${pPct >= 0 ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
                       <div className="flex justify-between text-sm font-bold"><span>{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol}{t.breakevenActivated && ' 🔒BE'}</span><span className={pPct >= 0 ? 'text-green-400' : 'text-red-400'}>{pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%</span></div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1 text-xs">
-                        <span>Вход:</span><span className="text-right">${formatPrice(t.entryPrice)}</span>
-                        <span>Тек:</span><span className="text-right">${formatPrice(cp)}</span>
-                        <span>TP:</span><span className="text-right text-green-400">${formatPrice(t.tpPrice)}</span>
-                        <span>SL:</span><span className={`text-right ${t.breakevenActivated ? 'text-blue-400' : 'text-red-400'}`}>${formatPrice(t.slPrice)}</span>
+                        <span className="text-gray-400">Вход:</span><span className="text-right">${formatPrice(t.entryPrice)}</span>
+                        <span className="text-gray-400">Тек:</span><span className="text-right">${formatPrice(cp)}</span>
+                        <span className="text-gray-400">TP:</span><span className="text-right text-green-400">${formatPrice(t.tpPrice)}</span>
+                        <span className="text-gray-400">SL:</span><span className={`text-right ${t.breakevenActivated ? 'text-blue-400' : 'text-red-400'}`}>${formatPrice(t.slPrice)}</span>
                       </div>
                       <button onClick={() => closeTrade(t, cp, 'manual')} className="mt-2 w-full bg-red-700/50 hover:bg-red-600 text-xs py-1 rounded">🔒 Закрыть</button>
                     </div>
@@ -381,9 +350,9 @@ const App: React.FC = () => {
 
         {activeTab === 'signals' && (
           <div className="space-y-2">
-            {!signals.length ? <div className={`rounded-xl p-8 text-center ${darkMode ? 'bg-black/40' : 'bg-white/40'}`}><div className="text-5xl mb-3">⏳</div><div className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Ждём сигналы...</div></div> :
+            {!signals.length ? <div className="rounded-xl p-8 text-center bg-black/40"><div className="text-5xl mb-3">⏳</div><div className="text-gray-400">Ждём сигналы...</div></div> :
               signals.filter(s => s?.price).map((s, i) => (
-                <div key={i} className={`rounded-lg p-3 border border-red-500/30 cursor-pointer ${darkMode ? 'bg-gradient-to-r from-black/60 to-red-900/20' : 'bg-gradient-to-r from-white to-red-100/50'}`}>
+                <div key={i} className="rounded-lg p-3 border border-red-500/30 cursor-pointer bg-gradient-to-r from-black/60 to-red-900/20">
                   <div className="flex justify-between items-center">
                     <span className="font-bold">{s.symbol}</span>
                     <span className={`px-2 py-0.5 rounded text-xs font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
