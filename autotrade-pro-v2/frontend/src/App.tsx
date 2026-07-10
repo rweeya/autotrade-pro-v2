@@ -37,6 +37,7 @@ interface Signal {
   adx: number;
   atr: number;
   reasons: string[];
+  candlePattern?: string;
 }
 
 interface Trade {
@@ -57,6 +58,13 @@ interface Trade {
   breakevenActivated: boolean;
 }
 
+interface Candle {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('signals');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
@@ -67,6 +75,7 @@ const App: React.FC = () => {
   const [riskPercent, setRiskPercent] = useState(5);
   const [aggressiveMode, setAggressiveMode] = useState(() => localStorage.getItem('aggressiveMode') === 'true');
   const [useHTFFilter, setUseHTFFilter] = useState(() => localStorage.getItem('useHTFFilter') === 'true');
+  const [useCandles, setUseCandles] = useState(() => localStorage.getItem('useCandles') === 'true');
   const [signals, setSignals] = useState<Signal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
@@ -83,6 +92,7 @@ const App: React.FC = () => {
   const COOLDOWN_MS = aggressiveMode ? 30000 : 60000;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
+  const candleHistoryRef = useRef<Map<string, Candle[]>>(new Map());
   const wsRef = useRef<any>(null);
   const connectedRef = useRef<Set<string>>(new Set());
   const lastTradeTimeForSymbol = useRef<Map<string, number>>(new Map());
@@ -92,15 +102,18 @@ const App: React.FC = () => {
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
   const htfRef = useRef(useHTFFilter);
+  const candlesRef = useRef(useCandles);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
   useEffect(() => { htfRef.current = useHTFFilter; }, [useHTFFilter]);
+  useEffect(() => { candlesRef.current = useCandles; }, [useCandles]);
 
   useEffect(() => { localStorage.setItem('aggressiveMode', aggressiveMode.toString()); }, [aggressiveMode]);
   useEffect(() => { localStorage.setItem('useHTFFilter', useHTFFilter.toString()); }, [useHTFFilter]);
+  useEffect(() => { localStorage.setItem('useCandles', useCandles.toString()); }, [useCandles]);
 
   const formatNumber = (n: number) => n?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00';
   const formatPrice = (p: number) => p ? (p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toFixed(6)) : '0.0000';
@@ -112,7 +125,6 @@ const App: React.FC = () => {
     setWinRate(closed.length ? (closed.filter(t => (t.profit || 0) > 0).length / closed.length) * 100 : 0);
   }, [trades]);
 
-  // ==================== ИНДИКАТОРЫ ====================
   const calcRSI = (p: number[], per = 14) => {
     if (!p || p.length < per + 1) return 50;
     let g = 0, l = 0;
@@ -142,16 +154,32 @@ const App: React.FC = () => {
     return Math.abs(smooth(pDM) - smooth(mDM)) / (smooth(pDM) + smooth(mDM)) * 100;
   };
 
-  // ==================== СИГНАЛЫ ====================
+  const detectCandles = (candles: Candle[]): { pattern: string; action: 'buy' | 'sell' | null } => {
+    if (!candles || candles.length < 3) return { pattern: '', action: null };
+    const last = candles[candles.length - 1], prev = candles[candles.length - 2];
+    const body = Math.abs(last.close - last.open);
+    const upW = last.high - Math.max(last.open, last.close), loW = Math.min(last.open, last.close) - last.low;
+    const tr = last.high - last.low || 0.0001;
+    if (loW > body * 2 && upW < body * 0.5 && body / tr < 0.4) return { pattern: '🔨 Молот', action: 'buy' };
+    if (upW > body * 2 && loW < body * 0.5 && body / tr < 0.4 && prev.close < prev.open) return { pattern: '🔄 Перевёрнутый молот', action: 'buy' };
+    if (upW > body * 2 && loW < body * 0.5 && body / tr < 0.4 && prev.close > prev.open) return { pattern: '⭐ Падающая звезда', action: 'sell' };
+    if (last.close > last.open && prev.close < prev.open && last.open < prev.close && last.close > prev.open && body > Math.abs(prev.close - prev.open) * 1.2) return { pattern: '📈 Поглощение', action: 'buy' };
+    if (last.close < last.open && prev.close > prev.open && last.open > prev.close && last.close < prev.open && body > Math.abs(prev.close - prev.open) * 1.2) return { pattern: '📉 Поглощение', action: 'sell' };
+    return { pattern: '', action: null };
+  };
+
   const generateSignal = (symbol: string, price: number): Signal | null => {
     if (!price || price <= 0) return null;
     const h = priceHistoryRef.current.get(symbol);
     if (!h || h.length < 50) return null;
     if (lastSignalTimeForSymbol.current.get(symbol) && Date.now() - lastSignalTimeForSymbol.current.get(symbol)! < COOLDOWN_MS) return null;
 
-    const rsi = calcRSI(h), macd = calcMACD(h), ema20 = calcEMA(h, 20), ema50 = calcEMA(h, 50);
-    const adx = calcADX(h);
+    const rsi = calcRSI(h), macd = calcMACD(h), ema20 = calcEMA(h, 20), ema50 = calcEMA(h, 50), adx = calcADX(h);
     if (adx < ADX_MIN) return null;
+
+    const candles = candleHistoryRef.current.get(symbol) || [];
+    const candleRes = detectCandles(candles);
+    if (candlesRef.current && !candleRes.pattern) return null;
 
     const buy = rsi < RSI_BUY_MAX && macd > 0 && ema20 > ema50;
     const sell = rsi > RSI_SELL_MIN && macd < 0 && ema20 < ema50;
@@ -160,29 +188,25 @@ const App: React.FC = () => {
     let reasons: string[] = [];
 
     if (buy) {
-      // HTF фильтр (5m тренд)
-      if (htfRef.current) {
-        const ema50_5m = calcEMA(h.slice(-75), 50);
-        if (price < ema50_5m) return null;
-      }
+      if (htfRef.current && price < calcEMA(h.slice(-75), 50)) return null;
+      if (candlesRef.current && candleRes.action !== 'buy') return null;
       action = 'buy';
       reasons = [`RSI ${rsi}<${RSI_BUY_MAX}`, `ADX ${adx.toFixed(0)}`, `MACD↑`, `EMA20>EMA50`];
+      if (candlesRef.current) reasons.push(candleRes.pattern);
     } else if (sell) {
-      if (htfRef.current) {
-        const ema50_5m = calcEMA(h.slice(-75), 50);
-        if (price > ema50_5m) return null;
-      }
+      if (htfRef.current && price > calcEMA(h.slice(-75), 50)) return null;
+      if (candlesRef.current && candleRes.action !== 'sell') return null;
       action = 'sell';
       reasons = [`RSI ${rsi}>${RSI_SELL_MIN}`, `ADX ${adx.toFixed(0)}`, `MACD↓`, `EMA20<EMA50`];
+      if (candlesRef.current) reasons.push(candleRes.pattern);
     }
     if (!action) return null;
 
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
     const strength = (rsi < 20 || rsi > 80) ? 3 : (rsi < 25 || rsi > 75) ? 2 : 1;
-    return { id: `${symbol}_${Date.now()}`, symbol, action, price, timestamp: Date.now(), strength: strength as 1 | 2 | 3, rsi, macd, ema20, ema50, adx, atr: 0, reasons };
+    return { id: `${symbol}_${Date.now()}`, symbol, action, price, timestamp: Date.now(), strength: strength as 1 | 2 | 3, rsi, macd, ema20, ema50, adx, atr: 0, reasons, candlePattern: candleRes.pattern || undefined };
   };
 
-  // ==================== ТОРГОВЛЯ ====================
   const executeTrade = useCallback((s: Signal) => {
     if (!autoTradeRef.current || !s?.price) return;
     if (tradesRef.current.find(t => t.symbol === s.symbol && t.status === 'open')) return;
@@ -229,6 +253,14 @@ const App: React.FC = () => {
     setPrices(p => new Map(p).set(symbol, price));
     let h = priceHistoryRef.current.get(symbol) || []; h.push(price); if (h.length > 200) h = h.slice(-200);
     priceHistoryRef.current.set(symbol, h);
+
+    let c = candleHistoryRef.current.get(symbol) || [];
+    if (!c.length || c[c.length - 1].close !== price) {
+      c.push({ open: c.length ? c[c.length - 1].close : price, high: price, low: price, close: price });
+      if (c.length > 100) c = c.slice(-100);
+    } else { const lc = c[c.length - 1]; lc.high = Math.max(lc.high, price); lc.low = Math.min(lc.low, price); lc.close = price; }
+    candleHistoryRef.current.set(symbol, c);
+
     const sig = generateSignal(symbol, price);
     if (sig) { setSignals(p => [sig, ...p].slice(0, 100)); if (autoTradeRef.current) executeTrade(sig); }
   }, [executeTrade]);
@@ -250,12 +282,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white relative">
-      {/* Чёрная дыра фон */}
-      <div className="black-hole-container">
-        <div className="black-hole" />
-        <div className="accretion-disk" />
-        <div className="accretion-disk-2" />
-        <div className="particles" />
+      {/* Чёрная дыра — сингулярность */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px]">
+          <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,transparent_20%,#000_40%,#0a0015_60%,transparent_100%)] shadow-[0_0_300px_150px_rgba(60,0,120,0.3)] animate-pulse" style={{ animationDuration: '6s' }} />
+          <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_0deg,transparent,rgba(120,0,200,0.3),rgba(200,0,100,0.2),transparent)] blur-3xl animate-spin" style={{ animationDuration: '30s' }} />
+          <div className="absolute inset-0 rounded-full bg-[conic-gradient(from_180deg,transparent,rgba(100,0,180,0.4),rgba(200,50,100,0.2),transparent)] blur-2xl animate-spin" style={{ animationDuration: '20s', animationDirection: 'reverse' }} />
+          <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(0,0,0,0)_30%,rgba(60,0,100,0.1)_60%,transparent_100%)] animate-pulse" style={{ animationDuration: '10s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white shadow-[0_0_80px_40px_rgba(255,255,255,0.8)] animate-pulse" style={{ animationDuration: '3s' }} />
+        </div>
       </div>
 
       <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0">
@@ -265,7 +300,7 @@ const App: React.FC = () => {
               <div className="text-2xl">{aggressiveMode ? '⚡' : '💀'}</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2{aggressiveMode && '⚡'}</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} акт. | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | HTF:{useHTFFilter ? '✅' : '❌'}</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} акт. | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | HTF:{useHTFFilter ? '✅' : '❌'} C:{useCandles ? '✅' : '❌'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -287,13 +322,7 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto">
-          {[
-            { k: 'signals', i: '🎯', l: 'Сигналы' },
-            { k: 'trading', i: '📈', l: 'График' },
-            { k: 'autotrade', i: '🤖', l: 'Автоторговля' },
-            { k: 'news', i: '📰', l: 'Новости' },
-            { k: 'history', i: '📜', l: 'История' }
-          ].map(t => (
+          {[{ k: 'signals', i: '🎯', l: 'Сигналы' }, { k: 'trading', i: '📈', l: 'График' }, { k: 'autotrade', i: '🤖', l: 'Автоторговля' }, { k: 'news', i: '📰', l: 'Новости' }, { k: 'history', i: '📜', l: 'История' }].map(t => (
             <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm rounded-t-lg ${activeTab === t.k ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t.i} {t.l}</button>
           ))}
         </div>
@@ -304,7 +333,6 @@ const App: React.FC = () => {
             <TradingChart symbol={selectedSymbol} />
           </div>
         )}
-
         {activeTab === 'history' && <SignalHistory />}
         {activeTab === 'news' && <News />}
 
@@ -315,10 +343,11 @@ const App: React.FC = () => {
                 <button onClick={() => setAutoTrade(!autoTrade)} className={`px-4 py-2 rounded-lg font-bold ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
                 <button onClick={() => { setAggressiveMode(!aggressiveMode); setRiskPercent(!aggressiveMode ? 10 : 5); }} className={`px-3 py-2 rounded-lg text-sm font-bold ${aggressiveMode ? 'bg-orange-600 animate-pulse' : 'bg-gray-600'}`}>{aggressiveMode ? '⚡АГРО' : '🐢НОРМ'}</button>
                 <button onClick={() => setUseHTFFilter(!useHTFFilter)} className={`px-3 py-2 rounded-lg text-sm ${useHTFFilter ? 'bg-cyan-600' : 'bg-gray-600'}`}>📈HTF</button>
+                <button onClick={() => setUseCandles(!useCandles)} className={`px-3 py-2 rounded-lg text-sm ${useCandles ? 'bg-purple-600' : 'bg-gray-600'}`}>🕯️C</button>
                 <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-3 py-2 bg-yellow-600/50 rounded-lg text-sm">🔄</button>
                 {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-3 py-2 bg-red-700/80 rounded-lg text-sm">🔒Все({openTrades.length})</button>}
               </div>
-              {autoTrade && <div className={`mt-2 p-2 rounded-lg text-center text-sm ${aggressiveMode ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>✅ АВТО | TP +{TP_PERCENT}% SL -{SL_PERCENT}% BE +{BREAKEVEN_TRIGGER}% | HTF:{useHTFFilter ? '✅' : '❌'}</div>}
+              {autoTrade && <div className={`mt-2 p-2 rounded-lg text-center text-sm ${aggressiveMode ? 'bg-orange-500/20 text-orange-400' : 'bg-green-500/20 text-green-400'}`}>✅ АВТО | TP +{TP_PERCENT}% SL -{SL_PERCENT}% BE +{BREAKEVEN_TRIGGER}% | HTF:{useHTFFilter ? '✅' : '❌'} C:{useCandles ? '✅' : '❌'}</div>}
             </div>
             <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
               <label className="text-sm text-gray-400">Риск: {riskPercent}%</label>
@@ -359,6 +388,7 @@ const App: React.FC = () => {
                     <span className="text-yellow-400 text-xs">{'★'.repeat(s.strength)}</span>
                   </div>
                   <div className="flex gap-1 mt-1 flex-wrap text-xs text-red-400">{(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/30 px-1.5 py-0.5 rounded">🎯 {r}</span>)}</div>
+                  {s.candlePattern && <div className="text-xs text-purple-400 mt-1">🕯️ {s.candlePattern}</div>}
                 </div>
               ))
             }
