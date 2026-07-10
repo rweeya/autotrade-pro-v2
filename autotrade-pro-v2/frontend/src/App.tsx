@@ -77,7 +77,6 @@ const App: React.FC = () => {
   const [wsConnectedCount, setWsConnectedCount] = useState(0);
   const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
 
-  // Жёсткие настройки для высокого винрейта
   const TP_PERCENT = aggressiveMode ? 2.5 : 1.8;
   const SL_PERCENT = aggressiveMode ? 1.0 : 0.7;
   const RSI_BUY_MAX = aggressiveMode ? 22 : 28;
@@ -97,18 +96,15 @@ const App: React.FC = () => {
   const balanceRef = useRef(balance);
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
-  const pricesRef = useRef(prices);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
-  useEffect(() => { pricesRef.current = prices; }, [prices]);
 
   useEffect(() => { localStorage.setItem('aggressiveMode', aggressiveMode.toString()); }, [aggressiveMode]);
   useEffect(() => { localStorage.setItem('riskPercent', riskPercent.toString()); }, [riskPercent]);
 
-  // Общий нереализованный P&L
   useEffect(() => {
     const interval = setInterval(() => {
       let totalPnl = 0;
@@ -132,7 +128,6 @@ const App: React.FC = () => {
     setWinRate(closed.length ? (closed.filter(t => (t.profit || 0) > 0).length / closed.length) * 100 : 0);
   }, [trades]);
 
-  // ==================== ИНДИКАТОРЫ ====================
   const calcRSI = (p: number[], per = 14) => {
     if (!p || p.length < per + 1) return 50;
     let g = 0, l = 0;
@@ -176,7 +171,6 @@ const App: React.FC = () => {
     return ((p[p.length - 1] - l) / (h - l)) * 100;
   };
 
-  // ==================== СИГНАЛЫ (Комбо RSI+Stoch+MACD+ADX+ATR) ====================
   const generateSignal = (symbol: string, price: number): Signal | null => {
     if (!price || price <= 0) return null;
     const h = priceHistoryRef.current.get(symbol);
@@ -192,14 +186,10 @@ const App: React.FC = () => {
     const adx = calcADX(h);
     const atr = calcATR(h);
 
-    // Фильтр ATR
     if (atr / price * 100 < ATR_MIN_PERCENT) return null;
-    // Фильтр ADX
     if (adx < ADX_MIN) return null;
 
-    // BUY: RSI < порог + Stoch < порог + MACD > 0 + EMA20 вверх
     const buyCondition = rsi < RSI_BUY_MAX && stoch < STOCH_BUY_MAX && macd > 0 && price > ema20;
-    // SELL: RSI > порог + Stoch > порог + MACD < 0 + EMA20 вниз
     const sellCondition = rsi > RSI_SELL_MIN && stoch > STOCH_SELL_MIN && macd < 0 && price < ema20;
 
     if (!buyCondition && !sellCondition) return null;
@@ -220,11 +210,9 @@ const App: React.FC = () => {
     };
   };
 
-  // ==================== ТОРГОВЛЯ ====================
   const executeTrade = useCallback((s: Signal) => {
     if (!autoTradeRef.current || !s?.price) return;
-    const currentTrades = tradesRef.current;
-    if (currentTrades.find(t => t.symbol === s.symbol && t.status === 'open')) return;
+    if (tradesRef.current.find(t => t.symbol === s.symbol && t.status === 'open')) return;
     
     const lastTrade = lastTradeTimeForSymbol.current.get(s.symbol);
     if (lastTrade && Date.now() - lastTrade < COOLDOWN_MS) return;
@@ -246,7 +234,6 @@ const App: React.FC = () => {
       status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4),
       breakevenActivated: false
     }]);
-    console.log(`✅ ${s.action.toUpperCase()} ${s.symbol} @ ${s.price} | TP:${tp.toFixed(4)} SL:${sl.toFixed(4)}`);
   }, [TP_PERCENT, SL_PERCENT, COOLDOWN_MS]);
 
   const closeTrade = useCallback((t: Trade, cp: number, reason: string) => {
@@ -257,15 +244,12 @@ const App: React.FC = () => {
     setBalance(p => p + inv + prof);
     setTotalProfit(p => p + prof);
     setTrades(p => p.map(x => x.id === t.id ? { ...x, status: 'closed' as const, exitPrice: cp, exitTime: Date.now(), profit: prof, profitPercent: pPct } : x));
-    console.log(`📉 ЗАКРЫТА ${t.symbol} | ${reason} | ${prof >= 0 ? '+' : ''}$${prof.toFixed(2)}`);
   }, []);
 
-  // TP/SL мониторинг
   useEffect(() => {
     const check = () => {
-      const currentPrices = pricesRef.current;
       for (const t of trades.filter(t => t.status === 'open')) {
-        const cp = currentPrices.get(t.symbol);
+        const cp = prices.get(t.symbol);
         if (!cp) continue;
         if ((t.side === 'buy' && cp >= t.tpPrice) || (t.side === 'sell' && cp <= t.tpPrice)) { closeTrade(t, cp, 'TP'); continue; }
         if ((t.side === 'buy' && cp <= t.slPrice) || (t.side === 'sell' && cp >= t.slPrice)) { closeTrade(t, cp, 'SL'); continue; }
@@ -279,7 +263,7 @@ const App: React.FC = () => {
     };
     const i = setInterval(check, 3000);
     return () => clearInterval(i);
-  }, [trades, closeTrade, TP_PERCENT]);
+  }, [trades, prices, closeTrade, TP_PERCENT]);
 
   const updatePrice = useCallback((data: PriceData) => {
     if (!data?.symbol || !data.price || data.price <= 0) return;
@@ -319,7 +303,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white relative">
-      {/* Чёрная дыра фон */}
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px]">
           <div className="absolute inset-0 rounded-full bg-[radial-gradient(circle,transparent_25%,#000_45%,#0a0015_65%,transparent_100%)] shadow-[0_0_250px_100px_rgba(50,0,100,0.25)] animate-pulse" style={{ animationDuration: '8s' }} />
@@ -335,13 +318,12 @@ const App: React.FC = () => {
               <div className="text-2xl">🌌</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+ | WR {winRate.toFixed(1)}%</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI {RSI_BUY_MAX}/{RSI_SELL_MIN} | ADX {ADX_MIN}+</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right"><div className="text-xs text-gray-500">Баланс</div><div className="text-lg font-bold text-green-400">${formatNumber(balance)}</div></div>
               <div className="text-right"><div className="text-xs text-gray-500">Equity</div><div className={`text-lg font-bold ${equity >= 10000 ? 'text-green-400' : 'text-red-400'}`}>${formatNumber(equity)}</div></div>
-              <div className="text-right"><div className="text-xs text-gray-500">P&L ( unrealized )</div><div className={`text-lg font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}{formatNumber(totalUnrealizedPnL)}</div></div>
               <div className="text-right"><div className="text-xs text-gray-500">Общий P&L</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
               <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${wsConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs text-gray-500">{wsConnectedCount}/{SYMBOLS.length}</span></div>
               <span className="text-sm text-gray-600">{currentTime.toLocaleTimeString()}</span>
@@ -351,10 +333,9 @@ const App: React.FC = () => {
       </header>
 
       <div className="relative z-10 container mx-auto px-4 py-4">
-        {/* Общий P&L бар */}
         <div className="rounded-xl p-4 mb-4 border border-purple-500/20 bg-black/60">
           <div className="flex justify-between items-center">
-            <span className="text-sm text-gray-400">📊 Общая прибыль по открытым позициям</span>
+            <span className="text-sm text-gray-400">📊 Нереализованная прибыль</span>
             <span className={`text-xl font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
           </div>
           <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-gray-500">
@@ -391,7 +372,7 @@ const App: React.FC = () => {
               </div>
               {autoTrade && (
                 <div className="mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/30 text-center">
-                  <p className="text-purple-300 text-sm">✅ АВТОТОРГОВЛЯ АКТИВНА | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | {aggressiveMode ? '⚡АГРО' : '🐢НОРМ'}</p>
+                  <p className="text-purple-300 text-sm">✅ АВТОТОРГОВЛЯ | TP +{TP_PERCENT}% | SL -{SL_PERCENT}% | {aggressiveMode ? '⚡АГРО' : '🐢НОРМ'}</p>
                 </div>
               )}
             </div>
