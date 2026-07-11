@@ -70,6 +70,7 @@ const App: React.FC = () => {
   const [winRate, setWinRate] = useState(0);
   const [autoTrade, setAutoTrade] = useState(false);
   const [riskPercent, setRiskPercent] = useState(3);
+  const [maxPositions, setMaxPositions] = useState(10);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
@@ -78,12 +79,11 @@ const App: React.FC = () => {
   const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
   const [expandedSignal, setExpandedSignal] = useState<string | null>(null);
 
-  const RSI_BUY = 28, RSI_SELL = 72;
-  const STOCH_BUY = 18, STOCH_SELL = 82;
-  const ADX_MIN = 28;
-  const TP_PERCENT = 1.8, SL_PERCENT = 0.5;
-  const MAX_POSITIONS = 10;
-  const COOLDOWN = 60000;
+  const RSI_BUY = 30, RSI_SELL = 70;
+  const STOCH_BUY = 20, STOCH_SELL = 80;
+  const ADX_MIN = 25;
+  const TP_PERCENT = 4.0, SL_PERCENT = 1.5;
+  const COOLDOWN = 120000;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const apiRef = useRef<any>(null);
@@ -94,11 +94,13 @@ const App: React.FC = () => {
   const balanceRef = useRef(balance);
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
+  const maxPositionsRef = useRef(maxPositions);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
+  useEffect(() => { maxPositionsRef.current = maxPositions; }, [maxPositions]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -173,7 +175,7 @@ const App: React.FC = () => {
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
     return {
       id: `${symbol}_${Date.now()}`, symbol, action: action as 'buy' | 'sell', price,
-      timestamp: Date.now(), strength: (rsi < 15 || rsi > 85) ? 3 : 2 as 1 | 2 | 3,
+      timestamp: Date.now(), strength: (rsi < 20 || rsi > 80) ? 3 : 2 as 1 | 2 | 3,
       rsi, stochK: Math.round(stoch), macd, adx,
       reasons: [`RSI:${rsi}`, `Stoch:${Math.round(stoch)}`, `ADX:${Math.round(adx)}`, `MACD:${macd > 0 ? '↑' : '↓'}`]
     };
@@ -182,7 +184,7 @@ const App: React.FC = () => {
   const executeTrade = useCallback((s: Signal) => {
     if (!autoTradeRef.current || !s?.price) return;
     const current = tradesRef.current.filter(t => t.status === 'open');
-    if (current.length >= MAX_POSITIONS) return;
+    if (maxPositionsRef.current > 0 && current.length >= maxPositionsRef.current) return;
     if (current.find(t => t.symbol === s.symbol)) return;
     if (lastTradeTimeForSymbol.current.get(s.symbol) && Date.now() - lastTradeTimeForSymbol.current.get(s.symbol)! < COOLDOWN) return;
 
@@ -222,11 +224,11 @@ const App: React.FC = () => {
         if ((t.side === 'buy' && cp <= t.slPrice) || (t.side === 'sell' && cp >= t.slPrice)) { closeTrade(t, cp, 'SL'); continue; }
         if (!t.breakevenActivated) {
           const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
-          if (pPct >= TP_PERCENT * 0.5) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
+          if (pPct >= TP_PERCENT * 0.4) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
         }
       }
     };
-    const i = setInterval(check, 2000);
+    const i = setInterval(check, 5000);
     return () => clearInterval(i);
   }, [trades, prices, closeTrade]);
 
@@ -257,6 +259,7 @@ const App: React.FC = () => {
   const openTrades = trades.filter(t => t.status === 'open');
   const closedTrades = trades.filter(t => t.status === 'closed');
   const equity = balance + totalUnrealizedPnL;
+  const maxPosLabel = maxPositions === 0 ? '∞' : maxPositions.toString();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/30 to-black text-white">
@@ -267,7 +270,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+ | Макс {MAX_POSITIONS} поз.</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | 15m | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -289,7 +292,7 @@ const App: React.FC = () => {
             <span className={`text-xl font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
           </div>
           <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-gray-500">
-            <div>Открыто: <span className="text-yellow-400 font-bold">{openTrades.length}/{MAX_POSITIONS}</span></div>
+            <div>Открыто: <span className="text-yellow-400 font-bold">{openTrades.length}/{maxPosLabel}</span></div>
             <div>Закрыто: <span className="text-blue-400 font-bold">{closedTrades.length}</span></div>
             <div>Винрейт: <span className="text-green-400 font-bold">{winRate.toFixed(1)}%</span></div>
             <div>Сигналов: <span className="text-red-400 font-bold">{signals.length}</span></div>
@@ -321,19 +324,26 @@ const App: React.FC = () => {
               </div>
               {autoTrade && (
                 <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
-                  <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | Макс {MAX_POSITIONS} поз.</p>
+                  <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ 15m | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | Макс {maxPosLabel} поз.</p>
                 </div>
               )}
             </div>
 
-            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
-              <div className="flex justify-between text-sm"><span className="text-gray-400">Риск на сделку</span><span className="text-white font-bold">{riskPercent}%</span></div>
-              <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-red-500 mt-2" />
+            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40 space-y-4">
+              <div>
+                <div className="flex justify-between text-sm"><span className="text-gray-400">Риск на сделку</span><span className="text-white font-bold">{riskPercent}%</span></div>
+                <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-red-500 mt-1" />
+              </div>
+              <div>
+                <div className="flex justify-between text-sm"><span className="text-gray-400">Макс. позиций</span><span className="text-white font-bold">{maxPosLabel}</span></div>
+                <input type="range" min="0" max="20" step="1" value={maxPositions} onChange={e => setMaxPositions(+e.target.value)} className="w-full accent-red-500 mt-1" />
+                <div className="text-xs text-gray-500 mt-1">0 = без ограничений (∞)</div>
+              </div>
             </div>
 
             <div className="rounded-xl border border-red-500/20 overflow-hidden bg-black/40">
               <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30 flex justify-between items-center">
-                <h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length}/{MAX_POSITIONS})</h3>
+                <h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length}/{maxPosLabel})</h3>
                 <span className={`text-sm font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
               </div>
               <div className="divide-y divide-gray-800 max-h-96 overflow-y-auto">
@@ -364,7 +374,7 @@ const App: React.FC = () => {
               <div className="rounded-xl p-12 text-center bg-black/40 border border-red-500/20">
                 <div className="text-6xl mb-4">⏳</div>
                 <div className="text-gray-400 text-lg">Ожидание сигналов...</div>
-                <div className="text-gray-500 text-sm mt-2">{SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+</div>
+                <div className="text-gray-500 text-sm mt-2">15m | {SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+</div>
               </div>
             ) : signals.filter(s => s?.price).map((s) => {
               const isExpanded = expandedSignal === s.id;
