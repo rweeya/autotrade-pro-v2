@@ -20,17 +20,14 @@ const SYMBOLS = [
   'PORTAL/USDT', 'AI/USDT', 'BOME/USDT', 'SLERF/USDT', 'MYRO/USDT', 'SAMO/USDT',
   'TURBO/USDT', 'DEGEN/USDT', 'ANDY/USDT', 'MICHI/USDT', 'MOTHER/USDT', 'BOB/USDT',
   'PONKE/USDT', 'MANEKI/USDT', 'BUBBLE/USDT', 'NPC/USDT', 'MAGA/USDT', 'TRUMPWIN/USDT',
-  'HMSTR/USDT', 'CATI/USDT', 'NEIRO/USDT', 'DOGS/USDT', 'NOT/USDT', 'MAJOR/USDT',
+  'HMSTR/USDT', 'CATI/USDT', 'NEIRO/USDT', 'DOGS/USDT', 'MAJOR/USDT',
   'MEME/USDT', 'BANANA/USDT', 'RARE/USDT', 'LISTA/USDT', 'BB/USDT', 'IO/USDT',
-  'ZRO/USDT', 'ZK/USDT', 'ALT/USDT', 'PORTAL/USDT', 'XAI/USDT', 'ACE/USDT',
   'NFP/USDT', 'PIXEL/USDT', 'SAGA/USDT', 'DYM/USDT', 'TNSR/USDT', 'W/USDT',
-  'OMNI/USDT', 'REZ/USDT', 'ETHFI/USDT', 'ENA/USDT', 'STRK/USDT', 'RONIN/USDT',
-  'AXL/USDT', 'WLD/USDT', 'TIA/USDT', 'SEI/USDT', 'SUI/USDT', 'APT/USDT',
-  'ARB/USDT', 'OP/USDT', 'METIS/USDT', 'CANTO/USDT', 'KAVA/USDT', 'OSMO/USDT',
-  'DYDX/USDT', 'GMX/USDT', 'GNS/USDT', 'SNX/USDT', 'CRV/USDT', 'CVX/USDT',
-  'FXS/USDT', 'LDO/USDT', 'RPL/USDT', 'ANKR/USDT', 'LRC/USDT', 'IMX/USDT',
-  'MINA/USDT', 'ROSE/USDT', 'ONE/USDT', 'COTI/USDT', 'CKB/USDT', 'YGG/USDT',
-  'SUPER/USDT', 'HIGH/USDT', 'MC/USDT', 'GALA/USDT', 'SAND/USDT', 'MANA/USDT'
+  'OMNI/USDT', 'REZ/USDT', 'ETHFI/USDT', 'STRK/USDT', 'RONIN/USDT',
+  'AXL/USDT', 'METIS/USDT', 'CANTO/USDT', 'KAVA/USDT', 'OSMO/USDT',
+  'GMX/USDT', 'GNS/USDT', 'LRC/USDT', 'ANKR/USDT', 'RPL/USDT',
+  'SUPER/USDT', 'HIGH/USDT', 'MC/USDT', 'COTI/USDT', 'ONE/USDT',
+  'ROSE/USDT', 'MINA/USDT', 'YGG/USDT', 'CKB/USDT'
 ];
 
 interface Signal {
@@ -45,7 +42,6 @@ interface Signal {
   macd: number;
   adx: number;
   reasons: string[];
-  aiConfirmed: boolean;
 }
 
 interface Trade {
@@ -66,18 +62,6 @@ interface Trade {
   breakevenActivated: boolean;
 }
 
-const MODES = {
-  normal: { rsiBuy: 25, rsiSell: 75, stochBuy: 15, stochSell: 85, adx: 25, tp: 1.8, sl: 0.5, cooldown: 90000, maxPos: 8 },
-  aggressive: { rsiBuy: 20, rsiSell: 80, stochBuy: 10, stochSell: 90, adx: 30, tp: 2.2, sl: 0.6, cooldown: 60000, maxPos: 6 },
-  turbo: { rsiBuy: 15, rsiSell: 85, stochBuy: 5, stochSell: 95, adx: 35, tp: 3.0, sl: 0.7, cooldown: 45000, maxPos: 4 },
-} as const;
-
-type ModeKey = keyof typeof MODES;
-
-// Hugging Face AI (бесплатный)
-const AI_API_URL = 'https://api-inference.huggingface.co/models/bert-base-uncased';
-const AI_TOKEN = ''; // Оставь пустым — работает без токена для простых моделей
-
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('autotrade');
   const [selectedSymbol, setSelectedSymbol] = useState('BTC/USDT');
@@ -86,17 +70,20 @@ const App: React.FC = () => {
   const [winRate, setWinRate] = useState(0);
   const [autoTrade, setAutoTrade] = useState(false);
   const [riskPercent, setRiskPercent] = useState(3);
-  const [mode, setMode] = useState<ModeKey>('normal');
-  const [useAI, setUseAI] = useState(true);
   const [signals, setSignals] = useState<Signal[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [prices, setPrices] = useState<Map<string, number>>(new Map());
   const [currentTime, setCurrentTime] = useState(new Date());
   const [apiConnectedCount, setApiConnectedCount] = useState(0);
   const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
-  const [aiPendingCount, setAiPendingCount] = useState(0);
 
-  const cfg = MODES[mode];
+  // Один сбалансированный режим
+  const RSI_BUY = 28, RSI_SELL = 72;
+  const STOCH_BUY = 18, STOCH_SELL = 82;
+  const ADX_MIN = 28;
+  const TP_PERCENT = 1.8, SL_PERCENT = 0.5;
+  const MAX_POSITIONS = 10;
+  const COOLDOWN = 60000;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
   const apiRef = useRef<any>(null);
@@ -107,15 +94,11 @@ const App: React.FC = () => {
   const balanceRef = useRef(balance);
   const riskPercentRef = useRef(riskPercent);
   const tradesRef = useRef(trades);
-  const modeRef = useRef(mode);
-  const useAIRef = useRef(useAI);
 
   useEffect(() => { autoTradeRef.current = autoTrade; }, [autoTrade]);
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { riskPercentRef.current = riskPercent; }, [riskPercent]);
   useEffect(() => { tradesRef.current = trades; }, [trades]);
-  useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { useAIRef.current = useAI; }, [useAI]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -169,80 +152,47 @@ const App: React.FC = () => {
   const calcStochastic = (p: number[], per = 14) => {
     if (!p || p.length < per) return 50;
     const slice = p.slice(-per);
-    const highest = Math.max(...slice), lowest = Math.min(...slice);
-    return highest === lowest ? 50 : ((p[p.length - 1] - lowest) / (highest - lowest)) * 100;
-  };
-
-  // AI проверка сигнала
-  const checkWithAI = async (symbol: string, action: string, rsi: number, stoch: number, adx: number): Promise<boolean> => {
-    if (!useAIRef.current) return true;
-    try {
-      setAiPendingCount(p => p + 1);
-      // Бесплатная проверка через Hugging Face
-      const res = await fetch('https://api-inference.huggingface.co/models/google/flan-t5-small', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          inputs: `Crypto trading signal: ${symbol} ${action} RSI=${rsi} Stochastic=${stoch} ADX=${adx}. Should I ${action}? Answer YES or NO.`,
-          parameters: { max_length: 5, temperature: 0.1 }
-        })
-      });
-      const data = await res.json();
-      const answer = data?.[0]?.generated_text?.toUpperCase() || 'NO';
-      setAiPendingCount(p => p - 1);
-      return answer.includes('YES');
-    } catch {
-      setAiPendingCount(p => p - 1);
-      return true; // Если AI недоступен — пропускаем сигнал
-    }
+    const h = Math.max(...slice), l = Math.min(...slice);
+    return h === l ? 50 : ((p[p.length - 1] - l) / (h - l)) * 100;
   };
 
   const generateSignal = (symbol: string, price: number): Signal | null => {
     if (!price || price <= 0) return null;
     const h = priceHistoryRef.current.get(symbol);
     if (!h || h.length < 60) return null;
-    if (lastSignalTimeForSymbol.current.get(symbol) && Date.now() - lastSignalTimeForSymbol.current.get(symbol)! < cfg.cooldown) return null;
+    if (lastSignalTimeForSymbol.current.get(symbol) && Date.now() - lastSignalTimeForSymbol.current.get(symbol)! < COOLDOWN) return null;
 
     const rsi = calcRSI(h), stoch = calcStochastic(h), macd = calcMACD(h), ema20 = calcEMA(h, 20), adx = calcADX(h);
-    if (adx < cfg.adx) return null;
+    if (adx < ADX_MIN) return null;
 
-    const buyCondition = rsi < cfg.rsiBuy && stoch < cfg.stochBuy && macd > 0 && price > ema20;
-    const sellCondition = rsi > cfg.rsiSell && stoch > cfg.stochSell && macd < 0 && price < ema20;
-    if (!buyCondition && !sellCondition) return null;
+    const buy = rsi < RSI_BUY && stoch < STOCH_BUY && macd > 0 && price > ema20;
+    const sell = rsi > RSI_SELL && stoch > STOCH_SELL && macd < 0 && price < ema20;
+    if (!buy && !sell) return null;
 
-    const action = buyCondition ? 'buy' : 'sell';
+    const action = buy ? 'buy' : 'sell';
     lastSignalTimeForSymbol.current.set(symbol, Date.now());
-    
     return {
       id: `${symbol}_${Date.now()}`, symbol, action: action as 'buy' | 'sell', price,
-      timestamp: Date.now(), strength: (rsi < 12 || rsi > 88) ? 3 : 2 as 1 | 2 | 3,
+      timestamp: Date.now(), strength: (rsi < 15 || rsi > 85) ? 3 : 2 as 1 | 2 | 3,
       rsi, stochK: Math.round(stoch), macd, adx,
-      reasons: [`RSI:${rsi}`, `Stoch:${Math.round(stoch)}`, `ADX:${Math.round(adx)}`, `MACD:${macd > 0 ? '↑' : '↓'}`],
-      aiConfirmed: false
+      reasons: [`RSI:${rsi}`, `Stoch:${Math.round(stoch)}`, `ADX:${Math.round(adx)}`, `MACD:${macd > 0 ? '↑' : '↓'}`]
     };
   };
 
-  const executeTrade = useCallback(async (s: Signal) => {
+  const executeTrade = useCallback((s: Signal) => {
     if (!autoTradeRef.current || !s?.price) return;
-    const currentTrades = tradesRef.current.filter(t => t.status === 'open');
-    if (currentTrades.length >= cfg.maxPos) return;
-    if (currentTrades.find(t => t.symbol === s.symbol)) return;
-    if (lastTradeTimeForSymbol.current.get(s.symbol) && Date.now() - lastTradeTimeForSymbol.current.get(s.symbol)! < cfg.cooldown) return;
-
-    // AI проверка
-    if (useAIRef.current) {
-      const aiOk = await checkWithAI(s.symbol, s.action, s.rsi, s.stochK, s.adx);
-      if (!aiOk) return;
-      s.aiConfirmed = true;
-    }
+    const current = tradesRef.current.filter(t => t.status === 'open');
+    if (current.length >= MAX_POSITIONS) return;
+    if (current.find(t => t.symbol === s.symbol)) return;
+    if (lastTradeTimeForSymbol.current.get(s.symbol) && Date.now() - lastTradeTimeForSymbol.current.get(s.symbol)! < COOLDOWN) return;
 
     const amt = balanceRef.current * riskPercentRef.current / 100;
     if (amt <= 0 || amt > balanceRef.current) return;
     const qty = Math.floor(amt / s.price * 1000) / 1000;
     if (!qty) return;
 
-    const tp = s.action === 'buy' ? s.price * (1 + cfg.tp / 100) : s.price * (1 - cfg.tp / 100);
-    const sl = s.action === 'buy' ? s.price * (1 - cfg.sl / 100) : s.price * (1 + cfg.sl / 100);
+    const tp = s.action === 'buy' ? s.price * (1 + TP_PERCENT / 100) : s.price * (1 - TP_PERCENT / 100);
+    const sl = s.action === 'buy' ? s.price * (1 - SL_PERCENT / 100) : s.price * (1 + SL_PERCENT / 100);
 
     lastTradeTimeForSymbol.current.set(s.symbol, Date.now());
     setBalance(p => p - amt);
@@ -252,7 +202,7 @@ const App: React.FC = () => {
       entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null,
       status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4), breakevenActivated: false
     }]);
-  }, [cfg]);
+  }, []);
 
   const closeTrade = useCallback((t: Trade, cp: number, reason: string) => {
     if (!t || !cp) return;
@@ -272,13 +222,13 @@ const App: React.FC = () => {
         if ((t.side === 'buy' && cp <= t.slPrice) || (t.side === 'sell' && cp >= t.slPrice)) { closeTrade(t, cp, 'SL'); continue; }
         if (!t.breakevenActivated) {
           const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
-          if (pPct >= cfg.tp * 0.5) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
+          if (pPct >= TP_PERCENT * 0.5) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
         }
       }
     };
-    const i = setInterval(check, 3000);
+    const i = setInterval(check, 2000);
     return () => clearInterval(i);
-  }, [trades, prices, closeTrade, cfg]);
+  }, [trades, prices, closeTrade]);
 
   const updatePrice = useCallback((data: PriceData) => {
     if (!data?.symbol || !data.price || data.price <= 0) return;
@@ -290,7 +240,7 @@ const App: React.FC = () => {
     priceHistoryRef.current.set(symbol, h);
     const sig = generateSignal(symbol, price);
     if (sig) { setSignals(p => [sig, ...p].slice(0, 100)); if (autoTradeRef.current) executeTrade(sig); }
-  }, [executeTrade, cfg]);
+  }, [executeTrade]);
 
   useEffect(() => {
     const manager = createPriceManager();
@@ -317,7 +267,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI {cfg.rsiBuy}/{cfg.rsiSell} | ADX {cfg.adx}+ | AI:{useAI ? '✅' : '❌'}</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+ | Макс {MAX_POSITIONS} поз.</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -326,7 +276,6 @@ const App: React.FC = () => {
               <div className="text-right"><div className="text-xs text-gray-400">P&L</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
               <div className="text-right"><div className="text-xs text-gray-400">WR</div><div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
               <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${apiConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs text-gray-400">{apiConnectedCount}/{SYMBOLS.length}</span></div>
-              {aiPendingCount > 0 && <span className="text-xs text-purple-400">🤖AI:{aiPendingCount}</span>}
               <span className="text-sm text-gray-500">{currentTime.toLocaleTimeString()}</span>
             </div>
           </div>
@@ -339,12 +288,11 @@ const App: React.FC = () => {
             <span className="text-sm text-gray-400">📊 Нереализованная прибыль</span>
             <span className={`text-xl font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
           </div>
-          <div className="grid grid-cols-5 gap-4 mt-2 text-xs text-gray-500">
-            <div>Открыто: <span className="text-yellow-400 font-bold">{openTrades.length}/{cfg.maxPos}</span></div>
+          <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-gray-500">
+            <div>Открыто: <span className="text-yellow-400 font-bold">{openTrades.length}/{MAX_POSITIONS}</span></div>
             <div>Закрыто: <span className="text-blue-400 font-bold">{closedTrades.length}</span></div>
             <div>Винрейт: <span className="text-green-400 font-bold">{winRate.toFixed(1)}%</span></div>
             <div>Сигналов: <span className="text-red-400 font-bold">{signals.length}</span></div>
-            <div>AI: <span className={useAI ? 'text-purple-400 font-bold' : 'text-gray-500'}>{useAI ? 'Активен' : 'Выключен'}</span></div>
           </div>
         </div>
 
@@ -368,16 +316,12 @@ const App: React.FC = () => {
             <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
               <div className="flex flex-wrap gap-3 items-center">
                 <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
-                <button onClick={() => setMode('normal')} className={`px-3 py-2 rounded-lg text-sm font-bold ${mode === 'normal' ? 'bg-gray-500 ring-1 ring-red-400' : 'bg-gray-800'}`}>🐢</button>
-                <button onClick={() => setMode('aggressive')} className={`px-3 py-2 rounded-lg text-sm font-bold ${mode === 'aggressive' ? 'bg-yellow-600 ring-1 ring-yellow-400' : 'bg-gray-800'}`}>⚡</button>
-                <button onClick={() => setMode('turbo')} className={`px-3 py-2 rounded-lg text-sm font-bold ${mode === 'turbo' ? 'bg-orange-600 ring-1 ring-orange-400 animate-pulse' : 'bg-gray-800'}`}>🔥</button>
-                <button onClick={() => setUseAI(!useAI)} className={`px-3 py-2 rounded-lg text-sm font-bold ${useAI ? 'bg-purple-600' : 'bg-gray-800'}`}>🤖AI</button>
                 <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-4 py-2 bg-gray-700 rounded-lg text-sm">🔄 Сбросить</button>
-                {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-4 py-2 bg-red-800 rounded-lg text-sm">🔒 Все({openTrades.length})</button>}
+                {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-4 py-2 bg-red-800 rounded-lg text-sm">🔒 Закрыть всё ({openTrades.length})</button>}
               </div>
               {autoTrade && (
                 <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
-                  <p className="text-red-300 text-sm">✅ АВТО | TP +{cfg.tp}% SL -{cfg.sl}% | Макс {cfg.maxPos} поз. | AI:{useAI ? '✅' : '❌'}</p>
+                  <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | Макс {MAX_POSITIONS} поз.</p>
                 </div>
               )}
             </div>
@@ -389,7 +333,7 @@ const App: React.FC = () => {
 
             <div className="rounded-xl border border-red-500/20 overflow-hidden bg-black/40">
               <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30 flex justify-between items-center">
-                <h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length}/{cfg.maxPos})</h3>
+                <h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length}/{MAX_POSITIONS})</h3>
                 <span className={`text-sm font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
               </div>
               <div className="divide-y divide-gray-800 max-h-96 overflow-y-auto">
@@ -420,7 +364,7 @@ const App: React.FC = () => {
               <div className="rounded-xl p-12 text-center bg-black/40 border border-red-500/20">
                 <div className="text-6xl mb-4">⏳</div>
                 <div className="text-gray-400 text-lg">Ожидание сигналов...</div>
-                <div className="text-gray-500 text-sm mt-2">{SYMBOLS.length} активов | RSI {cfg.rsiBuy}/{cfg.rsiSell} | ADX {cfg.adx}+</div>
+                <div className="text-gray-500 text-sm mt-2">{SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | Stoch {STOCH_BUY}/{STOCH_SELL} | ADX {ADX_MIN}+</div>
               </div>
             ) : signals.filter(s => s?.price).map((s, i) => (
               <div key={i} className={`rounded-lg p-4 border transition-all cursor-pointer bg-gradient-to-r from-black/80 ${s.action === 'buy' ? 'to-green-900/20 border-green-500/20' : 'to-red-900/20 border-red-500/20'}`}>
