@@ -308,7 +308,7 @@ const App: React.FC = () => {
         {activeTab === 'trading' && (
           <div className="rounded-xl p-3 border border-red-500/20 bg-black/40">
             <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}</select>
-            <TradingChart symbol={selectedSymbol} />
+            <TradingChart symbol={selectedSymbol.replace('/', '')} />
           </div>
         )}
         {activeTab === 'history' && <SignalHistory />}
@@ -394,7 +394,7 @@ const App: React.FC = () => {
                         {(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/50 px-2 py-1 rounded text-red-300 text-center">{r}</span>)}
                       </div>
                       <div className="h-[300px] rounded-lg overflow-hidden border border-gray-700">
-                        <TradingChart symbol={s.symbol} />
+                        <TradingChart symbol={s.symbol.replace('/', '')} />
                       </div>
                     </div>
                   )}
