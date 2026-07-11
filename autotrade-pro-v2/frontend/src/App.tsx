@@ -121,7 +121,6 @@ const App: React.FC = () => {
     setWinRate(closed.length ? (closed.filter(t => (t.profit || 0) > 0).length / closed.length) * 100 : 0);
   }, [trades]);
 
-  // ==================== ИСПРАВЛЕННЫЕ ИНДИКАТОРЫ ====================
   const calcRSI = (p: number[], per = 14) => {
     if (!p || p.length < per + 1) return 50;
     let g = 0, l = 0;
@@ -160,7 +159,6 @@ const App: React.FC = () => {
     return ((current - lowest) / (highest - lowest)) * 100;
   };
 
-  // ==================== СИГНАЛЫ ====================
   const generateSignal = (symbol: string, price: number): Signal | null => {
     if (!price || price <= 0) return null;
     const h = priceHistoryRef.current.get(symbol);
@@ -186,7 +184,6 @@ const App: React.FC = () => {
     };
   };
 
-  // ==================== ТОРГОВЛЯ ====================
   const executeTrade = useCallback((s: Signal) => {
     if (!autoTradeRef.current || !s?.price) return;
     const currentTrades = tradesRef.current.filter(t => t.status === 'open');
@@ -210,7 +207,6 @@ const App: React.FC = () => {
       entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null,
       status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4), breakevenActivated: false
     }]);
-    try { new Audio('/sounds/trade-open.mp3').play(); } catch(e) {}
   }, [cfg]);
 
   const closeTrade = useCallback((t: Trade, cp: number, reason: string) => {
@@ -220,7 +216,6 @@ const App: React.FC = () => {
     setBalance(p => p + inv + prof);
     setTotalProfit(p => p + prof);
     setTrades(p => p.map(x => x.id === t.id ? { ...x, status: 'closed' as const, exitPrice: cp, exitTime: Date.now(), profit: prof, profitPercent: t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100 } : x));
-    try { new Audio('/sounds/trade-close.mp3').play(); } catch(e) {}
   }, []);
 
   useEffect(() => {
@@ -269,69 +264,52 @@ const App: React.FC = () => {
   const equity = balance + totalUnrealizedPnL;
 
   return (
-    <div className="min-h-screen bg-[#020005] text-white relative overflow-hidden">
-      {/* Анимированный фон с частицами */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        {Array.from({ length: 30 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-0.5 h-0.5 bg-purple-400 rounded-full animate-pulse"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDuration: `${3 + Math.random() * 5}s`,
-              animationDelay: `${Math.random() * 5}s`,
-              opacity: 0.3 + Math.random() * 0.4
-            }}
-          />
-        ))}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] rounded-full bg-[radial-gradient(circle,transparent_30%,rgba(80,0,150,0.05)_60%,rgba(0,0,0,0)_100%)]" />
-      </div>
-
-      <header className="relative z-20 border-b border-purple-500/20 bg-black/95 backdrop-blur-xl sticky top-0">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/30 to-black text-white">
+      <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center flex-wrap gap-3">
             <div className="flex items-center gap-2">
-              <div className="text-xl">{mode === 'turbo' ? '🔥' : mode === 'aggressive' ? '⚡' : '🌌'}</div>
+              <div className="text-2xl">{mode === 'turbo' ? '🔥' : mode === 'aggressive' ? '⚡' : '💀'}</div>
               <div>
-                <h1 className="text-base font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-[10px] text-gray-600">{SYMBOLS.length} активов | {cfg.name}</p>
+                <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | {cfg.name} | RSI {cfg.rsiBuy}/{cfg.rsiSell} | ADX {cfg.adx}+</p>
               </div>
             </div>
-            <div className="flex items-center gap-3 text-xs">
-              <div className="text-right"><div className="text-gray-600">Баланс</div><div className="font-bold text-green-400">${formatNumber(balance)}</div></div>
-              <div className="text-right"><div className="text-gray-600">Equity</div><div className={`font-bold ${equity >= 10000 ? 'text-green-400' : 'text-red-400'}`}>${formatNumber(equity)}</div></div>
-              <div className="text-right"><div className="text-gray-600">P&L</div><div className={`font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
-              <div className="text-right"><div className="text-gray-600">WR</div><div className="font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
-              <div className="text-gray-600">{currentTime.toLocaleTimeString()}</div>
+            <div className="flex items-center gap-4">
+              <div className="text-right"><div className="text-xs text-gray-400">Баланс</div><div className="text-lg font-bold text-green-400">${formatNumber(balance)}</div></div>
+              <div className="text-right"><div className="text-xs text-gray-400">Equity</div><div className={`text-lg font-bold ${equity >= 10000 ? 'text-green-400' : 'text-red-400'}`}>${formatNumber(equity)}</div></div>
+              <div className="text-right"><div className="text-xs text-gray-400">P&L</div><div className={`text-lg font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalProfit >= 0 ? '+' : ''}{formatNumber(totalProfit)}</div></div>
+              <div className="text-right"><div className="text-xs text-gray-400">WR</div><div className="text-lg font-bold text-yellow-400">{winRate.toFixed(1)}%</div></div>
+              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${apiConnectedCount >= SYMBOLS.length ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} /><span className="text-xs text-gray-400">{apiConnectedCount}/{SYMBOLS.length}</span></div>
+              <span className="text-sm text-gray-500">{currentTime.toLocaleTimeString()}</span>
             </div>
           </div>
         </div>
       </header>
 
       <div className="relative z-10 container mx-auto px-4 py-4">
-        <div className="rounded-xl p-3 mb-4 border border-purple-500/15 bg-black/50">
-          <div className="flex justify-between items-center text-xs">
-            <span className="text-gray-500">Нереализованная прибыль</span>
-            <span className={`font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
+        <div className="rounded-xl p-4 mb-4 border border-red-500/20 bg-black/60">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-400">📊 Нереализованная прибыль</span>
+            <span className={`text-xl font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
           </div>
-          <div className="grid grid-cols-4 gap-2 mt-1 text-[10px] text-gray-600">
-            <div>Открыто: <span className="text-yellow-400">{openTrades.length}/{cfg.maxPos}</span></div>
-            <div>Закрыто: <span className="text-blue-400">{closedTrades.length}</span></div>
-            <div>Винрейт: <span className="text-green-400">{winRate.toFixed(1)}%</span></div>
-            <div>Режим: <span className={mode === 'turbo' ? 'text-orange-400' : mode === 'aggressive' ? 'text-yellow-400' : 'text-gray-400'}>{cfg.name}</span></div>
+          <div className="grid grid-cols-4 gap-4 mt-2 text-xs text-gray-500">
+            <div>Открыто: <span className="text-yellow-400 font-bold">{openTrades.length}/{cfg.maxPos}</span></div>
+            <div>Закрыто: <span className="text-blue-400 font-bold">{closedTrades.length}</span></div>
+            <div>Винрейт: <span className="text-green-400 font-bold">{winRate.toFixed(1)}%</span></div>
+            <div>Режим: <span className={mode === 'turbo' ? 'text-orange-400 font-bold' : mode === 'aggressive' ? 'text-yellow-400 font-bold' : 'text-gray-400 font-bold'}>{cfg.name}</span></div>
           </div>
         </div>
 
-        <div className="flex gap-1 mb-4 border-b border-purple-500/20 overflow-x-auto">
+        <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto">
           {[{ k: 'signals', i: '🎯', l: 'Сигналы' }, { k: 'trading', i: '📈', l: 'График' }, { k: 'autotrade', i: '🤖', l: 'Торговля' }, { k: 'news', i: '📰', l: 'Новости' }, { k: 'history', i: '📜', l: 'История' }].map(t => (
-            <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-xs rounded-t-lg transition-colors ${activeTab === t.k ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-gray-300'}`}>{t.i} {t.l}</button>
+            <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm rounded-t-lg transition-colors ${activeTab === t.k ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t.i} {t.l}</button>
           ))}
         </div>
 
         {activeTab === 'trading' && (
-          <div className="rounded-xl p-3 border border-purple-500/15 bg-black/40">
-            <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-purple-500/30 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}</select>
+          <div className="rounded-xl p-3 border border-red-500/20 bg-black/40">
+            <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.map(s => <option key={s} value={s}>{s}</option>)}</select>
             <TradingChart symbol={selectedSymbol} />
           </div>
         )}
@@ -339,50 +317,50 @@ const App: React.FC = () => {
         {activeTab === 'news' && <News />}
 
         {activeTab === 'autotrade' && (
-          <div className="space-y-3">
-            <div className="rounded-xl p-3 border border-purple-500/15 bg-black/40">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => setAutoTrade(!autoTrade)} className={`px-4 py-2 rounded-lg font-bold text-xs transition-all ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
-                <button onClick={() => setMode('normal')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'normal' ? 'bg-gray-600 ring-1 ring-purple-400' : 'bg-gray-800'}`}>🐢</button>
-                <button onClick={() => setMode('aggressive')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'aggressive' ? 'bg-yellow-700 ring-1 ring-yellow-400' : 'bg-gray-800'}`}>⚡</button>
-                <button onClick={() => setMode('turbo')} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all ${mode === 'turbo' ? 'bg-orange-700 ring-1 ring-orange-400 animate-pulse' : 'bg-gray-800'}`}>🔥</button>
-                <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-3 py-2 bg-gray-800 rounded-lg text-xs">🔄</button>
-                {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-3 py-2 bg-red-900/50 rounded-lg text-xs">🔒 Все({openTrades.length})</button>}
+          <div className="space-y-4">
+            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
+              <div className="flex flex-wrap gap-3 items-center">
+                <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
+                <button onClick={() => setMode('normal')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'normal' ? 'bg-gray-600 ring-1 ring-red-400' : 'bg-gray-800'}`}>🐢</button>
+                <button onClick={() => setMode('aggressive')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'aggressive' ? 'bg-yellow-700 ring-1 ring-yellow-400' : 'bg-gray-800'}`}>⚡</button>
+                <button onClick={() => setMode('turbo')} className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${mode === 'turbo' ? 'bg-orange-700 ring-1 ring-orange-400 animate-pulse' : 'bg-gray-800'}`}>🔥</button>
+                <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-4 py-2 bg-gray-700 rounded-lg text-sm">🔄 Сбросить</button>
+                {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-4 py-2 bg-red-800 rounded-lg text-sm">🔒 Закрыть всё ({openTrades.length})</button>}
               </div>
               {autoTrade && (
-                <div className="mt-2 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center text-xs text-purple-300">
-                  ✅ АВТО | {cfg.name} | TP +{cfg.tp}% SL -{cfg.sl}% | Макс {cfg.maxPos} поз.
+                <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
+                  <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ | {cfg.name} | TP +{cfg.tp}% | SL -{cfg.sl}% | Макс {cfg.maxPos} поз.</p>
                 </div>
               )}
             </div>
 
-            <div className="rounded-xl p-3 border border-purple-500/15 bg-black/40">
-              <div className="flex justify-between text-xs"><span className="text-gray-500">Риск</span><span className="font-bold">{riskPercent}%</span></div>
-              <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-purple-500 mt-1" />
+            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
+              <div className="flex justify-between text-sm"><span className="text-gray-400">Риск на сделку</span><span className="text-white font-bold">{riskPercent}%</span></div>
+              <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-red-500 mt-2" />
             </div>
 
-            <div className="rounded-xl border border-purple-500/15 overflow-hidden bg-black/40">
-              <div className="px-3 py-2 bg-purple-950/20 border-b border-purple-500/20 flex justify-between items-center">
-                <h3 className="font-bold text-purple-300 text-xs">📊 ПОЗИЦИИ ({openTrades.length}/{cfg.maxPos})</h3>
-                <span className={`text-xs font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
+            <div className="rounded-xl border border-red-500/20 overflow-hidden bg-black/40">
+              <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30 flex justify-between items-center">
+                <h3 className="font-bold text-red-400 text-sm">📊 ОТКРЫТЫЕ ПОЗИЦИИ ({openTrades.length}/{cfg.maxPos})</h3>
+                <span className={`text-sm font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
               </div>
-              <div className="divide-y divide-gray-800/50 max-h-80 overflow-y-auto">
-                {!openTrades.length ? <div className="p-6 text-center text-xs text-gray-600">Нет открытых позиций</div> : openTrades.map(t => {
+              <div className="divide-y divide-gray-800 max-h-96 overflow-y-auto">
+                {!openTrades.length ? <div className="p-6 text-center text-sm text-gray-500">Нет открытых позиций</div> : openTrades.map(t => {
                   const cp = prices.get(t.symbol) || t.entryPrice;
                   const pnl = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
                   const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
                   return (
-                    <div key={t.id} className={`p-2 hover:bg-white/3 transition-colors ${pnl >= 0 ? 'bg-green-500/2' : 'bg-red-500/2'}`}>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold">{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol} {t.breakevenActivated && <span className="text-blue-400">BE</span>}</span>
-                        <span className={`font-bold ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>${formatNumber(pnl)} ({pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%)</span>
+                    <div key={t.id} className={`p-3 hover:bg-white/5 transition-colors ${pnl >= 0 ? 'bg-green-500/3' : 'bg-red-500/3'}`}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-sm">{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol} {t.breakevenActivated && <span className="text-xs text-blue-400 ml-1">BE</span>}</span>
+                        <span className={`font-bold text-sm ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>${formatNumber(pnl)} ({pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%)</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-1 mt-1 text-[10px] text-gray-500">
-                        <div>Вход <span className="text-gray-300">${formatPrice(t.entryPrice)}</span></div>
+                      <div className="grid grid-cols-3 gap-2 mt-1 text-xs text-gray-400">
+                        <div>Вход <span className="text-white">${formatPrice(t.entryPrice)}</span></div>
                         <div>TP <span className="text-green-400">${formatPrice(t.tpPrice)}</span></div>
                         <div>SL <span className={t.breakevenActivated ? 'text-blue-400' : 'text-red-400'}>${formatPrice(t.slPrice)}</span></div>
                       </div>
-                      <button onClick={() => closeTrade(t, cp, 'manual')} className="mt-1 w-full bg-red-900/30 hover:bg-red-800/30 text-[10px] py-0.5 rounded">Закрыть</button>
+                      <button onClick={() => closeTrade(t, cp, 'manual')} className="mt-2 w-full bg-red-900/50 hover:bg-red-800/50 text-xs py-1 rounded transition-colors">Закрыть</button>
                     </div>
                   );
                 })}
@@ -392,22 +370,22 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'signals' && (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {!signals.length ? (
-              <div className="rounded-xl p-12 text-center bg-black/40 border border-purple-500/15">
-                <div className="text-4xl mb-3">🌌</div>
-                <div className="text-gray-500">Ожидание сигналов...</div>
-                <div className="text-gray-600 text-[10px] mt-1">{cfg.name} | RSI {cfg.rsiBuy}/{cfg.rsiSell} | Stoch {cfg.stochBuy}/{cfg.stochSell} | ADX {cfg.adx}+</div>
+              <div className="rounded-xl p-12 text-center bg-black/40 border border-red-500/20">
+                <div className="text-6xl mb-4">⏳</div>
+                <div className="text-gray-400 text-lg">Ожидание сигналов...</div>
+                <div className="text-gray-500 text-sm mt-2">{cfg.name} | RSI {cfg.rsiBuy}/{cfg.rsiSell} | Stoch {cfg.stochBuy}/{cfg.stochSell} | ADX {cfg.adx}+</div>
               </div>
             ) : signals.filter(s => s?.price).map((s, i) => (
-              <div key={i} className={`rounded-lg p-3 border transition-all cursor-pointer bg-gradient-to-r ${s.action === 'buy' ? 'from-black/80 to-green-950/20 border-green-500/20 hover:border-green-400/40' : 'from-black/80 to-red-950/20 border-red-500/20 hover:border-red-400/40'}`}>
+              <div key={i} className={`rounded-lg p-4 border transition-all cursor-pointer bg-gradient-to-r from-black/80 ${s.action === 'buy' ? 'to-green-900/20 border-green-500/20 hover:border-green-400/40' : 'to-red-900/20 border-red-500/20 hover:border-red-400/40'}`}>
                 <div className="flex justify-between items-center">
-                  <span className="font-bold text-sm">{s.symbol}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
-                  <span className="text-yellow-400 text-[10px]">{'★'.repeat(s.strength)}</span>
+                  <span className="font-bold text-base">{s.symbol}</span>
+                  <span className={`px-3 py-1 rounded text-xs font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
+                  <span className="text-yellow-400 text-xs">{'★'.repeat(s.strength)}{'☆'.repeat(3 - s.strength)}</span>
                 </div>
-                <div className="grid grid-cols-4 gap-1 mt-1.5 text-[10px]">
-                  {(s.reasons || []).map((r, j) => <span key={j} className="bg-purple-950/40 px-1.5 py-0.5 rounded text-purple-300 text-center">{r}</span>)}
+                <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
+                  {(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/50 px-2 py-1 rounded text-red-300 text-center">{r}</span>)}
                 </div>
               </div>
             ))}
