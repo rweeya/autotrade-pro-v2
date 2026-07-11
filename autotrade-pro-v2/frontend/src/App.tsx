@@ -76,8 +76,8 @@ const App: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [apiConnectedCount, setApiConnectedCount] = useState(0);
   const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
+  const [expandedSignal, setExpandedSignal] = useState<string | null>(null);
 
-  // Один сбалансированный режим
   const RSI_BUY = 28, RSI_SELL = 72;
   const STOCH_BUY = 18, STOCH_SELL = 82;
   const ADX_MIN = 28;
@@ -364,20 +364,33 @@ const App: React.FC = () => {
               <div className="rounded-xl p-12 text-center bg-black/40 border border-red-500/20">
                 <div className="text-6xl mb-4">⏳</div>
                 <div className="text-gray-400 text-lg">Ожидание сигналов...</div>
-                <div className="text-gray-500 text-sm mt-2">{SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | Stoch {STOCH_BUY}/{STOCH_SELL} | ADX {ADX_MIN}+</div>
+                <div className="text-gray-500 text-sm mt-2">{SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+</div>
               </div>
-            ) : signals.filter(s => s?.price).map((s, i) => (
-              <div key={i} className={`rounded-lg p-4 border transition-all cursor-pointer bg-gradient-to-r from-black/80 ${s.action === 'buy' ? 'to-green-900/20 border-green-500/20' : 'to-red-900/20 border-red-500/20'}`}>
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-base">{s.symbol}</span>
-                  <span className={`px-3 py-1 rounded text-xs font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
-                  <span className="text-yellow-400 text-xs">{'★'.repeat(s.strength)}</span>
+            ) : signals.filter(s => s?.price).map((s) => {
+              const isExpanded = expandedSignal === s.id;
+              return (
+                <div key={s.id} className={`rounded-lg border transition-all cursor-pointer bg-gradient-to-r from-black/80 ${s.action === 'buy' ? 'to-green-900/20 border-green-500/20' : 'to-red-900/20 border-red-500/20'}`}>
+                  <div className="p-4 flex justify-between items-center" onClick={() => setExpandedSignal(isExpanded ? null : s.id)}>
+                    <span className="font-bold text-base">{s.symbol}</span>
+                    <span className={`px-3 py-1 rounded text-xs font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-400 text-xs">{'★'.repeat(s.strength)}</span>
+                      <span className={`text-gray-400 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div className="px-4 pb-4">
+                      <div className="grid grid-cols-4 gap-2 mb-3 text-xs">
+                        {(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/50 px-2 py-1 rounded text-red-300 text-center">{r}</span>)}
+                      </div>
+                      <div className="h-[300px] rounded-lg overflow-hidden border border-gray-700">
+                        <TradingChart symbol={s.symbol} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
-                  {(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/50 px-2 py-1 rounded text-red-300 text-center">{r}</span>)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
