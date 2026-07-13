@@ -34,13 +34,29 @@ class PriceManager {
 
   private async fetchPrices() {
     try {
-      const res = await fetch('https://api.bybit.com/v5/market/tickers?category=spot');
-      if (!res.ok) return;
-      const data = await res.json();
-      
-      if (data.retCode !== 0 || !data.result?.list) return;
-      
-      for (const ticker of data.result.list) {
+      let allTickers: any[] = [];
+      let cursor = '';
+      let pageCount = 0;
+      const maxPages = 5;
+
+      while (pageCount < maxPages) {
+        const url = `https://api.bybit.com/v5/market/tickers?category=spot&limit=100${cursor ? '&cursor=' + cursor : ''}`;
+        const res = await fetch(url);
+        if (!res.ok) break;
+        const data = await res.json();
+        
+        if (data.retCode !== 0 || !data.result?.list || data.result.list.length === 0) break;
+        
+        allTickers = [...allTickers, ...data.result.list];
+        const nextCursor = data.result.nextPageCursor || '';
+        
+        if (!nextCursor || nextCursor === cursor) break;
+        
+        cursor = nextCursor;
+        pageCount++;
+      }
+
+      for (const ticker of allTickers) {
         const symbol = this.symbols.find(s => s.replace('/', '') === ticker.symbol);
         if (!symbol) continue;
 
