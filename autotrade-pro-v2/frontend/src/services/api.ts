@@ -34,34 +34,36 @@ class PriceManager {
 
   private async fetchPrices() {
     try {
-      const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+      const res = await fetch('https://api.bybit.com/v5/market/tickers?category=spot');
       if (!res.ok) return;
       const data = await res.json();
       
-      for (const ticker of data) {
+      if (data.retCode !== 0 || !data.result?.list) return;
+      
+      for (const ticker of data.result.list) {
         const symbol = this.symbols.find(s => s.replace('/', '') === ticker.symbol);
         if (!symbol) continue;
 
         const priceData: PriceData = {
           symbol,
           price: parseFloat(ticker.lastPrice),
-          change24h: parseFloat(ticker.priceChangePercent),
-          volume24h: parseFloat(ticker.volume),
-          high24h: parseFloat(ticker.highPrice),
-          low24h: parseFloat(ticker.lowPrice),
+          change24h: parseFloat(ticker.price24hPcnt) * 100,
+          volume24h: parseFloat(ticker.volume24h),
+          high24h: parseFloat(ticker.highPrice24h),
+          low24h: parseFloat(ticker.lowPrice24h),
           timestamp: Date.now()
         };
 
         this.subscribers.get(symbol)?.forEach(cb => cb(priceData));
       }
     } catch (error) {
-      console.warn('⚠️ Ошибка запроса цен');
+      console.warn('⚠️ Ошибка запроса цен Bybit');
     }
   }
 
   private start() {
     this.isRunning = true;
-    console.log(`🚀 REST API запущен (${this.symbols.length} активов)`);
+    console.log(`🚀 Bybit API запущен (${this.symbols.length} активов)`);
     this.fetchPrices();
     this.intervalId = window.setInterval(() => this.fetchPrices(), 2000);
   }
