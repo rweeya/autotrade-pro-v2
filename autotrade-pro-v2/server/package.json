@@ -1,0 +1,13 @@
+{
+  "name": "autotrade-server",
+  "version": "1.0.0",
+  "description": "Auto Trade Pro V2 - 24/7 Server",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "node-fetch": "^2.7.0"
+  }
+}
