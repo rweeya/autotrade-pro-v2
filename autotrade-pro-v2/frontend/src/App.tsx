@@ -83,7 +83,7 @@ const App: React.FC = () => {
   const RSI_BUY = 30, RSI_SELL = 70;
   const STOCH_BUY = 20, STOCH_SELL = 80;
   const ADX_MIN = 25;
-  const TP_PERCENT = 4.0, SL_PERCENT = 1.5;
+  const TP_PERCENT = 2.0, SL_PERCENT = 0.5;
   const COOLDOWN = 120000;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
@@ -225,7 +225,7 @@ const App: React.FC = () => {
         if ((t.side === 'buy' && cp <= t.slPrice) || (t.side === 'sell' && cp >= t.slPrice)) { closeTrade(t, cp, 'SL'); continue; }
         if (!t.breakevenActivated) {
           const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
-          if (pPct >= TP_PERCENT * 0.4) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
+          if (pPct >= TP_PERCENT * 0.5) setTrades(p => p.map(x => x.id === t.id ? { ...x, slPrice: x.entryPrice, breakevenActivated: true } : x));
         }
       }
     };
@@ -271,7 +271,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | 15m | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | 15m | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+ | TP {TP_PERCENT}% SL {SL_PERCENT}%</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -309,7 +309,7 @@ const App: React.FC = () => {
         {activeTab === 'trading' && (
           <div className="rounded-xl p-3 border border-red-500/20 bg-black/40">
             <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}</select>
-            <TradingChart symbol={selectedSymbol.replace('/', '')} />
+            <TradingChart symbol={selectedSymbol} />
           </div>
         )}
         {activeTab === 'history' && <SignalHistory />}
@@ -395,7 +395,7 @@ const App: React.FC = () => {
                         {(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/50 px-2 py-1 rounded text-red-300 text-center">{r}</span>)}
                       </div>
                       <div className="h-[300px] rounded-lg overflow-hidden border border-gray-700">
-                        <TradingChart symbol={s.symbol.replace('/', '')} />
+                        <TradingChart symbol={s.symbol} />
                       </div>
                     </div>
                   )}
