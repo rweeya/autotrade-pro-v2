@@ -5,33 +5,28 @@ interface TradingChartProps {
 }
 
 const TradingChart: React.FC<TradingChartProps> = ({ symbol }) => {
-  let tvSymbol = symbol
-  if (symbol.includes('/USDT')) {
-    tvSymbol = `BINANCE:${symbol.replace('/USDT', '')}USDT`
-  } else if (symbol.includes('/')) {
-    tvSymbol = `FX:${symbol.replace('/', '')}`
-  } else {
-    tvSymbol = `NASDAQ:${symbol}`
-  }
-
-  const encodedSymbol = encodeURIComponent(tvSymbol)
+  // Убираем / из символа для TradingView
+  const cleanSymbol = symbol.replace('/', '');
+  const tvSymbol = `BINANCE:${cleanSymbol}`;
+  const encodedSymbol = encodeURIComponent(tvSymbol);
   
-  const widgetUrl = `https://www.tradingview.com/widgetembed/?frame_id=tradingview_widget&symbol=${encodedSymbol}&interval=60&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=f1f3f6&studies=%5B%22MASimple@tv-basicstudies%22%2C%22RSI@tv-basicstudies%22%2C%22MACD@tv-basicstudies%22%5D&theme=dark&style=1&timezone=Etc%2FUTC`
+  const widgetUrl = `https://s.tradingview.com/widgetembed/?frame_id=tv_${cleanSymbol}&symbol=${encodedSymbol}&interval=15&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=000000&studies=%5B%22RSI%40tv-basicstudies%22%2C%22MACD%40tv-basicstudies%22%5D&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=0&hideideas=1&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=ru`;
 
   return (
-    <div className="bg-black/50 rounded-xl border border-purple-500/30 p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-purple-400 font-bold">📈 ГРАФИК: {symbol}</h3>
-        <div className="text-xs text-gray-500">Powered by TradingView</div>
+    <div className="bg-black/50 rounded-xl border border-red-500/30 overflow-hidden">
+      <div className="flex justify-between items-center px-4 py-2 bg-red-950/20 border-b border-red-500/20">
+        <h3 className="text-red-400 font-bold text-sm">📈 {symbol}</h3>
+        <span className="text-xs text-gray-600">TradingView</span>
       </div>
       <iframe
         src={widgetUrl}
         width="100%"
-        height="500"
+        height="400"
         allowTransparency={true}
         frameBorder="0"
-        title="TradingView Chart"
-        className="rounded-lg"
+        title={`Chart ${symbol}`}
+        className="w-full"
+        loading="lazy"
       />
     </div>
   )
