@@ -4,7 +4,6 @@ export const maxDuration = 30;
 const REDIS_URL = 'https://trusted-skylark-162178.upstash.io';
 const REDIS_TOKEN = 'gQAAAAAAAnmCAAIgcDIxZDcxZjE2YWI3OWI0ZmI4YWJmMDgyMmI2ZjViNjlmZQ';
 
-// Простые функции для Redis
 async function redisGet(key) {
   const res = await fetch(`${REDIS_URL}/get/${key}`, {
     headers: { 'Authorization': `Bearer ${REDIS_TOKEN}` }
@@ -24,7 +23,6 @@ async function redisSet(key, value) {
   });
 }
 
-// Индикаторы
 function calcRSI(prices, period = 14) {
   if (!prices || prices.length < period + 1) return 50;
   let gains = 0, losses = 0;
@@ -75,7 +73,6 @@ function calcStochastic(prices, period = 14) {
   return ((prices[prices.length - 1] - l) / (h - l)) * 100;
 }
 
-// Конфигурация
 const CONFIG = {
   RSI_BUY: 30, RSI_SELL: 70,
   STOCH_BUY: 20, STOCH_SELL: 80,
@@ -86,17 +83,15 @@ const CONFIG = {
 
 export default async function handler(req, res) {
   try {
-    // Получаем текущие цены
     const response = await fetch('https://api.binance.com/api/v3/ticker/price');
     const tickers = await response.json();
     
-    // Получаем топ-50 USDT пар по объёму
     const volumeRes = await fetch('https://api.binance.com/api/v3/ticker/24hr');
     const volumeData = await volumeRes.json();
     const topSymbols = volumeData
       .filter(t => t.symbol.endsWith('USDT'))
       .sort((a, b) => parseFloat(b.volume) - parseFloat(a.volume))
-      .slice(0, 50)
+      .slice(0, 150)
       .map(t => t.symbol.replace('USDT', '/USDT'));
     
     let signals = [];
@@ -108,7 +103,6 @@ export default async function handler(req, res) {
       
       const price = parseFloat(ticker.price);
       
-      // Получаем историю цен из Redis
       const historyKey = `price:${symbol}`;
       let history = JSON.parse(await redisGet(historyKey) || '[]');
       history.push(price);
@@ -117,12 +111,10 @@ export default async function handler(req, res) {
       
       if (history.length < 60) continue;
       
-      // Проверяем кулдаун
       const lastSignalKey = `lastsignal:${symbol}`;
       const lastSignal = await redisGet(lastSignalKey);
       if (lastSignal && Date.now() - parseInt(lastSignal) < CONFIG.COOLDOWN) continue;
       
-      // Индикаторы
       const rsi = calcRSI(history);
       const stoch = calcStochastic(history);
       const macd = calcMACD(history);
