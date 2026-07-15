@@ -81,21 +81,33 @@ const CONFIG = {
   COOLDOWN: 120000
 };
 
+async function fetchBinance(endpoint) {
+  const urls = [
+    `https://api.binance.com${endpoint}`,
+    `https://api1.binance.com${endpoint}`,
+    `https://api2.binance.com${endpoint}`,
+    `https://api3.binance.com${endpoint}`,
+  ];
+  
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+    } catch (e) {
+      continue;
+    }
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   try {
-    const response = await fetch('https://api.binance.com/api/v3/ticker/price');
-    const tickers = await response.json();
+    const tickers = await fetchBinance('/api/v3/ticker/price');
+    const volumeData = await fetchBinance('/api/v3/ticker/24hr');
     
-    const volumeRes = await fetch('https://api.binance.com/api/v3/ticker/24hr');
-    const volumeData = await volumeRes.json();
-    
-    if (!Array.isArray(volumeData)) {
-      return res.status(500).json({ error: 'Binance 24hr not array', type: typeof volumeData });
-    }
-    
-    if (!Array.isArray(tickers)) {
-      return res.status(500).json({ error: 'Binance price not array', type: typeof tickers });
-    }
+    if (!tickers) return res.status(500).json({ error: 'Все зеркала Binance недоступны для price' });
+    if (!volumeData) return res.status(500).json({ error: 'Все зеркала Binance недоступны для 24hr' });
     
     const topSymbols = volumeData
       .filter(t => t.symbol.endsWith('USDT'))
