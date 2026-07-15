@@ -117,6 +117,7 @@ const App: React.FC = () => {
 
   const formatNumber = (n: number) => n?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00';
   const formatPrice = (p: number) => p ? (p >= 100 ? p.toFixed(2) : p >= 1 ? p.toFixed(4) : p.toFixed(6)) : '0.0000';
+  const formatTime = (t: number) => t ? new Date(t).toLocaleTimeString() : '--:--:--';
 
   useEffect(() => { const t = setInterval(() => setCurrentTime(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -263,8 +264,8 @@ const App: React.FC = () => {
   const maxPosLabel = maxPositions === 0 ? '∞' : maxPositions.toString();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/30 to-black text-white">
-      <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900/30 to-black text-white flex flex-col">
+      <header className="relative z-20 border-b border-red-500/30 bg-black/80 backdrop-blur-xl sticky top-0 shrink-0">
         <div className="container mx-auto px-4 py-3">
           <div className="flex justify-between items-center flex-wrap gap-3">
             <div className="flex items-center gap-2">
@@ -286,8 +287,11 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      <div className="relative z-10 container mx-auto px-4 py-4">
-        <div className="rounded-xl p-4 mb-4 border border-red-500/20 bg-black/60">
+      {/* ОСНОВНОЙ КОНТЕНТ С ФИКСИРОВАННОЙ СТРУКТУРОЙ */}
+      <div className="flex-1 flex flex-col min-h-0 relative z-10 container mx-auto px-4 py-4">
+        
+        {/* Верхняя панель: Статистика */}
+        <div className="rounded-xl p-4 mb-4 border border-red-500/20 bg-black/60 shrink-0">
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-400">📊 Нереализованная прибыль</span>
             <span className={`text-xl font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
@@ -300,110 +304,116 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto">
+        {/* Вкладки */}
+        <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto shrink-0">
           {[{ k: 'signals', i: '🎯', l: 'Сигналы' }, { k: 'trading', i: '📈', l: 'График' }, { k: 'autotrade', i: '🤖', l: 'Торговля' }, { k: 'news', i: '📰', l: 'Новости' }, { k: 'history', i: '📜', l: 'История' }].map(t => (
             <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm rounded-t-lg transition-colors ${activeTab === t.k ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t.i} {t.l}</button>
           ))}
         </div>
 
-        {activeTab === 'trading' && (
-          <div className="rounded-xl p-3 border border-red-500/20 bg-black/40">
-            <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}</select>
-            <TradingChart symbol={selectedSymbol} />
-          </div>
-        )}
-        {activeTab === 'history' && <SignalHistory />}
-        {activeTab === 'news' && <News />}
+        {/* Контент вкладок с фиксированной высотой и скроллом */}
+        <div className="flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>
+          
+          {activeTab === 'trading' && (
+            <div className="rounded-xl p-3 border border-red-500/20 bg-black/40">
+              <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}</select>
+              <TradingChart symbol={selectedSymbol} />
+            </div>
+          )}
+          {activeTab === 'history' && <SignalHistory />}
+          {activeTab === 'news' && <News />}
 
-        {activeTab === 'autotrade' && (
-          <div className="space-y-4">
-            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
-              <div className="flex flex-wrap gap-3 items-center">
-                <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
-                <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-4 py-2 bg-gray-700 rounded-lg text-sm">🔄 Сбросить</button>
-                {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-4 py-2 bg-red-800 rounded-lg text-sm">🔒 Закрыть всё ({openTrades.length})</button>}
-              </div>
-              {autoTrade && (
-                <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
-                  <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ 15m | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | Макс {maxPosLabel} поз.</p>
+          {activeTab === 'autotrade' && (
+            <div className="space-y-4">
+              <div className="rounded-xl p-4 border border-red-500/20 bg-black/40">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <button onClick={() => setAutoTrade(!autoTrade)} className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${autoTrade ? 'bg-red-600' : 'bg-green-600'}`}>{autoTrade ? '🔴 СТОП' : '🟢 ПУСК'}</button>
+                  <button onClick={() => { setBalance(10000); setTotalProfit(0); setTrades([]); setSignals([]); }} className="px-4 py-2 bg-gray-700 rounded-lg text-sm">🔄 Сбросить</button>
+                  {openTrades.length > 0 && <button onClick={() => openTrades.forEach(t => { const cp = prices.get(t.symbol) || t.entryPrice; closeTrade(t, cp, 'manual'); })} className="px-4 py-2 bg-red-800 rounded-lg text-sm">🔒 Закрыть всё ({openTrades.length})</button>}
                 </div>
-              )}
-            </div>
-
-            <div className="rounded-xl p-4 border border-red-500/20 bg-black/40 space-y-4">
-              <div>
-                <div className="flex justify-between text-sm"><span className="text-gray-400">Риск на сделку</span><span className="text-white font-bold">{riskPercent}%</span></div>
-                <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-red-500 mt-1" />
-              </div>
-              <div>
-                <div className="flex justify-between text-sm"><span className="text-gray-400">Макс. позиций</span><span className="text-white font-bold">{maxPosLabel}</span></div>
-                <input type="range" min="0" max="20" step="1" value={maxPositions} onChange={e => setMaxPositions(+e.target.value)} className="w-full accent-red-500 mt-1" />
-                <div className="text-xs text-gray-500 mt-1">0 = без ограничений (∞)</div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-red-500/20 overflow-hidden bg-black/40">
-              <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30 flex justify-between items-center">
-                <h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length}/{maxPosLabel})</h3>
-                <span className={`text-sm font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
-              </div>
-              <div className="divide-y divide-gray-800 max-h-96 overflow-y-auto">
-                {!openTrades.length ? <div className="p-6 text-center text-sm text-gray-500">Нет открытых позиций</div> : openTrades.map(t => {
-                  const cp = prices.get(t.symbol) || t.entryPrice;
-                  const pnl = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
-                  const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
-                  return (
-                    <div key={t.id} className={`p-3 ${pnl >= 0 ? 'bg-green-500/3' : 'bg-red-500/3'}`}>
-                      <div className="flex justify-between text-sm font-bold"><span>{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol}{t.breakevenActivated && ' BE'}</span><span className={pnl >= 0 ? 'text-green-400' : 'text-red-400'}>${formatNumber(pnl)} ({pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%)</span></div>
-                      <div className="grid grid-cols-3 gap-2 mt-1 text-xs text-gray-400">
-                        <div>Вход <span className="text-white">${formatPrice(t.entryPrice)}</span></div>
-                        <div>TP <span className="text-green-400">${formatPrice(t.tpPrice)}</span></div>
-                        <div>SL <span className={t.breakevenActivated ? 'text-blue-400' : 'text-red-400'}>${formatPrice(t.slPrice)}</span></div>
-                      </div>
-                      <button onClick={() => closeTrade(t, cp, 'manual')} className="mt-2 w-full bg-red-900/50 hover:bg-red-800/50 text-xs py-1 rounded">Закрыть</button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'signals' && (
-          <div className="space-y-2">
-            {!signals.length ? (
-              <div className="rounded-xl p-12 text-center bg-black/40 border border-red-500/20">
-                <div className="text-6xl mb-4">⏳</div>
-                <div className="text-gray-400 text-lg">Ожидание сигналов...</div>
-                <div className="text-gray-500 text-sm mt-2">15m | {SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+</div>
-              </div>
-            ) : signals.filter(s => s?.price).map((s) => {
-              const isExpanded = expandedSignal === s.id;
-              return (
-                <div key={s.id} className={`rounded-lg border transition-all cursor-pointer bg-gradient-to-r from-black/80 ${s.action === 'buy' ? 'to-green-900/20 border-green-500/20' : 'to-red-900/20 border-red-500/20'}`}>
-                  <div className="p-4 flex justify-between items-center" onClick={() => setExpandedSignal(isExpanded ? null : s.id)}>
-                    <span className="font-bold text-base">{s.symbol}</span>
-                    <span className={`px-3 py-1 rounded text-xs font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-yellow-400 text-xs">{'★'.repeat(s.strength)}</span>
-                      <span className={`text-gray-400 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
-                    </div>
+                {autoTrade && (
+                  <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
+                    <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ 15m | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | Макс {maxPosLabel} поз.</p>
                   </div>
-                  {isExpanded && (
-                    <div className="px-4 pb-4">
-                      <div className="grid grid-cols-4 gap-2 mb-3 text-xs">
-                        {(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/50 px-2 py-1 rounded text-red-300 text-center">{r}</span>)}
+                )}
+              </div>
+
+              <div className="rounded-xl p-4 border border-red-500/20 bg-black/40 space-y-4">
+                <div>
+                  <div className="flex justify-between text-sm"><span className="text-gray-400">Риск на сделку</span><span className="text-white font-bold">{riskPercent}%</span></div>
+                  <input type="range" min="1" max="10" step="0.5" value={riskPercent} onChange={e => setRiskPercent(+e.target.value)} className="w-full accent-red-500 mt-1" />
+                </div>
+                <div>
+                  <div className="flex justify-between text-sm"><span className="text-gray-400">Макс. позиций</span><span className="text-white font-bold">{maxPosLabel}</span></div>
+                  <input type="range" min="0" max="20" step="1" value={maxPositions} onChange={e => setMaxPositions(+e.target.value)} className="w-full accent-red-500 mt-1" />
+                  <div className="text-xs text-gray-500 mt-1">0 = без ограничений (∞)</div>
+                </div>
+              </div>
+
+              {/* БЛОК ПОЗИЦИЙ С ФИКСИРОВАННЫМ СКРОЛЛОМ */}
+              <div className="rounded-xl border border-red-500/20 overflow-hidden bg-black/40">
+                <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30 flex justify-between items-center">
+                  <h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length}/{maxPosLabel})</h3>
+                  <span className={`text-sm font-bold ${totalUnrealizedPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>{totalUnrealizedPnL >= 0 ? '+' : ''}${formatNumber(totalUnrealizedPnL)}</span>
+                </div>
+                <div className="divide-y divide-gray-800" style={{ maxHeight: '400px', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+                  {!openTrades.length ? <div className="p-6 text-center text-sm text-gray-500">Нет открытых позиций</div> : openTrades.map(t => {
+                    const cp = prices.get(t.symbol) || t.entryPrice;
+                    const pnl = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
+                    const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
+                    return (
+                      <div key={t.id} className={`p-3 ${pnl >= 0 ? 'bg-green-500/3' : 'bg-red-500/3'}`}>
+                        <div className="flex justify-between text-sm font-bold"><span>{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol}{t.breakevenActivated && ' BE'}</span><span className={pnl >= 0 ? 'text-green-400' : 'text-red-400'}>${formatNumber(pnl)} ({pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%)</span></div>
+                        <div className="grid grid-cols-3 gap-2 mt-1 text-xs text-gray-400">
+                          <div>Вход <span className="text-white">${formatPrice(t.entryPrice)}</span></div>
+                          <div>TP <span className="text-green-400">${formatPrice(t.tpPrice)}</span></div>
+                          <div>SL <span className={t.breakevenActivated ? 'text-blue-400' : 'text-red-400'}>${formatPrice(t.slPrice)}</span></div>
+                        </div>
+                        <button onClick={() => closeTrade(t, cp, 'manual')} className="mt-2 w-full bg-red-900/50 hover:bg-red-800/50 text-xs py-1 rounded">Закрыть</button>
                       </div>
-                      <div className="h-[300px] rounded-lg overflow-hidden border border-gray-700">
-                        <TradingChart symbol={s.symbol} />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'signals' && (
+            <div className="space-y-2">
+              {!signals.length ? (
+                <div className="rounded-xl p-12 text-center bg-black/40 border border-red-500/20">
+                  <div className="text-6xl mb-4">⏳</div>
+                  <div className="text-gray-400 text-lg">Ожидание сигналов...</div>
+                  <div className="text-gray-500 text-sm mt-2">15m | {SYMBOLS.length} активов | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+</div>
+                </div>
+              ) : signals.filter(s => s?.price).map((s) => {
+                const isExpanded = expandedSignal === s.id;
+                return (
+                  <div key={s.id} className={`rounded-lg border transition-all cursor-pointer bg-gradient-to-r from-black/80 ${s.action === 'buy' ? 'to-green-900/20 border-green-500/20' : 'to-red-900/20 border-red-500/20'}`}>
+                    <div className="p-4 flex justify-between items-center" onClick={() => setExpandedSignal(isExpanded ? null : s.id)}>
+                      <span className="font-bold text-base">{s.symbol}</span>
+                      <span className={`px-3 py-1 rounded text-xs font-bold ${s.action === 'buy' ? 'bg-green-600' : 'bg-red-600'}`}>{s.action.toUpperCase()} @ ${formatPrice(s.price)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-yellow-400 text-xs">{'★'.repeat(s.strength)}</span>
+                        <span className={`text-gray-400 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    {isExpanded && (
+                      <div className="px-4 pb-4">
+                        <div className="grid grid-cols-4 gap-2 mb-3 text-xs">
+                          {(s.reasons || []).map((r, j) => <span key={j} className="bg-red-950/50 px-2 py-1 rounded text-red-300 text-center">{r}</span>)}
+                        </div>
+                        <div className="rounded-lg overflow-hidden border border-gray-700" style={{ height: '350px' }}>
+                          <TradingChart symbol={s.symbol} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
