@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 
 interface TradeChartProps {
   symbol: string;
@@ -7,93 +7,43 @@ interface TradeChartProps {
 }
 
 const TradeChart: React.FC<TradeChartProps> = ({ symbol, entryPrice, side }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const prices = JSON.parse(localStorage.getItem(`prices_${symbol}`) || '[]');
+  const color = side === 'buy' ? '#22c55e' : '#ef4444';
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  if (prices.length < 5) {
+    return <div className="h-[200px] bg-black/30 rounded-lg flex items-center justify-center text-gray-500 text-xs">Недостаточно данных</div>;
+  }
 
-    const prices = JSON.parse(localStorage.getItem(`prices_${symbol}`) || '[]');
-    const w = canvas.width, h = canvas.height;
-    
-    ctx.fillStyle = '#0a0a0f';
-    ctx.fillRect(0, 0, w, h);
+  const min = Math.min(...prices, entryPrice);
+  const max = Math.max(...prices, entryPrice);
+  const range = max - min || 1;
+  const entryY = ((max - entryPrice) / range) * 100;
 
-    if (prices.length < 10) {
-      ctx.fillStyle = '#666';
-      ctx.font = '12px Inter';
-      ctx.textAlign = 'center';
-      ctx.fillText('Загрузка...', w / 2, h / 2);
-      return;
-    }
+  const points = prices.map((p: number, i: number) => {
+    const x = (i / (prices.length - 1)) * 100;
+    const y = ((max - p) / range) * 100;
+    return `${x},${y}`;
+  }).join(' ');
 
-    const pad = 30;
-    const min = Math.min(...prices, entryPrice) * 0.998;
-    const max = Math.max(...prices, entryPrice) * 1.002;
-    const range = max - min || 1;
-
-    const toX = (i: number) => pad + (i / (prices.length - 1)) * (w - pad * 2);
-    const toY = (p: number) => pad + ((max - p) / range) * (h - pad * 2);
-
-    // Сетка
-    ctx.strokeStyle = '#1a1a2e';
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i < 4; i++) {
-      const y = pad + (i / 3) * (h - pad * 2);
-      ctx.beginPath();
-      ctx.moveTo(pad, y);
-      ctx.lineTo(w - pad, y);
-      ctx.stroke();
-    }
-
-    // Свечи
-    for (let i = 1; i < prices.length; i++) {
-      const open = prices[i - 1], close = prices[i];
-      const high = Math.max(open, close) * 1.001;
-      const low = Math.min(open, close) * 0.999;
-      const isUp = close >= open;
-
-      ctx.strokeStyle = isUp ? '#22c55e' : '#ef4444';
-      ctx.fillStyle = isUp ? '#22c55e' : '#ef4444';
-      ctx.lineWidth = 1;
-
-      // Хвост
-      ctx.beginPath();
-      ctx.moveTo(toX(i), toY(high));
-      ctx.lineTo(toX(i), toY(low));
-      ctx.stroke();
-
-      // Тело
-      const bodyH = Math.abs(toY(open) - toY(close));
-      ctx.fillRect(toX(i) - 1.5, toY(Math.max(open, close)), 3, Math.max(1, bodyH));
-    }
-
-    // Точка входа
-    const entryY = toY(entryPrice);
-    ctx.strokeStyle = side === 'buy' ? '#22c55e' : '#ef4444';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.beginPath();
-    ctx.moveTo(pad, entryY);
-    ctx.lineTo(w - pad, entryY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Кружок
-    ctx.beginPath();
-    ctx.arc(w - pad, entryY, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Подпись
-    ctx.font = 'bold 11px Inter';
-    ctx.textAlign = 'left';
-    ctx.fillText(`Вход $${entryPrice}`, pad + 5, entryY - 8);
-
-  }, [symbol, entryPrice, side]);
-
-  return <canvas ref={canvasRef} width={500} height={280} className="w-full rounded-lg" />;
+  return (
+    <div className="relative h-[200px] bg-[#0a0a0f] rounded-lg overflow-hidden">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+        {/* Линия цены */}
+        <polyline points={points} fill="none" stroke="#4ade80" strokeWidth="0.5" />
+        {/* Заливка под графиком */}
+        <polygon points={`0,100 ${points} 100,100`} fill="rgba(74, 222, 128, 0.1)" />
+        {/* Линия точки входа */}
+        <line x1="0" y1={entryY} x2="100" y2={entryY} stroke={color} strokeWidth="0.5" strokeDasharray="2,2" />
+      </svg>
+      {/* Подпись точки входа */}
+      <div className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black/70 px-2 py-1 rounded text-xs font-bold" style={{ color, marginTop: entryY > 50 ? '-10px' : '10px' }}>
+        Вход ${entryPrice.toFixed(4)}
+      </div>
+      {/* Цены на шкале */}
+      <div className="absolute top-1 left-2 text-[10px] text-gray-500">${max.toFixed(2)}</div>
+      <div className="absolute bottom-1 left-2 text-[10px] text-gray-500">${min.toFixed(2)}</div>
+    </div>
+  );
 };
 
 export default TradeChart;
