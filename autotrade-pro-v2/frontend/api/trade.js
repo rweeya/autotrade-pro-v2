@@ -88,6 +88,15 @@ export default async function handler(req, res) {
     
     const volumeRes = await fetch('https://api.binance.com/api/v3/ticker/24hr');
     const volumeData = await volumeRes.json();
+    
+    if (!Array.isArray(volumeData)) {
+      return res.status(500).json({ error: 'Binance 24hr not array', type: typeof volumeData });
+    }
+    
+    if (!Array.isArray(tickers)) {
+      return res.status(500).json({ error: 'Binance price not array', type: typeof tickers });
+    }
+    
     const topSymbols = volumeData
       .filter(t => t.symbol.endsWith('USDT'))
       .sort((a, b) => parseFloat(b.volume) - parseFloat(a.volume))
