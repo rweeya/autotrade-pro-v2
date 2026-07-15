@@ -1,5 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 
+declare global {
+  interface Window {
+    TradingView: any;
+  }
+}
+
 interface TradeChartProps {
   symbol: string;
   entryPrice: number;
@@ -15,8 +21,8 @@ const TradeChart: React.FC<TradeChartProps> = ({ symbol, entryPrice, side }) => 
     script.src = 'https://s3.tradingview.com/tv.js';
     script.async = true;
     script.onload = () => {
-      if (typeof TradingView !== 'undefined' && containerRef.current) {
-        const widget = new (TradingView as any).widget({
+      if (window.TradingView && containerRef.current) {
+        const widget = new window.TradingView.widget({
           container_id: id,
           symbol: `BINANCE:${symbol.replace('/', '')}`,
           interval: '15',
@@ -31,8 +37,6 @@ const TradeChart: React.FC<TradeChartProps> = ({ symbol, entryPrice, side }) => 
           save_image: false,
           height: 300,
           width: '100%',
-          studies: [],
-          disabled_features: ['header_symbol_search', 'header_compare', 'header_saveload'],
         });
 
         widget.onChartReady(() => {
