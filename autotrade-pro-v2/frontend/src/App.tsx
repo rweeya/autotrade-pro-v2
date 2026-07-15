@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import TradingChart from './components/TradingChart';
+import TradeChart from './components/TradeChart';
 import SignalHistory from './components/SignalHistory';
 import News from './components/News';
 import { createPriceManager, PriceData } from './services/api';
@@ -79,6 +80,7 @@ const App: React.FC = () => {
   const [apiConnectedCount, setApiConnectedCount] = useState(0);
   const [totalUnrealizedPnL, setTotalUnrealizedPnL] = useState(0);
   const [expandedSignal, setExpandedSignal] = useState<string | null>(null);
+  const [expandedTrade, setExpandedTrade] = useState<string | null>(null);
 
   const RSI_BUY = 30, RSI_SELL = 70;
   const STOCH_BUY = 20, STOCH_SELL = 80;
@@ -242,6 +244,9 @@ const App: React.FC = () => {
     h.push(price);
     if (h.length > 200) h = h.slice(-200);
     priceHistoryRef.current.set(symbol, h);
+    // Сохраняем историю для TradeChart
+    const key = `prices_${symbol}`;
+    localStorage.setItem(key, JSON.stringify(h.slice(-100)));
     const sig = generateSignal(symbol, price);
     if (sig) { setSignals(p => [sig, ...p].slice(0, 100)); if (autoTradeRef.current) executeTrade(sig); }
   }, [executeTrade]);
@@ -287,10 +292,8 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* ОСНОВНОЙ КОНТЕНТ С ФИКСИРОВАННОЙ СТРУКТУРОЙ */}
       <div className="flex-1 flex flex-col min-h-0 relative z-10 container mx-auto px-4 py-4">
         
-        {/* Верхняя панель: Статистика */}
         <div className="rounded-xl p-4 mb-4 border border-red-500/20 bg-black/60 shrink-0">
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-400">📊 Нереализованная прибыль</span>
@@ -304,14 +307,12 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Вкладки */}
         <div className="flex gap-1 mb-4 border-b border-red-500/30 overflow-x-auto shrink-0">
           {[{ k: 'signals', i: '🎯', l: 'Сигналы' }, { k: 'trading', i: '📈', l: 'График' }, { k: 'autotrade', i: '🤖', l: 'Торговля' }, { k: 'news', i: '📰', l: 'Новости' }, { k: 'history', i: '📜', l: 'История' }].map(t => (
             <button key={t.k} onClick={() => setActiveTab(t.k)} className={`px-4 py-2 text-sm rounded-t-lg transition-colors ${activeTab === t.k ? 'bg-red-600 text-white' : 'text-gray-400'}`}>{t.i} {t.l}</button>
           ))}
         </div>
 
-        {/* Контент вкладок с фиксированной высотой и скроллом */}
         <div className="flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>
           
           {activeTab === 'trading' && (
@@ -350,7 +351,6 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* БЛОК ПОЗИЦИЙ С ФИКСИРОВАННЫМ СКРОЛЛОМ */}
               <div className="rounded-xl border border-red-500/20 overflow-hidden bg-black/40">
                 <div className="px-4 py-3 bg-red-950/30 border-b border-red-500/30 flex justify-between items-center">
                   <h3 className="font-bold text-red-400 text-sm">📊 ПОЗИЦИИ ({openTrades.length}/{maxPosLabel})</h3>
@@ -361,14 +361,26 @@ const App: React.FC = () => {
                     const cp = prices.get(t.symbol) || t.entryPrice;
                     const pnl = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
                     const pPct = t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100;
+                    const isExpanded = expandedTrade === t.id;
                     return (
                       <div key={t.id} className={`p-3 ${pnl >= 0 ? 'bg-green-500/3' : 'bg-red-500/3'}`}>
-                        <div className="flex justify-between text-sm font-bold"><span>{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol}{t.breakevenActivated && ' BE'}</span><span className={pnl >= 0 ? 'text-green-400' : 'text-red-400'}>${formatNumber(pnl)} ({pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%)</span></div>
+                        <div className="flex justify-between text-sm font-bold cursor-pointer" onClick={() => setExpandedTrade(isExpanded ? null : t.id)}>
+                          <span>{t.side === 'buy' ? '🟢' : '🔴'} {t.symbol}{t.breakevenActivated && ' BE'}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={pnl >= 0 ? 'text-green-400' : 'text-red-400'}>${formatNumber(pnl)} ({pPct >= 0 ? '+' : ''}{pPct.toFixed(2)}%)</span>
+                            <span className={`text-gray-400 transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-3 gap-2 mt-1 text-xs text-gray-400">
                           <div>Вход <span className="text-white">${formatPrice(t.entryPrice)}</span></div>
                           <div>TP <span className="text-green-400">${formatPrice(t.tpPrice)}</span></div>
                           <div>SL <span className={t.breakevenActivated ? 'text-blue-400' : 'text-red-400'}>${formatPrice(t.slPrice)}</span></div>
                         </div>
+                        {isExpanded && (
+                          <div className="mt-2 rounded-lg overflow-hidden border border-gray-700">
+                            <TradeChart symbol={t.symbol} entryPrice={t.entryPrice} side={t.side} />
+                          </div>
+                        )}
                         <button onClick={() => closeTrade(t, cp, 'manual')} className="mt-2 w-full bg-red-900/50 hover:bg-red-800/50 text-xs py-1 rounded">Закрыть</button>
                       </div>
                     );
