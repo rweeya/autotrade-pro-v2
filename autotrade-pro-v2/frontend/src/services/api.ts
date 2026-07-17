@@ -1,69 +1,68 @@
 export interface PriceData {
   symbol: string;
   price: number;
+  change24h: number;
+  volume24h: number;
+  high24h: number;
+  low24h: number;
+  timestamp: number;
 }
 
-export interface TradeData {
-  id: string;
-  symbol: string;
-  side: 'buy' | 'sell';
-  entryPrice: number;
-  quantity: number;
-  invested: number;
-  tpPrice: number;
-  slPrice: number;
-  entryTime: number;
-  breakevenActivated: boolean;
-}
-
-export interface ServerData {
-  status: string;
-  symbols: number;
-  trades: number;
-  openTrades: TradeData[];
-}
-
-type Callback = (data: ServerData) => void;
-
-const SERVER_URL = 'https://autotrade-server-1.onrender.com';
+type Callback = (data: PriceData) => void;
 
 class PriceManager {
+  private symbols: string[] = [];
+  private subscribers: Map<string, Set<Callback>> = new Map();
   private intervalId: number | null = null;
-  private subscribers: Set<Callback> = new Set();
   private isRunning = false;
 
-  subscribe(callback: Callback) {
-    this.subscribers.add(callback);
+  subscribe(symbols: string | string[], callback: Callback) {
+    const symbolArray = Array.isArray(symbols) ? symbols : [symbols];
+    this.symbols = [...new Set([...this.symbols, ...symbolArray])];
+    symbolArray.forEach(symbol => {
+      if (!this.subscribers.has(symbol)) this.subscribers.set(symbol, new Set());
+      this.subscribers.get(symbol)!.add(callback);
+    });
     if (!this.isRunning) this.start();
   }
 
-  private async fetchData() {
+  private async fetchPrices() {
     try {
-      const res = await fetch(SERVER_URL);
-      const data: ServerData = await res.json();
-      this.subscribers.forEach(cb => cb(data));
+      const res = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+      if (!res.ok) return;
+      const data = await res.json();
+      for (const ticker of data) {
+        const symbol = this.symbols.find(s => s.replace('/', '') === ticker.symbol);
+        if (!symbol) continue;
+        const priceData: PriceData = {
+          symbol,
+          price: parseFloat(ticker.lastPrice),
+          change24h: parseFloat(ticker.priceChangePercent),
+          volume24h: parseFloat(ticker.volume),
+          high24h: parseFloat(ticker.highPrice),
+          low24h: parseFloat(ticker.lowPrice),
+          timestamp: Date.now()
+        };
+        this.subscribers.get(symbol)?.forEach(cb => cb(priceData));
+      }
     } catch (error) {
-      console.warn('⚠️ Сервер недоступен');
+      console.warn('⚠️ Ошибка Binance');
     }
   }
 
   private start() {
     this.isRunning = true;
-    console.log(`🚀 Подключено к серверу ${SERVER_URL}`);
-    this.fetchData();
-    this.intervalId = window.setInterval(() => this.fetchData(), 2000);
+    console.log(`🚀 Binance API (${this.symbols.length} активов)`);
+    this.fetchPrices();
+    this.intervalId = window.setInterval(() => this.fetchPrices(), 2000);
   }
 
   disconnect() {
     this.isRunning = false;
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
+    if (this.intervalId) { clearInterval(this.intervalId); this.intervalId = null; }
     this.subscribers.clear();
+    this.symbols = [];
   }
 }
 
 export const createPriceManager = () => new PriceManager();
-
-
