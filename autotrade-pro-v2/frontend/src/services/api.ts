@@ -65,3 +65,5 @@ class PriceManager {
 }
 
 export const createPriceManager = () => new PriceManager();
+
+
