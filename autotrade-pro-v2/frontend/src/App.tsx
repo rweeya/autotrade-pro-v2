@@ -4,6 +4,7 @@ import TradeChart from './components/TradeChart';
 import SignalHistory from './components/SignalHistory';
 import News from './components/News';
 import { createPriceManager, PriceData } from './services/api';
+import { openPosition, closePosition, fetchBalance } from './services/bybitTestnet';
 
 const SYMBOLS = [
   'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT', 'XRP/USDT', 'DOGE/USDT', 'ADA/USDT',
@@ -85,7 +86,7 @@ const App: React.FC = () => {
   const RSI_BUY = 30, RSI_SELL = 70;
   const STOCH_BUY = 20, STOCH_SELL = 80;
   const ADX_MIN = 25;
-  const TP_PERCENT = 2.0, SL_PERCENT = 0.5;
+  const TP_PERCENT = 1.0, SL_PERCENT = 0.3;
   const COOLDOWN = 120000;
 
   const priceHistoryRef = useRef<Map<string, number[]>>(new Map());
@@ -197,26 +198,34 @@ const App: React.FC = () => {
     const qty = Math.floor(amt / s.price * 1000) / 1000;
     if (!qty) return;
 
-    const tp = s.action === 'buy' ? s.price * (1 + TP_PERCENT / 100) : s.price * (1 - TP_PERCENT / 100);
-    const sl = s.action === 'buy' ? s.price * (1 - SL_PERCENT / 100) : s.price * (1 + SL_PERCENT / 100);
+    const tp = s.action === 'buy' ? s.price * 1.01 : s.price * 0.99;
+    const sl = s.action === 'buy' ? s.price * 0.997 : s.price * 1.003;
 
-    lastTradeTimeForSymbol.current.set(s.symbol, Date.now());
-    setBalance(p => p - amt);
-    setTrades(p => [...p, {
-      id: `${s.symbol}_${Date.now()}`, symbol: s.symbol, side: s.action,
-      entryPrice: s.price, exitPrice: null, quantity: qty, invested: amt,
-      entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null,
-      status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4), breakevenActivated: false
-    }]);
+    const symbolFormatted = s.symbol.replace('/', '') + 'USDT';
+    openPosition(symbolFormatted, s.action === 'buy' ? 'Buy' : 'Sell', qty.toString(), tp, sl).then(success => {
+      if (success) {
+        lastTradeTimeForSymbol.current.set(s.symbol, Date.now());
+        setBalance(p => p - amt);
+        setTrades(p => [...p, {
+          id: `${s.symbol}_${Date.now()}`, symbol: s.symbol, side: s.action,
+          entryPrice: s.price, exitPrice: null, quantity: qty, invested: amt,
+          entryTime: Date.now(), exitTime: null, profit: null, profitPercent: null,
+          status: 'open' as const, tpPrice: +tp.toFixed(4), slPrice: +sl.toFixed(4), breakevenActivated: false
+        }]);
+      }
+    });
   }, []);
 
   const closeTrade = useCallback((t: Trade, cp: number, reason: string) => {
     if (!t || !cp) return;
-    const inv = t.entryPrice * t.quantity;
-    const prof = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
-    setBalance(p => p + inv + prof);
-    setTotalProfit(p => p + prof);
-    setTrades(p => p.map(x => x.id === t.id ? { ...x, status: 'closed' as const, exitPrice: cp, exitTime: Date.now(), profit: prof, profitPercent: t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100 } : x));
+    const symbolFormatted = t.symbol.replace('/', '') + 'USDT';
+    closePosition(symbolFormatted).then(() => {
+      const inv = t.entryPrice * t.quantity;
+      const prof = t.side === 'buy' ? (cp - t.entryPrice) * t.quantity : (t.entryPrice - cp) * t.quantity;
+      setBalance(p => p + inv + prof);
+      setTotalProfit(p => p + prof);
+      setTrades(p => p.map(x => x.id === t.id ? { ...x, status: 'closed' as const, exitPrice: cp, exitTime: Date.now(), profit: prof, profitPercent: t.side === 'buy' ? (cp - t.entryPrice) / t.entryPrice * 100 : (t.entryPrice - cp) / t.entryPrice * 100 } : x));
+    });
   }, []);
 
   useEffect(() => {
@@ -244,7 +253,6 @@ const App: React.FC = () => {
     h.push(price);
     if (h.length > 200) h = h.slice(-200);
     priceHistoryRef.current.set(symbol, h);
-    // Сохраняем историю для TradeChart
     const key = `prices_${symbol}`;
     localStorage.setItem(key, JSON.stringify(h.slice(-100)));
     const sig = generateSignal(symbol, price);
@@ -277,7 +285,7 @@ const App: React.FC = () => {
               <div className="text-2xl">💀</div>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-red-500 to-red-700 bg-clip-text text-transparent">AUTO TRADE PRO V2</h1>
-                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | 15m | RSI {RSI_BUY}/{RSI_SELL} | ADX {ADX_MIN}+ | TP {TP_PERCENT}% SL {SL_PERCENT}%</p>
+                <p className="text-xs text-gray-500">{SYMBOLS.length} активов | 15m | TP {TP_PERCENT}% SL {SL_PERCENT}% | Bybit Testnet</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
@@ -293,7 +301,6 @@ const App: React.FC = () => {
       </header>
 
       <div className="flex-1 flex flex-col min-h-0 relative z-10 container mx-auto px-4 py-4">
-        
         <div className="rounded-xl p-4 mb-4 border border-red-500/20 bg-black/60 shrink-0">
           <div className="flex justify-between items-center">
             <span className="text-sm text-gray-400">📊 Нереализованная прибыль</span>
@@ -314,7 +321,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-          
           {activeTab === 'trading' && (
             <div className="rounded-xl p-3 border border-red-500/20 bg-black/40">
               <select value={selectedSymbol} onChange={e => setSelectedSymbol(e.target.value)} className="border border-red-500/50 rounded-lg px-3 py-1.5 text-sm mb-3 w-full bg-black/60 text-white">{SYMBOLS.slice(0, 50).map(s => <option key={s} value={s}>{s}</option>)}</select>
@@ -334,7 +340,7 @@ const App: React.FC = () => {
                 </div>
                 {autoTrade && (
                   <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-center">
-                    <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ 15m | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | Макс {maxPosLabel} поз.</p>
+                    <p className="text-red-300 text-sm">✅ АВТОТОРГОВЛЯ | Bybit Testnet | TP +{TP_PERCENT}% SL -{SL_PERCENT}% | Макс {maxPosLabel} поз.</p>
                   </div>
                 )}
               </div>
@@ -432,4 +438,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
